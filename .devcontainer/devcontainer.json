@@ -1,0 +1,25 @@
+{
+  "name": "earthengine-pixi-dev",
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "context": ".."
+  },
+  "workspaceFolder": "/app",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-toolsai.jupyter"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/opt/conda/bin/python",
+        "jupyter.jupyterServerType": "local"
+      }
+    }
+  },
+  "postCreateCommand": "pixi run python -m ipykernel install --user --name earthengine --display-name 'Python (earthengine)'",
+  "mounts": [
+    "source=/data,target=/app/data,type=bind,consistency=cached"
+  ],
+  "remoteUser": "root"
+}

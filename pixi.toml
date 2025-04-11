@@ -1,0 +1,11 @@
+[project]
+name = "earthengine"
+channels = ["conda-forge"]
+platforms = ["osx-arm64"]
+
+[dependencies]
+python = "3.11"
+earthengine-api = "*"
+geemap = "*"
+jupyterlab = "*"
+ipykernel = "*"
