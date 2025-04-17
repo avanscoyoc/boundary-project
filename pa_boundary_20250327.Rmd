@@ -1,0 +1,400 @@
+---
+title: "PA_new"
+output: html_document
+date: "2025-03-11"
+---
+
+## Protected area boundary change
+
+This notebook outlines the methodology used to measure at protected area boundaries via GEE. 
+
+The notebook queries MODIS imagery and returns the gradient values of relevant bands as well as the vegetation indicies NDVI and EVI. This code expects an annual time span and returns a geoTIFF for each band in each park for that year. This notebook is designed to test the code, which then is scaled to retrieve the full annual timeseries. 
+
+```{r}
+library(tidyverse)
+library(rgee)
+```
+
+```{r}
+ee_Authenticate()
+ee_Initialize(project = 'dse-staff')
+print(ee$String('Hello from the Earth Engine servers!')$getInfo())
+```
+
+#### Load dataset 
+```{r}
+# Load a FeatureCollection (example: World Database on Protected Areas)
+protected_areas <- ee$FeatureCollection("WCMC/WDPA/202106/polygons")
+
+# Define individual filters
+marine_filter <- , "0")ee$Filter$eq("MARINE" # Remove marine areas
+not_mpa_filter <- ee$Filter$neq("DESIG_ENG", "Marine Protected Area")  # Exclude MPAs
+status_filter <- ee$Filter$inList("STATUS", c("Designated", "Established", "Inscribed")) 
+designation_filter <- ee$Filter$neq("DESIG_ENG", "UNESCO-MAB Biosphere Reserve")
+excluded_pids <- c("555655917", "555656005", "555656013", "555665477", "555656021",
+                   "555665485", "555556142", "187", "555703455", "555563456", "15894") 
+area_filter <- ee$Filter$gte("GIS_AREA", 200) # larger than 200 km^2
+
+# Filter to exclude specific WDPA_PID values
+pids_filter <- ee$Filter$inList("WDPA_PID", excluded_pids)$Not()
+
+# Combine filters using logical operations
+combined_filter <- ee$Filter$And(
+  marine_filter,
+  not_mpa_filter,
+  status_filter,
+  designation_filter,
+  pids_filter,
+  area_filter
+)
+
+# Apply the combined filter to the FeatureCollection
+data <- protected_areas$filter(combined_filter)
+
+# Select the WDPA_PID property from the filtered dataset
+wdpa_pids <- data$aggregate_array("WDPA_PID")  # Extracts all values of the WDPA_PID property as a list
+
+# Retrieve the list as an R vector
+wdpa_pid_list <- wdpa_pids$getInfo()
+
+# Print the list of WDPA_PIDs
+print(length(wdpa_pid_list)) #9272
+```
+
+#### Set global constants
+
+```{r}
+PROTECTED_AREAS <- data
+WATER_MASK <- ee$Image('JRC/GSW1_0/GlobalSurfaceWater')
+MODIS <- ee$ImageCollection('MODIS/006/MOD09A1')
+BUFFER <- 10000
+MAX_ERR <- 1
+YEAR <- 2010
+```
+
+#### Define functions
+```{r}
+buffer_polygon <- function(feat, buff, err){
+  feat <- ee$Feature(feat)
+  out <- feat$buffer(buff)$geometry()  # 10km out
+  inn <- feat$buffer(-buff)$geometry()  # 10km in
+  aoi <- out$difference(inn, err)
+  return(aoi)
+}
+```
+
+```{r}
+mask_water <- function(feat){
+  water_no_holes <- WATER_MASK$select('max_extent')$
+    focalMax(radius = 30, units = 'meters', kernelType = 'square')$
+    focalMin(radius = 30, units = 'meters', kernelType = 'square')
+  water_vect <- water_no_holes$reduceToVectors(
+    reducer = ee$Reducer$countEvery(),
+    geometry = feat$buffer(1000),  # Ensures water is removed at edges
+    scale = 30,
+    maxPixels = 1e10,
+    geometryType = 'polygon',
+    eightConnected = FALSE)
+  geom <- feat$difference(right = water_vect$geometry(), maxError = 1)
+  return(geom)
+}
+```
+
+```{r}
+filter_for_year <- function(feat, year) {
+  start <- ee$Date$fromYMD(year, 1, 1)
+  return(ee$Filter$And(
+    ee$Filter$bounds(feat),
+    ee$Filter$date(start, start$advance(1, "year"))
+  ))
+}
+```
+
+```{r}
+add_indices_to_image <- function(image) {
+  
+  EVI <- image$expression(
+    "2.5 * ((NIR - RED) / (NIR + 6 * RED - 7.5 * BLUE + 1))",
+    list(
+      NIR = image$select("sur_refl_b02"),  # MODIS NIR
+      RED = image$select("sur_refl_b01"),  # MODIS RED
+      BLUE = image$select("sur_refl_b03")  # MODIS BLUE
+    )
+  )$rename("EVI")
+  
+  NDVI <- image$expression(
+    "(NIR - RED) / (NIR + RED)",
+    list(
+      NIR = image$select("sur_refl_b02"),
+      RED = image$select("sur_refl_b01")
+    )
+  )$rename("NDVI")
+  
+  image <- image$addBands(list(EVI, NDVI))
+  
+  #print(paste("All band names:", image$bandNames()$getInfo()))
+  
+  return(image)
+}
+```
+
+```{r}
+get_gradient_magnitude <- function(image){
+  gradient <- image$gradient()
+  gradient_x <- gradient$select('x') 
+  gradient_y <- gradient$select('y') 
+  magnitude <- gradient_x$pow(2)$add(gradient_y$pow(2))$sqrt() 
+  return(magnitude)
+}
+```
+
+```{r}
+geometry <- ee$Geometry$Polygon(list(
+  list(
+    c(-119.80738088038615, 38.53793770547406),
+    c(-120.35120412257365, 38.64956590608609),
+    c(-120.86206838038615, 38.51215270703278),
+    c(-120.41162892726115, 38.05942162797243),
+    c(-120.13697072413615, 38.24085287086409),
+    c(-120.05457326319865, 37.98585693208372),
+    c(-119.85681935694865, 38.01182937540273),
+    c(-119.79639455226115, 38.11130517090483),
+    c(-119.71399709132365, 38.119948848017394),
+    c(-119.63709279444865, 38.1674707827119),
+    c(-119.62061330226115, 38.2494811940204),
+    c(-119.65357228663615, 38.32709000484806),
+    c(-119.65906545069865, 38.38739502408541),
+    c(-119.60962697413615, 38.46915718247208),
+    c(-119.69751759913615, 38.49065815171371),
+    c(-119.90076466944865, 38.3012296223024),
+    c(-119.94470998194865, 38.3658632836034),
+    c(-119.97217580226115, 38.41322465329759)
+  )
+))
+```
+
+```{r}
+serengeti <- data$
+  filter(ee$Filter$eq('ORIG_NAME', 'Serengeti National Park'))$
+  first()
+serengeti_geometry <- single_feature$geometry()
+```
+
+```{r}
+serengeti_geometry <- serengeti$geometry()
+
+# Now we can visualize the geometry using rgee
+Map$centerObject(aoi, zoom = 8)
+Map$addLayer(aoi, list(color = 'red'), 'Serengeti Geometry')
+```
+
+
+```{r}
+aoi <- buffer_polygon(serengeti_geometry, BUFFER, MAX_ERR)|> mask_water() 
+modis_ic <- MODIS$filter(filter_for_year(aoi, YEAR))
+band_names <- modis_ic$first()$bandNames()
+composite <- modis_ic$reduce(ee$Reducer$median())$rename(band_names)$clip(aoi)
+image <- add_indices_to_image(composite)
+single_band <- image$select("sur_refl_b01")
+gradient <- get_gradient_magnitude(single_band)
+# Normalize the gradient magnitude to the range 0-1
+max_val <- gradient$reduce(ee$Reducer$max())  # Find the maximum value in the gradient image
+normalized_gradient <- gradient$divide(max_val)  # Divide by the max value to normalize
+```
+
+```{r}
+vis_params <- list(
+  min = -0.5, 
+  max = 1, 
+  palette = c('blue', 'white', 'green')
+)
+
+# Add single_band (NDVI) to the map
+Map$centerObject(aoi, zoom = 8)
+Map$addLayer(single_band, vis_params, "NDVI Layer")
+```
+
+
+```{r}
+# Step 3: Apply thresholding (simple example with a fixed threshold)
+threshold_value <- 0.1
+edges <- gradient$gt(threshold_value)
+
+# Apply Gaussian blur to smooth the gradient magnitude
+smoothed_gradient <- gradient$focal_mean(radius = 3, kernelType = "circle", units = "pixels")
+
+# Step 4: Visualize the edges
+vis_params <- list(
+  min = 0,
+  max = 1,
+  palette = c('blue', 'white', 'red')
+)
+
+# Map the result using Leaflet
+Map$centerObject(aoi, zoom = 10)
+Map$addLayer(gradient, vis_params)
+```
+
+```{r}
+vis_params <- list(
+  min = 0,
+  max = 1,
+  palette = c('blue', 'white', 'red')
+)
+
+# Map the result using Leaflet
+Map$centerObject(aoi, zoom = 10)
+Map$addLayer(normalized_gradient, vis_params)
+```
+
+```{r}
+download_task <- ee$batch$Export$image$toDrive(
+  image = edges,
+  description = 'Canny_Edges',
+  folder = 'earth_engine_outputs',
+  scale = 30,
+  region = aoi
+)
+```
+
+#### Visualization (OPTIONAL)
+
+```{r}
+export_image_to_cloud <- function(image) {
+  
+  export_task <- ee$batch$Export$image$toCloudStorage(
+    image = image,
+    description = "gradient",
+    bucket = "dse-staff",
+    fileNamePrefix = "gradient",
+    fileFormat = "GeoTIFF",
+    formatOptions = list(cloudOptimized = TRUE),
+    maxPixels = 1e9,
+    scale = 30
+  )
+  export_task$start()
+  print("saved")
+}
+
+export_image_to_cloud(gradient)
+```
+
+
+#### Testing 
+
+```{r}
+line <- ee$Geometry$LineString(geometry$coordinates()$get(0))
+line_buffered <- line$buffer(500)  # 500 meters buffer
+
+pixel_median_value_line <- single_band$reduceRegions(
+  collection = ee$FeatureCollection(line),
+  reducer = ee$Reducer$median(),
+  scale = 500 
+)
+
+pixel_median_value_buffer <- single_band$reduceRegions(
+  collection = ee$FeatureCollection(aoi),
+  reducer = ee$Reducer$median(),
+  scale = 500 
+)
+
+pixel_count_line <- image$reduceRegion(
+  reducer = ee$Reducer$count(),
+  geometry = line_buffered,
+  scale = 500,  # Match dataset resolution
+  maxPixels = 1e13
+)
+
+pixel_count_buffer <- image$reduceRegion(
+  reducer = ee$Reducer$count(),
+  geometry = aoi,
+  scale = 500,  # Match dataset resolution
+  maxPixels = 1e13
+)
+
+# Print results
+pixel_median_value_line$getInfo()
+pixel_median_value_buffer$getInfo()
+pixel_count_line$getInfo()
+pixel_count_buffer$getInfo()
+```
+
+
+```{r}
+# Load the required library
+library(rgee)
+
+# Initialize the Earth Engine API
+ee_Initialize()
+
+# Define the region and date range for MODIS data
+region <- ee$Geometry$BBox(-122.5549, 37.6968, -122.3446, 37.8111)
+start_date <- '2016-01-01'
+end_date <- '2022-12-31'
+
+# Load MODIS data (MOD09A1)
+collection <- ee$ImageCollection("MODIS/006/MOD09A1")$
+  filterDate(start_date, end_date)$
+  filterBounds(region)
+
+# Reduce the collection by taking the median
+images <- collection$reduce(ee$Reducer$median())
+
+# Define visualization parameters for RGB bands (assuming B1, B4, B3 correspond to Red, Green, and Blue)
+vis_params <- list(
+  min = 0, 
+  max = 10000,  # Typical scaling for MODIS surface reflectance bands
+  bands = c("sur_refl_b01_median", "sur_refl_b04", "sur_refl_b03")  # B1: Red, B4: Green, B3: Blue
+)
+
+# Map visualization
+Map$centerObject(region)
+Map$addLayer(images, vis_params, "MODIS RGB", FALSE)
+
+# Show the map
+Map
+
+```
+
+
+```{r}
+get_polygon_annual_median_perpixel <- function(geom, start_date, end_date, show_map = FALSE) {
+  
+  # Load MODIS surface reflectance dataset
+  ic <- ee$ImageCollection("MODIS/006/MOD09A1")$  
+    filterBounds(geom)$
+    filterDate(start_date, end_date)$
+    select(c("sur_refl_b01", "sur_refl_b02", "sur_refl_b03","sur_refl_b04", 
+             "sur_refl_b05", "sur_refl_b06", "sur_refl_b07"))  
+  
+  image <- ic$mean()$clip(geom)
+  
+  image <- add_indices_to_image(image)
+  
+  image <- get_gradient_magnitude(image)
+  
+  image <- image$set(
+    list(
+      "system:time_start" = ee$Date(start_date)$millis(),
+      "system:time_end" = ee$Date(end_date)$millis()
+    )
+  )
+  
+  # Display image and polygon on map if requested
+  if (show_map) {
+    vizParams <- list(
+      bands = c("sur_refl_b01", "sur_refl_b02", "sur_refl_b03"),  # RED, NIR, BLUE
+      min = 0,
+      max = 5000,  # MODIS surface reflectance scaling
+      gamma = c(0.95, 1.1, 1)
+    )
+    
+    Map$centerObject(geom, 6)
+    Map$addLayer(image, vizParams, "MODIS False Color Composite")
+    Map$addLayer(geom, list(color = "red"), "Polygon")
+  }
+  
+  return(image)
+}
+```
+
