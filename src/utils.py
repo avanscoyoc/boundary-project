@@ -1,6 +1,8 @@
 import ee
 import geemap
-
+import os
+import pandas as pd
+from datetime import datetime
 
 class GeometryOperations:
     def __init__(self, buffer_distance=10000, max_error=1):
@@ -84,7 +86,91 @@ class ImageOperations:
         gradient_y = gradient.select('y')
         magnitude = gradient_x.pow(2).add(gradient_y.pow(2)).sqrt()
         return magnitude
+
+class StatsOperations:
+        def __init__(self):
+        self.gHM_collection = ee.ImageCollection('CSP/HM/GlobalHumanModification')
+
+    def calculate_gradient_statistics(self, layer scale=500, name='buffer'):
+        """Calculate mean and standard deviation of gradient magnitude"""
+        magnitude_mean = layer.reduceRegion(
+            reducer=ee.Reducer.mean(),
+            scale=scale,
+            maxPixels=1e10)
+        magnitude_stddev = layer.reduceRegion(
+            reducer=ee.Reducer.stdDev(),
+            scale=scale,
+            maxPixels=1e10)
+        object_area = layer.mask().multiply(ee.Image.pixelArea()).reduceRegion(
+        reducer=ee.Reducer.sum(),
+        scale=scale,
+        maxPixels=1e10
+    )
+        return {
+            f"{name}_mean": magnitude_mean.get('x'),
+            f"{name}_stddev": magnitude_stddev.get('x'),
+            f"{name}_area": object_area.get('x')
+        }
     
+    def calculate_human_modification(self, geometry, scale=500):
+        """Calculate mean Global Human Modification value"""
+        mean_gHM = self.gHM_collection.mean().clip(geometry)
+        gHM_value = mean_gHM.reduceRegion(
+            reducer=ee.Reducer.mean(),
+            geometry=geometry,
+            scale=scale,
+            maxPixels=1e9)
+        return gHM_value.get('gHM')
+    
+    def create_statistics_row(self, feature, gradient_stats):
+        """Create a dictionary of statistics for a single feature"""
+        return {
+            'WDPA_PID': feature.get('WDPA_PID').getInfo(),
+            'ORIG_NAME': feature.get('ORIG_NAME').getInfo(),
+            'GIS_AREA': feature.get('GIS_AREA').getInfo(),
+            'buffer_mean': gradient_stats['buffer_mean'].getInfo(),
+            'buffer_SD': gradient_stats['buffer_stddev'].getInfo(),
+            'buffer_area': gradient_stats['buffer_area'].getInfo(),
+            'boundary_mean': gradient_stats['boundary_mean'].getInfo(),
+            'boundary_SD': gradient_stats['boundary_stddev'].getInfo(),
+            'boundary_area': gradient_stats['boundary_area'].getInfo(),
+            
+        }
+
+
+class ExportResults: 
+    def __init__(self, results_path='/workspaces/jupyter-gee-project/results'):
+        self.results_path = results_path
+        os.makedirs(results_path, exist_ok=True)
+    
+    def generate_filename(self):
+        """Generate standardized filename for results."""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        return f"output_{timestamp}.csv"
+    
+    def save_result_csv(self, filename):
+        """Save results to a file"""
+        filename = self.generate_filename()
+        filepath = os.path.join(self.results_path, filename)
+        results_data = {
+            "PA Name": pa_name,
+            "Band Name": band_name,
+            "Year": year,
+            "Buffer Distance": buffer_distance,
+            "Max Error": max_error,
+            "Image Count": image_count,
+            "Gradient Buffer Area": gradient_buffer_area,
+            "Gradient Buffer Mean": gradient_buffer_mean,
+            "Gradient Buffer StdDev": gradient_buffer_stddev,
+            "Gradient Boundary Area": gradient_boundary_area,
+            "Gradient Boundary Mean": gradient_boundary_mean,
+            "Gradient Boundary StdDev": gradient_boundary_stddev
+        }
+        df = pd.DataFrame([results_data])
+        df.to_csv(filepath, index=False)
+        print(f"Results saved locally to: {filepath}")
+        return filepath
+
 
 class Visualization:
     def __init__(self):
