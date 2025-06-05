@@ -31,6 +31,18 @@ class GeometryOperations:
         geom = feat.difference(water_vect.geometry(), maxError=self.max_error)
         return geom
     
+    def get_pixels_boundary(self, image, polygon, scale=10):
+        """Get pixels that straddle the 10km surrounding the polygon boundary"""
+        outer_buffer = ee.Geometry(polygon).buffer(scale/2)
+        inner_buffer = ee.Geometry(polygon).buffer(-scale/2)
+        boundary_region = outer_buffer.difference(inner_buffer)
+        boundary_pixels = image.updateMask(
+            image.clip(boundary_region)
+            .mask()
+            .reduce(ee.Reducer.anyNonZero())
+        )
+        return boundary_pixels
+        
 
 class ImageOperations:
     def __init__(self):
@@ -79,10 +91,10 @@ class Visualization:
         self.default_vis_params = {
             'min': -0.5,
             'max': 1,
-            'palette': ['blue', 'white', 'green']
+            'palette': ['black', 'gray', 'white']
         }
 
-    def create_map(self, geometry, gradient, vis_params=None):
+    def create_map(self, geometry, gradient, boundary_pixels, vis_params=None):
         """Create and return an interactive map"""
         if vis_params is None:
             vis_params = self.default_vis_params
@@ -90,5 +102,6 @@ class Visualization:
         Map = geemap.Map()
         Map.centerObject(geometry, 8)
         Map.addLayer(geometry, {'color': 'red'}, 'Protected Area Geometry')
-        Map.addLayer(gradient, vis_params, "Gradient Layer")
+        Map.addLayer(gradient, vis_params, 'Gradient Layer')
+        Map.addLayer(boundary_pixels, vis_params, 'Gradient Boundary Pixels')
         return Map
