@@ -87,31 +87,39 @@ class ImageOperations:
         magnitude = gradient_x.pow(2).add(gradient_y.pow(2)).sqrt()
         return magnitude
 
+
 class StatsOperations:
-        def __init__(self):
+    def __init__(self):
         self.gHM_collection = ee.ImageCollection('CSP/HM/GlobalHumanModification')
 
-    def calculate_gradient_statistics(self, layer scale=500, name='buffer'):
-        """Calculate mean and standard deviation of gradient magnitude"""
-        magnitude_mean = layer.reduceRegion(
+    def calculate_gradient_statistics(self, layer, scale=500, name='buffer'):
+        """Calculate mean and standard deviation of gradient magnitude for each band"""
+        bounded_layer = layer.clip(layer.geometry())
+        magnitude_mean = bounded_layer.reduceRegion(
             reducer=ee.Reducer.mean(),
+            geometry=bounded_layer.geometry(),
             scale=scale,
             maxPixels=1e10)
-        magnitude_stddev = layer.reduceRegion(
+        magnitude_stddev = bounded_layer.reduceRegion(
             reducer=ee.Reducer.stdDev(),
+            geometry=bounded_layer.geometry(),
             scale=scale,
             maxPixels=1e10)
-        object_area = layer.mask().multiply(ee.Image.pixelArea()).reduceRegion(
-        reducer=ee.Reducer.sum(),
-        scale=scale,
-        maxPixels=1e10
-    )
-        return {
-            f"{name}_mean": magnitude_mean.get('x'),
-            f"{name}_stddev": magnitude_stddev.get('x'),
-            f"{name}_area": object_area.get('x')
-        }
-    
+        object_area = bounded_layer.mask().multiply(ee.Image.pixelArea()).reduceRegion(
+            reducer=ee.Reducer.sum(),
+            geometry=bounded_layer.geometry(),
+            scale=scale,
+            maxPixels=1e10)
+        
+        # Create a dictionary with statistics for all bands
+        stats = {}
+        for key in magnitude_mean.getInfo().keys():
+            stats[f"{name}_mean"] = magnitude_mean.get(key).getInfo()
+            stats[f"{name}_stddev"] = magnitude_stddev.get(key).getInfo()
+            stats[f"{name}_area"] = object_area.get(key).getInfo()
+        
+        return stats
+
     def calculate_human_modification(self, geometry, scale=500):
         """Calculate mean Global Human Modification value"""
         mean_gHM = self.gHM_collection.mean().clip(geometry)
@@ -128,13 +136,14 @@ class StatsOperations:
             'WDPA_PID': feature.get('WDPA_PID').getInfo(),
             'ORIG_NAME': feature.get('ORIG_NAME').getInfo(),
             'GIS_AREA': feature.get('GIS_AREA').getInfo(),
+            'band_name': feature.get('band_name').getInfo(),#
+            'year': feature.get('year').getInfo(),##check
             'buffer_mean': gradient_stats['buffer_mean'].getInfo(),
             'buffer_SD': gradient_stats['buffer_stddev'].getInfo(),
             'buffer_area': gradient_stats['buffer_area'].getInfo(),
             'boundary_mean': gradient_stats['boundary_mean'].getInfo(),
             'boundary_SD': gradient_stats['boundary_stddev'].getInfo(),
-            'boundary_area': gradient_stats['boundary_area'].getInfo(),
-            
+            'boundary_area': gradient_stats['boundary_area'].getInfo(),     
         }
 
 
@@ -184,7 +193,6 @@ class Visualization:
         """Create and return an interactive map"""
         if vis_params is None:
             vis_params = self.default_vis_params
-
         Map = geemap.Map()
         Map.centerObject(geometry, 8)
         Map.addLayer(geometry, {'color': 'red'}, 'Protected Area Geometry')
