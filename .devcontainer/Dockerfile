@@ -1,21 +1,38 @@
-FROM python:3.9-slim
+FROM osgeo/gdal:ubuntu-small-3.6.3
 
 WORKDIR /workspace
 
-RUN apt-get update && apt-get install -y \
-    curl \
-    git \
-    && rm -rf /var/lib/apt/lists/*
+ENV DEBIAN_FRONTEND=noninteractive
 
-RUN pip install --no-cache-dir \
+# Install Python, pip, PostgreSQL server, PostGIS, and utilities
+RUN apt-get update && apt-get install -y \
+    python3-pip \
+    python3-dev \
+    postgresql postgresql-contrib \
+    postgis \
+    git \
+    curl \
+    sudo
+
+# Upgrade pip and install Python packages
+RUN pip3 install --no-cache-dir \
     jupyterlab \
     ipykernel \
     notebook \
+    pandas \
+    numpy \
     earthengine-api \
     geemap \
     folium \
     ipyleaflet \
-    pandas \
-    numpy
+    geopandas \
+    sqlalchemy psycopg2-binary
 
-CMD ["bash"]
+# Copy startup script into container
+COPY start.sh /usr/local/bin/start.sh
+RUN chmod +x /usr/local/bin/start.sh
+
+# Expose PostgreSQL port (optional, for external access)
+EXPOSE 5432
+
+CMD ["/usr/local/bin/start.sh"]

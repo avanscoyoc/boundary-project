@@ -4,6 +4,7 @@ import os
 import pandas as pd
 from datetime import datetime
 
+
 class GeometryOperations:
     def __init__(self, buffer_distance=10000, max_error=1):
         self.buffer_distance = buffer_distance
@@ -32,6 +33,17 @@ class GeometryOperations:
             eightConnected=False)
         geom = feat.difference(water_vect.geometry(), maxError=self.max_error)
         return geom
+    
+    def get_biome(self, geom): 
+        """Get biome with largest overlap for a feature, add BIOME_NAME property"""
+        ecoregions = ee.FeatureCollection("RESOLVE/ECOREGIONS/2017")
+        intersecting = ecoregions.map(lambda eco: eco.set(
+            'intersection_area', 
+            eco.geometry().intersection(geom).area()
+        )).filterBounds(geom)
+        largest_ecoregion = intersecting.sort('intersection_area', False).first()
+        result = ee.Feature(geom).set('BIOME_NAME', largest_ecoregion.get('BIOME_NAME'))
+        return result
     
     def get_pixels_boundary(self, image, polygon, scale=10):
         """Get pixels that straddle the 10km surrounding the polygon boundary"""
@@ -93,31 +105,20 @@ class StatsOperations:
         self.gHM_collection = ee.ImageCollection('CSP/HM/GlobalHumanModification')
 
     def calculate_gradient_statistics(self, layer, scale=500, name='buffer'):
-        """Calculate mean and standard deviation of gradient magnitude for each band"""
+        """Calculate mean and standard deviation of gradient magnitude"""
         bounded_layer = layer.clip(layer.geometry())
-        magnitude_mean = bounded_layer.reduceRegion(
-            reducer=ee.Reducer.mean(),
+        stats = bounded_layer.reduceRegion(
+            reducer=ee.Reducer.mean().combine(
+                reducer2=ee.Reducer.stdDev(),
+                sharedInputs=True
+            ).combine(
+                reducer2=ee.Reducer.sum(),
+                sharedInputs=True
+            ),
             geometry=bounded_layer.geometry(),
             scale=scale,
-            maxPixels=1e10)
-        magnitude_stddev = bounded_layer.reduceRegion(
-            reducer=ee.Reducer.stdDev(),
-            geometry=bounded_layer.geometry(),
-            scale=scale,
-            maxPixels=1e10)
-        object_area = bounded_layer.mask().multiply(ee.Image.pixelArea()).reduceRegion(
-            reducer=ee.Reducer.sum(),
-            geometry=bounded_layer.geometry(),
-            scale=scale,
-            maxPixels=1e10)
-        
-        # Create a dictionary with statistics for all bands
-        stats = {}
-        for key in magnitude_mean.getInfo().keys():
-            stats[f"{name}_mean"] = magnitude_mean.get(key).getInfo()
-            stats[f"{name}_stddev"] = magnitude_stddev.get(key).getInfo()
-            stats[f"{name}_area"] = object_area.get(key).getInfo()
-        
+            maxPixels=1e10
+        )
         return stats
 
     def calculate_human_modification(self, geometry, scale=500):
@@ -129,22 +130,55 @@ class StatsOperations:
             scale=scale,
             maxPixels=1e9)
         return gHM_value.get('gHM')
-    
-    def create_statistics_row(self, feature, gradient_stats):
-        """Create a dictionary of statistics for a single feature"""
+
+
+class FeatureProcessor:
+    def __init__(self, geo_ops, img_ops, stats_ops):
+        self.geo_ops = geo_ops
+        self.img_ops = img_ops
+        self.stats_ops = stats_ops
+        self.bands_to_process = ['sur_refl_b01', 'sur_refl_b02', 'sur_refl_b03', 'EVI', 'NDVI']
+        
+    def collect_feature_info(self, pa, aoi_with_biome):
+        """Collect basic protected area feature information"""
         return {
-            'WDPA_PID': feature.get('WDPA_PID').getInfo(),
-            'ORIG_NAME': feature.get('ORIG_NAME').getInfo(),
-            'GIS_AREA': feature.get('GIS_AREA').getInfo(),
-            'band_name': feature.get('band_name').getInfo(),#
-            'year': feature.get('year').getInfo(),##check
-            'buffer_mean': gradient_stats['buffer_mean'].getInfo(),
-            'buffer_SD': gradient_stats['buffer_stddev'].getInfo(),
-            'buffer_area': gradient_stats['buffer_area'].getInfo(),
-            'boundary_mean': gradient_stats['boundary_mean'].getInfo(),
-            'boundary_SD': gradient_stats['boundary_stddev'].getInfo(),
-            'boundary_area': gradient_stats['boundary_area'].getInfo(),     
+            'WDPA_PID': pa.get('WDPA_PID'),
+            'ORIG_NAME': pa.get('ORIG_NAME'),
+            'BIOME_NAME': aoi_with_biome.get('BIOME_NAME'),
+            'GIS_AREA': pa.get('GIS_AREA')
         }
+    
+    def process_single_band(self, band_name, image, pa_geometry):
+        """Process a single band and return its statistics"""
+        single_band = image.select(band_name)
+        gradient = self.img_ops.get_gradient_magnitude(single_band)
+        boundary_pixels = self.geo_ops.get_pixels_boundary(gradient, pa_geometry, scale=500)
+        boundary_pixels = boundary_pixels.clip(pa_geometry.buffer(500))
+        return {
+            'band_name': band_name,
+            'boundary_stats': self.stats_ops.calculate_gradient_statistics(boundary_pixels, name='boundary'),
+            'buffer_stats': self.stats_ops.calculate_gradient_statistics(boundary_pixels, name='buffer'),
+            'gradient': gradient,
+            'boundary_pixels': boundary_pixels}
+    
+    def process_all_bands(self, image, pa_geometry):
+        """Process all bands and collect their statistics"""
+        return [self.process_single_band(band_name, image, pa_geometry) 
+                for band_name in self.bands_to_process]
+    
+    def compile_statistics(self, feature_info, computed_stats, year):
+        """Compile all statistics into a list of dictionaries"""
+        feature_values = {k: v.getInfo() for k, v in feature_info.items()}
+        all_stats = []
+        for stat in computed_stats:
+            row_stats = {
+                **feature_values,
+                'band_name': stat['band_name'],
+                'year': year,
+                **{f"boundary_{k}": v for k, v in stat['boundary_stats'].getInfo().items()},
+                **{f"buffer_{k}": v for k, v in stat['buffer_stats'].getInfo().items()}}
+            all_stats.append(row_stats)       
+        return all_stats
 
 
 class ExportResults: 
@@ -152,33 +186,19 @@ class ExportResults:
         self.results_path = results_path
         os.makedirs(results_path, exist_ok=True)
     
-    def generate_filename(self):
+    def generate_filename(self, protected_area_name, year):
         """Generate standardized filename for results."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        return f"output_{timestamp}.csv"
+        return f"results_{protected_area_name.replace(' ', '_')}_{year}_{timestamp}.csv"
     
-    def save_result_csv(self, filename):
-        """Save results to a file"""
-        filename = self.generate_filename()
-        filepath = os.path.join(self.results_path, filename)
-        results_data = {
-            "PA Name": pa_name,
-            "Band Name": band_name,
-            "Year": year,
-            "Buffer Distance": buffer_distance,
-            "Max Error": max_error,
-            "Image Count": image_count,
-            "Gradient Buffer Area": gradient_buffer_area,
-            "Gradient Buffer Mean": gradient_buffer_mean,
-            "Gradient Buffer StdDev": gradient_buffer_stddev,
-            "Gradient Boundary Area": gradient_boundary_area,
-            "Gradient Boundary Mean": gradient_boundary_mean,
-            "Gradient Boundary StdDev": gradient_boundary_stddev
-        }
-        df = pd.DataFrame([results_data])
-        df.to_csv(filepath, index=False)
-        print(f"Results saved locally to: {filepath}")
-        return filepath
+    def save_statistics_to_csv(self, all_stats, protected_area_name, year):
+        """Save computed statistics to a CSV file"""
+        df = pd.DataFrame(all_stats)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        output_file = f'results_{protected_area_name.replace(" ", "_")}_{year}_{timestamp}.csv'
+        df.to_csv(output_file, index=False)
+        print(f'Results saved to {output_file}')
+        return df, output_file
 
 
 class Visualization:

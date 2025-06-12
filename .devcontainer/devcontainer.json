@@ -1,15 +1,14 @@
 {
-    "name": "gee-dev",
-    "dockerFile": "Dockerfile",
-    "context": ".",
-    "workspaceFolder": "/workspace",
-    "mounts": [
-      "source=${localWorkspaceFolder},target=/workspace,type=bind"
-    ],
-    "settings": {
-      "python.defaultInterpreterPath": "/usr/local/bin/python"
-    },
-    "postCreateCommand": "earthengine authenticate --quiet || true",
-    "remoteUser": "root"
-  }
-  
+  "name": "gee-dev",
+  "dockerFile": "Dockerfile",
+  "context": ".",
+  "workspaceFolder": "/workspace",
+  "mounts": [
+    "source=${localWorkspaceFolder},target=/workspace,type=bind"
+  ],
+  "settings": {
+    "python.defaultInterpreterPath": "/usr/bin/python3"
+  },
+  "postCreateCommand": "python3 -m ipykernel install --user --name gee-dev-kernel && earthengine authenticate --quiet || true",
+  "remoteUser": "root"
+}
