@@ -1,0 +1,6 @@
+WDPA_PID,ORIG_NAME,BIOME_NAME,GIS_AREA,band_name,year,boundary_x_count,boundary_x_mean,boundary_x_stdDev,buffer_x_count,buffer_x_mean,buffer_x_stdDev
+916,Serengeti National Park,"Tropical & Subtropical Grasslands, Savannas & Shrublands",13123.0503012899,sur_refl_b01,2010,7401,0.08955859412597765,0.06833554854470168,53386,0.08666596887875261,0.0652825843750178
+916,Serengeti National Park,"Tropical & Subtropical Grasslands, Savannas & Shrublands",13123.0503012899,sur_refl_b02,2010,7401,0.1566211357299091,0.11191529305875395,53386,0.15109222497132874,0.11132661556517345
+916,Serengeti National Park,"Tropical & Subtropical Grasslands, Savannas & Shrublands",13123.0503012899,sur_refl_b03,2010,7401,0.04434986092223826,0.034763493447104235,53386,0.04210836507282138,0.03180729772668419
+916,Serengeti National Park,"Tropical & Subtropical Grasslands, Savannas & Shrublands",13123.0503012899,EVI,2010,7401,0.00010798047131357876,7.942124319974879e-05,53386,0.00010052232996043537,7.265189442002086e-05
+916,Serengeti National Park,"Tropical & Subtropical Grasslands, Savannas & Shrublands",13123.0503012899,NDVI,2010,7401,4.090565471374215e-05,3.0413388615449602e-05,53386,3.75017008863554e-05,2.6895414028638514e-05

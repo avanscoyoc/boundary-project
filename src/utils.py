@@ -7,16 +7,14 @@ from google.cloud import storage
 
 
 class GeometryOperations:
-    def __init__(self, buffer_distance=10000, max_error=1):
-        self.buffer_distance = buffer_distance
+    def __init__(self, max_error=1):
         self.max_error = max_error
         self.water_mask = ee.Image('JRC/GSW1_0/GlobalSurfaceWater')
 
-    def buffer_polygon(self, feat):
+    def buffer_polygon(self, geom, buffer_distance=10000):
         """Create buffer around polygon"""
-        feat = ee.Feature(feat)
-        out = feat.buffer(self.buffer_distance).geometry()
-        inn = feat.buffer(-self.buffer_distance).geometry()
+        out = geom.buffer(buffer_distance)
+        inn = geom.buffer(-buffer_distance)
         aoi = out.difference(inn, self.max_error)
         return aoi
 
@@ -45,18 +43,6 @@ class GeometryOperations:
         largest_ecoregion = intersecting.sort('intersection_area', False).first()
         result = ee.Feature(geom).set('BIOME_NAME', largest_ecoregion.get('BIOME_NAME'))
         return result
-    
-    def get_pixels_boundary(self, image, polygon, scale=10):
-        """Get pixels that straddle the 10km surrounding the polygon boundary"""
-        outer_buffer = ee.Geometry(polygon).buffer(scale/2)
-        inner_buffer = ee.Geometry(polygon).buffer(-scale/2)
-        boundary_region = outer_buffer.difference(inner_buffer)
-        boundary_pixels = image.updateMask(
-            image.clip(boundary_region)
-            .mask()
-            .reduce(ee.Reducer.anyNonZero())
-        )
-        return boundary_pixels
         
 
 class ImageOperations:
@@ -105,19 +91,18 @@ class StatsOperations:
     def __init__(self):
         self.gHM_collection = ee.ImageCollection('CSP/HM/GlobalHumanModification')
 
-    def calculate_gradient_statistics(self, layer, scale=500, name='buffer'):
+    def calculate_gradient_statistics(self, layer, name='buffer'):
         """Calculate mean and standard deviation of gradient magnitude"""
-        bounded_layer = layer.clip(layer.geometry())
-        stats = bounded_layer.reduceRegion(
+        stats = layer.reduceRegion(
             reducer=ee.Reducer.mean().combine(
                 reducer2=ee.Reducer.stdDev(),
                 sharedInputs=True
             ).combine(
-                reducer2=ee.Reducer.sum(),
+                reducer2=ee.Reducer.count(),
                 sharedInputs=True
             ),
-            geometry=bounded_layer.geometry(),
-            scale=scale,
+            geometry=layer.geometry(),
+            scale=500,
             maxPixels=1e10
         )
         return stats
@@ -149,22 +134,23 @@ class FeatureProcessor:
             'GIS_AREA': pa.get('GIS_AREA')
         }
     
-    def process_single_band(self, band_name, image, pa_geometry):
+    def process_single_band(self, band_name, image, pa_geometry, aoi):
         """Process a single band and return its statistics"""
         single_band = image.select(band_name)
-        gradient = self.img_ops.get_gradient_magnitude(single_band)
-        boundary_pixels = self.geo_ops.get_pixels_boundary(gradient, pa_geometry, scale=500)
-        boundary_pixels = boundary_pixels.clip(pa_geometry.buffer(500))
+        buffer_img = self.img_ops.get_gradient_magnitude(single_band).clip(aoi)
+        boundary = self.geo_ops.buffer_polygon(pa_geometry, 1000)
+        boundary_img = buffer_img.clip(boundary)
         return {
             'band_name': band_name,
-            'boundary_stats': self.stats_ops.calculate_gradient_statistics(boundary_pixels, name='boundary'),
-            'buffer_stats': self.stats_ops.calculate_gradient_statistics(boundary_pixels, name='buffer'),
-            'gradient': gradient,
-            'boundary_pixels': boundary_pixels}
-    
-    def process_all_bands(self, image, pa_geometry):
+            'boundary_stats': self.stats_ops.calculate_gradient_statistics(boundary_img, name='boundary'),
+            'buffer_stats': self.stats_ops.calculate_gradient_statistics(buffer_img, name='buffer') #, 
+            #'boundary_pixels': boundary_img,
+            #'buffer_pixels': buffer_img
+        }
+
+    def process_all_bands(self, image, pa_geometry, aoi):
         """Process all bands and collect their statistics"""
-        return [self.process_single_band(band_name, image, pa_geometry) 
+        return [self.process_single_band(band_name, image, pa_geometry, aoi)
                 for band_name in self.bands_to_process]
     
     def compile_statistics(self, feature_info, computed_stats, year):
