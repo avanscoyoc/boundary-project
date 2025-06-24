@@ -3,6 +3,7 @@ import geemap
 import os
 import pandas as pd
 from datetime import datetime
+from google.cloud import storage
 
 
 class GeometryOperations:
@@ -185,20 +186,36 @@ class ExportResults:
     def __init__(self, results_path='/workspaces/jupyter-gee-project/results'):
         self.results_path = results_path
         os.makedirs(results_path, exist_ok=True)
-    
-    def generate_filename(self, protected_area_name, year):
-        """Generate standardized filename for results."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        return f"results_{protected_area_name.replace(' ', '_')}_{year}_{timestamp}.csv"
-    
-    def save_statistics_to_csv(self, all_stats, protected_area_name, year):
-        """Save computed statistics to a CSV file"""
-        df = pd.DataFrame(all_stats)
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        output_file = f'results_{protected_area_name.replace(" ", "_")}_{year}_{timestamp}.csv'
-        df.to_csv(output_file, index=False)
-        print(f'Results saved to {output_file}')
-        return df, output_file
+        self.timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+    def save_df_to_gcs(self, df, bucket_name, wdpaid, year):
+        """Save DataFrame as CSV and upload to GCS."""
+        tmp_file = "/workspace/temp.csv"
+        df.to_csv(tmp_file, index=False)
+        client = storage.Client(project=bucket_name)
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(f'protected_areas/tables/_{wdpaid.replace(" ", "_")}_{year}_{self.timestamp}.csv')
+        blob.upload_from_filename(tmp_file)
+        print(f"Uploaded to: gs://{bucket_name}/{blob.name}")
+
+    def export_image_to_cloud(self, image, wdpaid, year):
+        """Save Image as a COG and upload to GCS."""
+        filepath = f'protected_areas/images/_{wdpaid.replace(" ", "_")}_{year}_{self.timestamp}.csv'
+        print(filepath)
+        export_task = ee.batch.Export.image.toCloudStorage(
+        image=image,
+        description='modis_export_cog',
+        bucket='dse-staff', 
+        fileNamePrefix=filepath,  
+        fileFormat='GeoTIFF', 
+        formatOptions={
+            'cloudOptimized': True,  
+        },
+        maxPixels=1e8,  
+        scale=30  
+        )
+        export_task.start()
+        return print(f'{self.timestamp} saved')
 
 
 class Visualization:
@@ -214,6 +231,7 @@ class Visualization:
         if vis_params is None:
             vis_params = self.default_vis_params
         Map = geemap.Map()
+        Map.add_basemap('HYBRID')
         Map.centerObject(geometry, 8)
         Map.addLayer(geometry, {'color': 'red'}, 'Protected Area Geometry')
         Map.addLayer(gradient, vis_params, 'Gradient Layer')
