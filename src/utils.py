@@ -1,9 +1,12 @@
+from glob import glob
 import ee
 import geemap
 import os
+import io
 import pandas as pd
 from datetime import datetime
 from google.cloud import storage
+import matplotlib.pyplot as plt
 
 
 class GeometryOperations:
@@ -143,9 +146,9 @@ class FeatureProcessor:
         return {
             'band_name': band_name,
             'boundary_stats': self.stats_ops.calculate_gradient_statistics(boundary_img, name='boundary'),
-            'buffer_stats': self.stats_ops.calculate_gradient_statistics(buffer_img, name='buffer') #, 
-            #'boundary_pixels': boundary_img,
-            #'buffer_pixels': buffer_img
+            'buffer_stats': self.stats_ops.calculate_gradient_statistics(buffer_img, name='buffer'),
+            'boundary_pixels': boundary_img,
+            'buffer_pixels': buffer_img
         }
 
     def process_all_bands(self, image, pa_geometry, aoi):
@@ -169,19 +172,19 @@ class FeatureProcessor:
 
 
 class ExportResults: 
-    def __init__(self, results_path='/workspaces/jupyter-gee-project/results'):
-        self.results_path = results_path
-        os.makedirs(results_path, exist_ok=True)
+    def __init__(self):
         self.timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
     def save_df_to_gcs(self, df, bucket_name, wdpaid, year):
         """Save DataFrame as CSV and upload to GCS."""
-        tmp_file = "/workspace/temp.csv"
-        df.to_csv(tmp_file, index=False)
+        import io
+        buffer = io.BytesIO()
+        df.to_csv(buffer, index=False)
+        buffer.seek(0)
         client = storage.Client(project=bucket_name)
         bucket = client.bucket(bucket_name)
         blob = bucket.blob(f'protected_areas/tables/_{wdpaid.replace(" ", "_")}_{year}_{self.timestamp}.csv')
-        blob.upload_from_filename(tmp_file)
+        blob.upload_from_file(buffer, content_type='text/csv')
         print(f"Uploaded to: gs://{bucket_name}/{blob.name}")
 
     def export_image_to_cloud(self, image, wdpaid, year):
@@ -203,9 +206,16 @@ class ExportResults:
         export_task.start()
         return print(f'{self.timestamp} saved')
 
+    def combine_gcs_csvs(self, bucket_name, folder_path):
+        """Combine all CSV files from a GCS folder into a single DataFrame."""
+        bucket = storage.Client(bucket_name).bucket(bucket_name)
+        dfs = [pd.read_csv(io.BytesIO(blob.download_as_bytes()))
+               for blob in bucket.list_blobs(prefix=folder_path) if blob.name.endswith('.csv')]
+        return pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
+
 
 class Visualization:
-    def __init__(self):
+    def __init__(self): 
         self.default_vis_params = {
             'min': -0.5,
             'max': 1,
@@ -223,3 +233,35 @@ class Visualization:
         Map.addLayer(gradient, vis_params, 'Gradient Layer')
         Map.addLayer(boundary_pixels, vis_params, 'Gradient Boundary Pixels')
         return Map
+
+    def plot_edge_ratio(self, df):
+        """
+        Plot edge_ratio by year for each WDPA and band.
+        Line color = WDPA_PID, line style = band_name.
+        """
+        line_styles = ['-', '--', '-.', ':']
+        bands = df['band_name'].unique()
+        style_map = {band: line_styles[i % len(line_styles)] for i, band in enumerate(bands)}
+
+        colors = plt.cm.tab10.colors  # Up to 10 distinct colors
+        wdpaids = df['WDPA_PID'].unique()
+        color_map = {wdpa: colors[i % len(colors)] for i, wdpa in enumerate(wdpaids)}
+
+        plt.figure(figsize=(10, 6))
+        for band in bands:
+            for wdpa in wdpaids:
+                sub = df[(df['band_name'] == band) & (df['WDPA_PID'] == wdpa)]
+                if not sub.empty:
+                    plt.plot(
+                        sub['year'],
+                        sub['edge_ratio'],
+                        marker='o',
+                        linestyle=style_map[band],
+                        color=color_map[wdpa],
+                        label=f'WDPA {wdpa}, Band {band}'
+                    )
+        plt.xlabel('Year')
+        plt.ylabel('Edge Ratio')
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
