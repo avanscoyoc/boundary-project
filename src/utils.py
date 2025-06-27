@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 class GeometryOperations:
     def __init__(self, max_error=1):
         self.max_error = max_error
-        self.water_mask = ee.Image('JRC/GSW1_0/GlobalSurfaceWater')
+        self.water_mask = ee.Image("JRC/GSW1_0/GlobalSurfaceWater")
 
     def buffer_polygon(self, geom, buffer_distance=10000):
         """Create buffer around polygon"""
@@ -44,8 +44,12 @@ class GeometryOperations:
             eco.geometry().intersection(geom).area()
         )).filterBounds(geom)
         largest_ecoregion = intersecting.sort('intersection_area', False).first()
-        result = ee.Feature(geom).set('BIOME_NAME', largest_ecoregion.get('BIOME_NAME'))
-        return result
+        biome_name = ee.Algorithms.If(
+            largest_ecoregion,
+            largest_ecoregion.get('BIOME_NAME'),
+            ee.String('Unknown')
+        )
+        return biome_name
         
 
 class ImageOperations:
@@ -110,15 +114,20 @@ class StatsOperations:
         )
         return stats
 
-    def calculate_human_modification(self, geometry, scale=500):
-        """Calculate mean Global Human Modification value"""
-        mean_gHM = self.gHM_collection.mean().clip(geometry)
-        gHM_value = mean_gHM.reduceRegion(
+    def get_gHM(self, geom, scale=500):
+        """Return mean Global Human Modification value for a geometry as an ee.Number."""
+        mean_gHM = self.gHM_collection.mean()
+        gHM_dict = mean_gHM.reduceRegion(
             reducer=ee.Reducer.mean(),
-            geometry=geometry,
+            geometry=geom,
             scale=scale,
-            maxPixels=1e9)
-        return gHM_value.get('gHM')
+            maxPixels=1e9
+        )
+        return ee.Algorithms.If(
+            gHM_dict.contains('gHM'),
+            gHM_dict.get('gHM'),
+            ee.Number(-9999)
+        )
 
 
 class FeatureProcessor:
@@ -128,84 +137,85 @@ class FeatureProcessor:
         self.stats_ops = stats_ops
         self.bands_to_process = ['sur_refl_b01', 'sur_refl_b02', 'sur_refl_b03', 'EVI', 'NDVI']
         
-    def collect_feature_info(self, pa, aoi_with_biome):
+    def collect_feature_info(self, pa, geom):
         """Collect basic protected area feature information"""
         return {
             'WDPA_PID': pa.get('WDPA_PID'),
             'ORIG_NAME': pa.get('ORIG_NAME'),
-            'BIOME_NAME': aoi_with_biome.get('BIOME_NAME'),
-            'GIS_AREA': pa.get('GIS_AREA')
+            'GOV_TYPE': pa.get('GOV_TYPE'), 
+            'OWN_TYPE': pa.get('OWN_TYPE'),
+            'STATUS_YR': pa.get('STATUS_YR'),
+            'IUCN_CAT': pa.get('IUCN_CAT'),
+            'GIS_AREA': pa.get('GIS_AREA'),
+            'gHM': self.stats_ops.get_gHM(geom),
+            'BIOME_NAME': self.geo_ops.get_biome(geom),
         }
     
-    def process_single_band(self, band_name, image, pa_geometry, aoi):
-        """Process a single band and return its statistics"""
-        single_band = image.select(band_name)
-        buffer_img = self.img_ops.get_gradient_magnitude(single_band).clip(aoi)
-        boundary = self.geo_ops.buffer_polygon(pa_geometry, 1000)
-        boundary_img = buffer_img.clip(boundary)
-        return {
-            'band_name': band_name,
-            'boundary_stats': self.stats_ops.calculate_gradient_statistics(boundary_img, name='boundary'),
-            'buffer_stats': self.stats_ops.calculate_gradient_statistics(buffer_img, name='buffer'),
-            'boundary_pixels': boundary_img,
-            'buffer_pixels': buffer_img
-        }
+    def process_all_bands_ee(self, image, pa_geometry, aoi, feature_info, year):
+        """Process all bands and return a list of ee.Feature (one per band)"""
+        features = []
+        for band_name in self.bands_to_process:
+            single_band = image.select(band_name)
+            buffer_img = self.img_ops.get_gradient_magnitude(single_band).clip(aoi)
+            boundary = self.geo_ops.buffer_polygon(pa_geometry, 1000)
+            boundary_img = buffer_img.clip(boundary)
 
-    def process_all_bands(self, image, pa_geometry, aoi):
-        """Process all bands and collect their statistics"""
-        return [self.process_single_band(band_name, image, pa_geometry, aoi)
-                for band_name in self.bands_to_process]
-    
-    def compile_statistics(self, feature_info, computed_stats, year):
-        """Compile all statistics into a list of dictionaries"""
-        feature_values = {k: v.getInfo() for k, v in feature_info.items()}
-        all_stats = []
-        for stat in computed_stats:
-            row_stats = {
-                **feature_values,
-                'band_name': stat['band_name'],
+            # Calculate stats as EE dictionaries
+            boundary_stats = self.stats_ops.calculate_gradient_statistics(boundary_img, name='boundary')
+            buffer_stats = self.stats_ops.calculate_gradient_statistics(buffer_img, name='buffer')
+
+            # Combine all info into an ee.Feature
+            props = {
+                'WDPA_PID': feature_info['WDPA_PID'],
+                'ORIG_NAME': feature_info['ORIG_NAME'],
+                'BIOME_NAME': feature_info['BIOME_NAME'],
+                'GOV_TYPE': feature_info['GOV_TYPE'], 
+                'OWN_TYPE': feature_info['OWN_TYPE'],
+                'STATUS_YR': feature_info['STATUS_YR'],
+                'IUCN_CAT': feature_info['IUCN_CAT'],
+                'GIS_AREA': feature_info['GIS_AREA'],
+                'gHM': feature_info['gHM'],
                 'year': year,
-                **{f"boundary_{k}": v for k, v in stat['boundary_stats'].getInfo().items()},
-                **{f"buffer_{k}": v for k, v in stat['buffer_stats'].getInfo().items()}}
-            all_stats.append(row_stats)       
-        return all_stats
+                'band_name': band_name,
+                **{f"boundary_{k}": boundary_stats.get(k) for k in ['x_mean', 'x_stdDev', 'x_count']},
+                **{f"buffer_{k}": buffer_stats.get(k) for k in ['x_mean', 'x_stdDev', 'x_count']}
+            }
+            features.append(ee.Feature(None, props))
+        return features
 
 
 class ExportResults: 
     def __init__(self):
         self.timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
-    def save_df_to_gcs(self, df, bucket_name, wdpaid, year):
-        """Save DataFrame as CSV and upload to GCS."""
-        import io
-        buffer = io.BytesIO()
-        df.to_csv(buffer, index=False)
-        buffer.seek(0)
-        client = storage.Client(project=bucket_name)
-        bucket = client.bucket(bucket_name)
-        blob = bucket.blob(f'protected_areas/tables/_{wdpaid.replace(" ", "_")}_{year}_{self.timestamp}.csv')
-        blob.upload_from_file(buffer, content_type='text/csv')
-        print(f"Uploaded to: gs://{bucket_name}/{blob.name}")
+    def export_table_to_cloud(self, feature_collection, wdpaid, year):
+        task = ee.batch.Export.table.toCloudStorage(
+        collection=feature_collection,
+        description=f'{wdpaid}_{year}',
+        bucket='dse-staff',
+        fileNamePrefix=f'protected_areas/tables/{wdpaid}_{year}',
+        fileFormat='CSV'
+        )
+        task.start()
+        return print(f"Export task started for {wdpaid}, {year}")    
 
     def export_image_to_cloud(self, image, wdpaid, year):
         """Save Image as a COG and upload to GCS."""
-        filepath = f'protected_areas/images/_{wdpaid.replace(" ", "_")}_{year}_{self.timestamp}.csv'
-        print(filepath)
-        export_task = ee.batch.Export.image.toCloudStorage(
+        task = ee.batch.Export.image.toCloudStorage(
         image=image,
-        description='modis_export_cog',
+        description=f'image_{wdpaid}_{year}',
         bucket='dse-staff', 
-        fileNamePrefix=filepath,  
+        fileNamePrefix=f'protected_areas/images/{wdpaid}_{year}',  
         fileFormat='GeoTIFF', 
         formatOptions={
             'cloudOptimized': True,  
         },
         maxPixels=1e8,  
-        scale=30  
+        scale=500  
         )
-        export_task.start()
-        return print(f'{self.timestamp} saved')
-
+        task.start()
+        return print(f"Export task started for {wdpaid}, {year}") 
+    
     def combine_gcs_csvs(self, bucket_name, folder_path):
         """Combine all CSV files from a GCS folder into a single DataFrame."""
         bucket = storage.Client(bucket_name).bucket(bucket_name)

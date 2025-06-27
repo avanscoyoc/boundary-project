@@ -19,7 +19,6 @@ def run_analysis(wdpaid, year, show_map=False, band_name=None):
     pa_geometry = pa.geometry()
     aoi = geo_ops.buffer_polygon(pa_geometry)
     aoi = geo_ops.mask_water(aoi)
-    aoi_with_biome = geo_ops.get_biome(aoi)
 
     # Process imagery and add indices
     modis_ic = img_ops.modis.filter(img_ops.filter_for_year(aoi, year))
@@ -28,17 +27,25 @@ def run_analysis(wdpaid, year, show_map=False, band_name=None):
     image = img_ops.add_indices_to_image(composite)
 
     # Process features and collect statistics
-    feature_info = feature_processor.collect_feature_info(pa, aoi_with_biome)
-    computed_stats = feature_processor.process_all_bands(image, pa_geometry, aoi)
-    all_stats = feature_processor.compile_statistics(feature_info, computed_stats, year)
-    
+    feature_info = feature_processor.collect_feature_info(pa, aoi)
+    features = feature_processor.process_all_bands_ee(image, pa_geometry, aoi, feature_info, year)
+    stats_fc = ee.FeatureCollection(features)
+
     # Save results
-    df = pd.DataFrame(all_stats)
-    exporter.save_df_to_gcs(df, 'dse-staff', wdpaid, year)
+    #exporter.export_table_to_cloud(wdpaid, year, stats_fc)
+    task = ee.batch.Export.table.toCloudStorage(
+        collection=stats_fc,
+        description=f'{wdpaid}_{year}',
+        bucket='dse-staff',
+        fileNamePrefix=f'protected_areas/tables/{wdpaid}_{year}',
+        fileFormat='CSV'
+    )
+    task.start()
+    print(f"Export task started for {wdpaid}, {year}")  
 
     # Visualization
     if show_map:
-        band_stats = next(cs for cs in computed_stats if cs["band_name"] == band_name)
+        band_stats = next(cs for cs in features if cs["band_name"] == band_name)
         Map = viz.create_map(pa_geometry, band_stats['buffer_pixels'], band_stats['boundary_pixels'])
         return Map
     
