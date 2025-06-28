@@ -10,9 +10,9 @@ ee.Initialize(project='dse-staff')
 def main():
     start = time.time()
 
-    #shp_path = '/workspace/data/global_wdpa_June2021/Global_wdpa_wInfo_June2021.shp'
-    #gdf = gpd.read_file(shp_path)
-    wdpaids = ["916"] #gdf['WDPA_PID'].tail(1).tolist()
+    shp_path = '/workspace/data/global_wdpa_June2021/Global_wdpa_wInfo_June2021.shp'
+    gdf = gpd.read_file(shp_path)
+    wdpaids = gdf['WDPA_PID'].tail(1).tolist()
 
     run_all(wdpaids = wdpaids, start_year=2010, n_years=1, max_workers=10)
 

@@ -66,15 +66,6 @@ class ImageOperations:
 
     def add_indices_to_image(self, image):
         """Add vegetation indices to image"""
-        EVI = image.expression(
-            "2.5 * ((NIR - RED) / (NIR + 6 * RED - 7.5 * BLUE + 1))",
-            {
-                'NIR': image.select("sur_refl_b02"),
-                'RED': image.select("sur_refl_b01"),
-                'BLUE': image.select("sur_refl_b03")
-            }
-        ).rename("EVI")
-
         NDVI = image.expression(
             "(NIR - RED) / (NIR + RED)",
             {
@@ -83,7 +74,17 @@ class ImageOperations:
             }
         ).rename("NDVI")
 
-        return image.addBands([EVI, NDVI])
+        BSI = image.expression(
+            "((SWIR2 + RED) - (NIR + BLUE)) / ((SWIR2 + RED) + (NIR + BLUE))",
+            {
+                'SWIR2': image.select("sur_refl_b07"),
+                'RED': image.select("sur_refl_b01"), 
+                'NIR': image.select("sur_refl_b02"),
+                'BLUE': image.select("sur_refl_b03")
+            }
+        ).rename("BSI")
+
+        return image.addBands([NDVI, BSI])
 
     def get_gradient_magnitude(self, image):
         """Calculate gradient magnitude"""
@@ -135,7 +136,7 @@ class FeatureProcessor:
         self.geo_ops = geo_ops
         self.img_ops = img_ops
         self.stats_ops = stats_ops
-        self.bands_to_process = ['sur_refl_b01', 'sur_refl_b02', 'sur_refl_b03', 'EVI', 'NDVI']
+        self.bands_to_process = ['NDVI', 'BSI']#['sur_refl_b01', 'sur_refl_b02', 'sur_refl_b03', 'sur_refl_b04', 'NDVI', 'BSI']
         
     def collect_feature_info(self, pa, geom):
         """Collect basic protected area feature information"""
@@ -199,13 +200,13 @@ class ExportResults:
         task.start()
         return print(f"Export task started for {wdpaid}, {year}")    
 
-    def export_image_to_cloud(self, image, wdpaid, year):
+    def export_image_to_cloud(self, image, band_name, wdpaid, year):
         """Save Image as a COG and upload to GCS."""
         task = ee.batch.Export.image.toCloudStorage(
         image=image,
         description=f'image_{wdpaid}_{year}',
         bucket='dse-staff', 
-        fileNamePrefix=f'protected_areas/images/{wdpaid}_{year}',  
+        fileNamePrefix=f'protected_areas/images/{band_name}_{wdpaid}_{year}',  
         fileFormat='GeoTIFF', 
         formatOptions={
             'cloudOptimized': True,  
@@ -227,9 +228,9 @@ class ExportResults:
 class Visualization:
     def __init__(self): 
         self.default_vis_params = {
-            'min': -0.5,
-            'max': 1,
-            'palette': ['black', 'gray', 'white']
+            'min': 0,
+            'max': 0.0004,
+            'palette': ['black', 'white']
         }
 
     def create_map(self, geometry, gradient, boundary_pixels, vis_params=None):
@@ -244,34 +245,34 @@ class Visualization:
         Map.addLayer(boundary_pixels, vis_params, 'Gradient Boundary Pixels')
         return Map
 
-    def plot_edge_ratio(self, df):
+    def plot_edge_index(self, df):
         """
-        Plot edge_ratio by year for each WDPA and band.
+        Plot edge_index by year for each WDPA and band.
         Line color = WDPA_PID, line style = band_name.
         """
         line_styles = ['-', '--', '-.', ':']
-        bands = df['band_name'].unique()
+        bands = df[df['band_name'].isin(['BSI', 'NDVI'])]['band_name'].unique() #df['band_name'].unique()
         style_map = {band: line_styles[i % len(line_styles)] for i, band in enumerate(bands)}
 
         colors = plt.cm.tab10.colors  # Up to 10 distinct colors
-        wdpaids = df['WDPA_PID'].unique()
+        wdpaids = df['ORIG_NAME'].unique()
         color_map = {wdpa: colors[i % len(colors)] for i, wdpa in enumerate(wdpaids)}
 
         plt.figure(figsize=(10, 6))
         for band in bands:
             for wdpa in wdpaids:
-                sub = df[(df['band_name'] == band) & (df['WDPA_PID'] == wdpa)]
+                sub = df[(df['band_name'] == band) & (df['ORIG_NAME'] == wdpa)]
                 if not sub.empty:
                     plt.plot(
                         sub['year'],
-                        sub['edge_ratio'],
+                        sub['edge_index'],
                         marker='o',
                         linestyle=style_map[band],
                         color=color_map[wdpa],
-                        label=f'WDPA {wdpa}, Band {band}'
+                        label=f'{wdpa}, Band {band}'
                     )
         plt.xlabel('Year')
-        plt.ylabel('Edge Ratio')
+        plt.ylabel('Edge Index')
         plt.legend()
         plt.tight_layout()
         plt.show()

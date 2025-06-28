@@ -6,8 +6,12 @@
   "mounts": [
     "source=${localWorkspaceFolder},target=/workspace,type=bind"
   ],
-  "settings": {
-    "python.defaultInterpreterPath": "/usr/bin/python3"
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/bin/python3"
+      }
+    }
   },
   "postCreateCommand": "python3 -m ipykernel install --user --name gee-dev-kernel && earthengine authenticate --quiet || true",
   "remoteUser": "root"
