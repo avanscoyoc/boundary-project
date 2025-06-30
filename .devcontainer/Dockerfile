@@ -5,7 +5,7 @@ WORKDIR /workspace
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && \
-    apt-get install -y python3-pip python3-dev git curl sudo gnupg ffmpeg && \
+    apt-get install -y python3-pip python3-dev git curl sudo gnupg && \
     echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" \
       | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && \
     curl https://packages.cloud.google.com/apt/doc/apt-key.gpg \
@@ -16,6 +16,7 @@ RUN apt-get update && \
 
 RUN pip3 install --no-cache-dir \
     jupyterlab \
+    jupytext \
     ipykernel \
     notebook \
     pandas \
@@ -26,4 +27,7 @@ RUN pip3 install --no-cache-dir \
     folium \
     ipyleaflet \
     geopandas \
-    time-lapse 
+    matplotlib \
+    imageio \
+    tifffile \
+    imagecodecs 

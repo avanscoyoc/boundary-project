@@ -7,6 +7,10 @@ import pandas as pd
 from datetime import datetime
 from google.cloud import storage
 import matplotlib.pyplot as plt
+import tifffile
+import imageio
+import numpy as np
+from IPython.display import Image, display
 
 
 class GeometryOperations:
@@ -276,3 +280,34 @@ class Visualization:
         plt.legend()
         plt.tight_layout()
         plt.show()
+
+    def create_gif_from_tifs(self, folder):   
+        tif_files = sorted([os.path.join(folder, f) for f in os.listdir(folder) if f.endswith('.tif')])
+
+        vmin = 0
+        vmax = 0.0004
+        cmap = 'magma'
+        frames = []
+
+        for tif_path in tif_files:
+            data = tifffile.imread(tif_path)
+            if data.ndim > 2:
+                data = data[0]
+            # Extract year from filename (adjust if your pattern is different)
+            year = os.path.basename(tif_path).split('_')[-1].split('.')[0]
+            fig, ax = plt.subplots(figsize=(10, 10), dpi=100)
+            im = ax.imshow(data, vmin=vmin, vmax=vmax, cmap=cmap)
+            ax.axis('off')
+            # Add year text
+            ax.text(0.05, 0.95, year, color='black', fontsize=20, fontweight='bold',
+                    ha='left', va='top', transform=ax.transAxes)
+            plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+            buf = f"/tmp/frame_{os.path.basename(tif_path)}.png"
+            fig.savefig(buf, bbox_inches='tight', pad_inches=0)
+            plt.close(fig)
+            frames.append(imageio.v2.imread(buf))
+
+        name =  os.path.basename(folder).split('/')[-1]
+        gif_path = f"/workspace/output/gifs/{name}.gif"
+        imageio.mimsave(gif_path, frames, duration=0.25, loop=0)  # duration=2 seconds per frame for slower playback
+        return display(Image(filename=gif_path))
