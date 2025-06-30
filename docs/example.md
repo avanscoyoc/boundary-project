@@ -1,21 +1,23 @@
 ---
-jupytext:
-  text_representation:
-    extension: .md
-    format_name: myst
-    format_version: 0.13
-    jupytext_version: 1.17.2
-kernelspec:
-  display_name: Python 3
-  language: python
-  name: python3
+title: Islandization of Terrestrial Protected Areas
+authors:
+  - name: Amy Van Scoyoc
+    affiliations: 
+      - University of California, Berkeley
+    orchid: 0000-0001-8638-935X
+    email: avanscoyoc@berkeley.edu
+  - name: Wenjing Xu
+    affiliations: 
+      - University of California, Berkeley 
+      - Senckenberg Biodiversity and Climate Research Centre
+    orcid: 0000-0001-5657-2364
+  - name: Carl Boettiger
+    affiliations: Unversity of California, Berkeley
+  - name: Justin Brashares
+    affiliations: Unversity of California, Berkeley    
+description: >
+  Analysis of habitat continuity and islandization in protected areas using MODIS and geospatial methods.
 ---
-
-## Islandization of Terrestrial Protected Areas
-
-by Amy Van Scoyoc, Wenjing Xu, Thomas Mueller, Carl Boettiger, Justin Brashares
-
-+++
 
 ### Background
 

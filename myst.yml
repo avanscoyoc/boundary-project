@@ -1,0 +1,15 @@
+# See docs at: https://mystmd.org/guide/frontmatter
+version: 1
+project:
+  id: c7017cb7-b1bf-4e7f-82bb-2d0d1e7dcc0b
+   title: Islandization of Terrestrial Protected Areas
+   description: Analysis of habitat continuity and islandization in protected areas using MODIS and geospatial methods.
+   keywords: [protected areas, islandization, habitat continuity, MODIS]
+   authors: [Amy Van Scoyoc, Wenjing Xu, Carl Boettiger, Justin Brashares]
+  github: https://github.com/avanscoyoc/jupyter-gee-project
+  # To autogenerate a Table of Contents, run "myst init --write-toc"
+site:
+  template: book-theme
+  # options:
+  #   favicon: favicon.ico
+  #   logo: site_logo.png
