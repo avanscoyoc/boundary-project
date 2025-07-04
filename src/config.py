@@ -49,7 +49,7 @@ def load_protected_area(name):
 
 def load_local_data(wdpa_id):
     """Load protected area from local shapefile and convert to EE Feature"""
-    shp_path = '../data/global_wdpa_June2021/Global_wdpa_wInfo_June2021.shp'
+    shp_path = '../data/global_wdpa_June2021/Global_wdpa_footprint_June2021.shp'
     try:
         # Read shapefile
         gdf = gpd.read_file(shp_path)

@@ -1,0 +1,19 @@
+band_name,group,slope,p_value,r_squared,n
+sur_refl_b01,Global,,,0.41186177322477024,46
+sur_refl_b01,Temperate-Forests,,,1.0,23
+sur_refl_b01,Grassland & shrubland,,,1.0,23
+sur_refl_b02,Global,,,0.32533674325581163,46
+sur_refl_b02,Temperate-Forests,,,1.0,23
+sur_refl_b02,Grassland & shrubland,,,1.0,23
+sur_refl_b03,Global,,,0.3687061548627246,46
+sur_refl_b03,Temperate-Forests,,,1.0,23
+sur_refl_b03,Grassland & shrubland,,,1.0,23
+sur_refl_b04,Global,,,0.45019336726398373,46
+sur_refl_b04,Temperate-Forests,,,1.0,23
+sur_refl_b04,Grassland & shrubland,,,1.0,23
+NDVI,Global,,,0.013781244657297687,92
+NDVI,Temperate-Forests,,,1.0,23
+NDVI,Grassland & shrubland,,,0.021290648903848575,69
+BSI,Global,,,0.013850468027951202,92
+BSI,Temperate-Forests,,,1.0,23
+BSI,Grassland & shrubland,,,0.027721584645396535,69

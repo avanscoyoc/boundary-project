@@ -33,4 +33,6 @@ RUN pip3 install --no-cache-dir \
     matplotlib \
     imageio \
     tifffile \
-    imagecodecs 
+    imagecodecs \
+    seaborn \
+    statsmodels 

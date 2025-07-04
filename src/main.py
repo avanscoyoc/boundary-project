@@ -12,9 +12,9 @@ def main():
 
     shp_path = '/workspace/data/global_wdpa_June2021/Global_wdpa_wInfo_June2021.shp'
     gdf = gpd.read_file(shp_path)
-    wdpaids = gdf['WDPA_PID'].tail(1).tolist()
+    wdpaids = gdf['WDPA_PID'].head(50).tolist()
 
-    run_all(wdpaids = wdpaids, start_year=2010, n_years=1, max_workers=10)
+    run_all(wdpaids, start_year=2001, n_years=23, max_concurrent=15)
 
     end = time.time()
     print(f"Total elapsed time: {end - start:.2f} seconds")

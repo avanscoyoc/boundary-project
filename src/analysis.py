@@ -2,9 +2,11 @@ from utils import *
 from config import *
 import pandas as pd
 import concurrent.futures
+import ee
+import time
 
 
-def run_analysis(wdpaid, year, show_map=False, band_name=None):
+def run_analysis(wdpaid, year):
     """Function to analyze habitat edge at protected area boundary"""
     # Initialize classes
     geo_ops = GeometryOperations()
@@ -41,35 +43,38 @@ def run_analysis(wdpaid, year, show_map=False, band_name=None):
         fileFormat='CSV'
     )
     task.start()
-    print(f"Export task started for {wdpaid}, {year}")  
-
-    # Visualization
-    if show_map:
-        band_stats = next(cs for cs in features if cs["band_name"] == band_name)
-        Map = viz.create_map(pa_geometry, band_stats['buffer_pixels'], band_stats['boundary_pixels'])
-        return Map
-    
-    return print("Analysis complete for WDPA ID:", wdpaid, "for the year:", year)
+    print("Analysis complete for WDPA ID:", wdpaid, "for the year:", year)
+    return task
 
 
-def run_all(wdpaids, start_year, n_years, max_workers=4):
+def run_all(wdpaids, start_year, n_years, max_concurrent=12, poll_interval=30):
     """
-    Runs analysis for all wdpaids and years in parallel.
-    Prints completion messages as each run finishes.
+    Submits up to max_concurrent GEE export tasks at a time, waits for completion before submitting more.
     """
     years = [start_year + i for i in range(n_years)]
     tasks = [(wdpaid, year) for wdpaid in wdpaids for year in years]
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_task = {
-            executor.submit(run_analysis, wdpaid, year): (wdpaid, year)
-            for wdpaid, year in tasks
-        }
-        for future in concurrent.futures.as_completed(future_to_task):
-            wdpaid, year = future_to_task[future]
-            try:
-                future.result()
-            except Exception as exc:
-                print(f"WDPA ID {wdpaid}, Year {year} generated an exception: {exc}")
+    task_queue = []
+
+    for wdpaid, year in tasks:
+        # Start a new export task
+        task = run_analysis(wdpaid, year) 
+        task_queue.append((task, wdpaid, year))
+
+        # If we've reached the max_concurrent limit, wait for at least one to finish
+        while len([t for t,_,_ in task_queue if t.active()]) >= max_concurrent:
+            print(f"Waiting for tasks to finish... ({len(task_queue)} submitted)")
+            time.sleep(poll_interval)
+            # Remove finished tasks from the queue
+            task_queue = [(t, w, y) for t, w, y in task_queue if t.active()]
+
+    # Wait for all remaining tasks to finish
+    while any(t.active() for t,_,_ in task_queue):
+        print(f"Waiting for final tasks to finish... ({len(task_queue)} total)")
+        time.sleep(poll_interval)
+        task_queue = [(t, w, y) for t, w, y in task_queue if t.active()]
+
+    print("All exports complete.")
+
 
 
 def image_analysis(wdpaid, year, band_name):
