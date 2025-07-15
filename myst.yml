@@ -9,7 +9,3 @@ project:
   github: https://github.com/avanscoyoc/jupyter-gee-project
 site:
   template: book-theme
-exports:
-  - format: pdf
-    template: article 
-    output: docs/manuscript.pdf

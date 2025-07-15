@@ -18,6 +18,11 @@ description: >
   Analysis of habitat continuity and islandization in protected areas using MODIS and geospatial methods.
 keywords: protected area, boundary, habitat edge, earth engine, gradient
 bibliography: references.bib
+exports:
+  - format: docx
+  - format: pdf
+    template: plain_latex
+  - format: md
 ---
 
 ### Introduction
