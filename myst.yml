@@ -7,9 +7,9 @@ project:
   keywords: [protected areas, islandization, habitat continuity, MODIS, geospatial analysis]
   authors: [Amy Van Scoyoc, Wenjing Xu, Carl Boettiger, Justin Brashares]
   github: https://github.com/avanscoyoc/jupyter-gee-project
-  # To autogenerate a Table of Contents, run "myst init --write-toc"
 site:
   template: book-theme
-  # options:
-  #   favicon: favicon.ico
-  #   logo: site_logo.png
+exports:
+  - format: pdf
+    template: article 
+    output: docs/manuscript.pdf

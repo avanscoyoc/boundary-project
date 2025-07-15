@@ -32,10 +32,13 @@ Here, we quantified the rate of change in edges along XXXX protected area bounda
 ### Methods
 
 We conducted a global assessment of edge dynamics in terrestrial protected areas using 500 m MODIS satellite imagery and a pixel-based approach to quantify spatial heterogeneity across protected area boundaries. Specifically, we calculated the gradient magnitude, a measure of spectral contrast among neighboring pixels, for multiple spectral bands and remote sensing indices. Gradient magnitude was computed within a 3×3 kernel using:
+
 $$
 \text{Magnitude} = \sqrt{(\nabla_x I)^2 + (\nabla_y I)^2}
 $$
+
 Higher gradient values indicated greater local heterogeneity. Because abrupt transitions in land cover or land use create contrast in spectral values—“the gradient of [a] characteristic is steeper in the boundary than in either of the neighboring patches” [8]. Using this logic, when a protected area boundary aligns with an edge, we expect higher gradient magnitude on the boundary than in a larger reference area. Thus, to detect edges at protected area boundaries, we defined an ‘edge index’ for each protected area as the ratio of the median gradient magnitude within a 1 km buffer to that within a concentric 10 km buffer. 
+
 $$
 \text{Edge Index} = \frac{\overline{X}_{\text{boundary}}}{\overline{X}_{\text{buffer}}}
 $$
