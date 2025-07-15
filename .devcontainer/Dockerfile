@@ -14,6 +14,7 @@ RUN apt-get update && \
     apt-get install -y nodejs && \
     apt-get update && \
     apt-get install -y google-cloud-cli && \
+    apt-get install -y latexmk texlive-latex-recommended texlive-fonts-recommended texlive-latex-extra texlive-xetex && \
     apt-get clean && rm -rf /var/lib/apt/lists/*v
 
 RUN pip3 install --no-cache-dir \

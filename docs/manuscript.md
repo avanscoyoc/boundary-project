@@ -22,6 +22,7 @@ exports:
   - format: docx
   - format: pdf
     template: plain_latex
+    output: manuscript.pdf
   - format: md
 ---
 
