@@ -25,7 +25,7 @@ exports:
   - format: docx
   - format: pdf
     template: arxiv_nips
-    output: manuscript.pdf
+    output: docs/manuscript.pdf
     show_date: false
   - format: md
 ---
