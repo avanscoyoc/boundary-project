@@ -6,19 +6,19 @@ project:
   description: Analysis of habitat continuity and islandization in protected areas using MODIS and geospatial methods.
   authors:
     - name: Amy Van Scoyoc
-      affiliation: ucb
-      equal_contributor: true
-      corresponding: true
       orcid: 0000-0001-8638-935X
+      affiliation: ucb
+      corresponding: true
       email: avanscoyoc@berkeley.edu
+      equal_contributor: true
     - name: Wenjing Xu
+      orcid: 0000-0001-5657-2364
       affiliations:
         - ucb
         - guf
-      equal_contributor: true
       corresponding: true
-      orcid: 0000-0001-5657-2364
       email: wenjing.xu@senckenberg.de 
+      equal_contributor: true
     - name: Carl Boettiger
       affiliation: ucb
     - name: Justin Brashares
@@ -40,4 +40,4 @@ project:
           postal_code: 60323
   github: https://github.com/avanscoyoc/jupyter-gee-project
 site:
-  template: book-theme
+  template: article-theme 
