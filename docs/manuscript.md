@@ -82,7 +82,7 @@ $$
 \mathrm{BSI} = \frac{(\mathrm{SWIR2} + \mathrm{RED}) - (\mathrm{NIR} + \mathrm{BLUE})}{(\mathrm{SWIR2} + \mathrm{RED}) + (\mathrm{NIR} + \mathrm{BLUE})}
 $$
 
-To validate the suitability of 500 m imagery, we visually compared MODIS-derived gradients from 2023 with those from 30 m Landsat-8 imagery. Overall, MODIS better captured broad-scale land cover transitions and was less sensitive to fine-scale spectral noise (e.g., individual trees, buildings, paddocks), while providing consistent coverage over the 23-year study period ([](#resolutions)). Temporally, Landsat data suffered from data gaps due to the ETM+ Scan Line Corrector failure [@Arvidson2006]. For the spatial scale of this study, which focused on protected areas greater than 200 km{sup}`2`, MODIS was most appropriate, though finer-resolution imagery (e.g., Landsat 30-meter, Sentinel 10 – 60-meter, Planet 0.5-meter) may be preferable for analyses that include small protected areas.
+To validate the suitability of 500 m imagery, we visually compared MODIS-derived gradients from 2023 with those from 30 m Landsat-8 imagery. Overall, MODIS better captured broad-scale land cover transitions and was less sensitive to fine-scale spectral noise (e.g., individual trees, buildings, paddocks), while providing consistent coverage over the 23-year study period ( [](#resolutions) ). Temporally, Landsat data suffered from data gaps due to the ETM+ Scan Line Corrector failure [@Arvidson2006]. For the spatial scale of this study, which focused on protected areas greater than 200 km{sup}`2`, MODIS was most appropriate, though finer-resolution imagery (e.g., Landsat 30-meter, Sentinel 10 – 60-meter, Planet 0.5-meter) may be preferable for analyses that include small protected areas.
 
 ```{figure} ../images/resolutions.png
 :label: resolutions
@@ -104,6 +104,3 @@ Last, to assess the contemporary state of edge dynamics, we calculated the propo
 
 
 ### Discussion
-
-
-### References 
