@@ -4,7 +4,7 @@ authors:
   - name: Amy Van Scoyoc
     affiliations: 
       - University of California, Berkeley
-    orchid: 0000-0001-8638-935X
+    orcid: 0000-0001-8638-935X
     email: avanscoyoc@berkeley.edu
   - name: Wenjing Xu
     affiliations: 
