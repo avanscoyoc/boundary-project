@@ -2,19 +2,19 @@
 title: Islandization of terrestrial protected areas
 authors:
   - name: Amy Van Scoyoc
-    equal_contributor: true
-    orcid: 0000-0001-8638-935X
-    corresponding: true
-    email: avanscoyoc@berkeley.edu
     affiliation: ucb
-  - name: Wenjing Xu
     equal_contributor: true
-    orcid: 0000-0001-5657-2364
     corresponding: true
-    email: wenjing.xu@senckenberg.de 
+    orcid: 0000-0001-8638-935X
+    email: avanscoyoc@berkeley.edu
+  - name: Wenjing Xu
     affiliations:
       - ucb
       - guf
+    equal_contributor: true
+    corresponding: true
+    orcid: 0000-0001-5657-2364
+    email: wenjing.xu@senckenberg.de 
   - name: Carl Boettiger
     affiliation: ucb
   - name: Justin Brashares
