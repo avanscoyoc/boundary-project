@@ -1,32 +1,30 @@
 ---
-doc:
-  title: Islandization of terrestrial protected areas
-  description: Analysis of habitat continuity and islandization in protected areas using MODIS and geospatial methods.
-  short_title: arcXiv
-  authors:
-    - name: Amy Van Scoyoc
-      affiliation: University of California, Berkeley
-      orcid: 0000-0001-8638-935X
-      email: avanscoyoc@berkeley.edu
-    - name: Wenjing Xu
-      affiliation: Senckenberg Biodiversity and Climate Research Centre
-      orcid: 0000-0001-5657-2364
-      email: wenjing.xu@senckenberg.de 
-    - name: Carl Boettiger
-      affiliation: Unversity of California, Berkeley
-    - name: Justin Brashares
-      affiliation: Unversity of California, Berkeley   
-  date:
-    year: 
-    month: 
-    day: 
-  tags:
-    - protected area
-    - boundary
-    - earth engine
-    - habitat edge
-tagged:
-  abstract: >
+title: Islandization of terrestrial protected areas
+description: Analysis of habitat continuity and islandization in protected areas using MODIS and geospatial methods.
+short_title: arcXiv
+authors:
+  - name: Amy Van Scoyoc
+    affiliation: University of California, Berkeley
+    orcid: 0000-0001-8638-935X
+    email: avanscoyoc@berkeley.edu
+  - name: Wenjing Xu
+    affiliation: Senckenberg Biodiversity and Climate Research Centre
+    orcid: 0000-0001-5657-2364
+    email: wenjing.xu@senckenberg.de 
+  - name: Carl Boettiger
+    affiliation: Unversity of California, Berkeley
+  - name: Justin Brashares
+    affiliation: Unversity of California, Berkeley   
+date:
+  year: 
+  month: 
+  day: 
+tags:
+  - protected area
+  - boundary
+  - earth engine
+  - habitat edge
+abstract:
     Recent global commitments to biodiversity conservation focus on safeguarding habitat connectivity to preserve landscape-scale ecological processes and the capacity for adaptation to rapid global change. While many key studies have quantified changes in forest cover to highlight the potential isolation of protected areas via their edges, biome-wide assessments of edges at protected areas boundaries have been few to none. Here, we quantified the rate of change in edges along XXXX protected area boundaries over 23-year period (2001 - 2023). We achieved a comparative biome-wide global assessment by using 500m MODIS satellite imagery and a pixel-based approach to compute the contrast in spectral values along the 10km boundary of XXXX protected areas representing all terrestrial biomes for all visible bands and several remote sensing indices. Nearly half the world’s protected areas showed accelerated islandization over a 23-year period (2001-2023). Surprisingly, protected areas in grassland and shrubland biomes showed the greatest rates of islandization over time. These findings highlight the challenges and opportunities for utilizing protected areas as the backbone of post-2020 initiatives for large-landscape conservation.
 options:
   footnote_link: true
