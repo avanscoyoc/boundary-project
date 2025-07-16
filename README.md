@@ -1,63 +1,45 @@
-# jupyter-gee-project
+# boundary-project
 
 ## Overview
-This project contains Jupyter notebooks for analyzing geospatial data using Google Earth Engine (GEE). The notebooks include code for protected area boundary analysis, Landsat imagery retrieval, data processing, cloud masking, and image export functionality.
+This project contains an analysis of habitat continuity and islandization in protected areas using MODIS and geospatial methods. The `example.ipynb` in the notebooks folder includes code for a step-by-step walk through of the analysis; this includes protected area filtering, MODIS imagery retrieval, geometry operations, data processing, gradient calculation, result export, and visualization functionality. The `src` folder contains the application to run the full analysis and includes functions called in the `analysis.py` analysis and `example.ipynb` scripts. The working manuscript is located in the `docs` folder.
 
 ## Project Structure
 ```
-jupyter-gee-project
+boundary-project
+├── .devcontainer             # startup container 
+├── docs                      # manuscript, references
+├── images                    # supporting graphics
 ├── notebooks
-│   ├── pa_boundary_python.ipynb
-│   └── Recreating_spectral_database_leb.ipynb
-├── Dockerfile
-├── requirements.txt
+│   ├── example.ipynb         # example workflow, step-by-step 
+│   └── visualization.ipynb   # functions for visualizations
+├── output                    # outputs for example workflow
+├── src
+│   ├── analysis.py           # 3. full workflow function, iteration function 
+│   ├── config.py             # 1. functions to load/filter protected area data
+│   ├── main.py               # 4. main execution function
+│   └── utils.py              # 2. all geometric, image, feature, export, viz functions
+├── myst.yml                  # latex frontmatter
 └── README.md
 ```
 
 ## Setup Instructions
 
 ### Prerequisites
-- Access to a JupyterHub instance
+- VS code installed on your machine (if running locally)
 - Docker installed on your machine (if running locally)
+- Access to a JupyterHub instance (if running on a browser)
 
-### Using with JupyterHub
-The project is optimized for JupyterHub environments. Simply build and use the Docker image with your JupyterHub instance:
-
-```bash
-docker build -t gee-analysis .
-```
-
-### Running Locally
-If you prefer to run the notebooks locally:
-
-1. Build the Docker image:
-   ```bash
-   docker build -t gee-analysis .
-   ```
-
-2. Start the container:
-   ```bash
-   docker run -p 8888:8888 -v $(pwd):/work gee-analysis
-   ```
-
-3. Open your web browser and navigate to the URL shown in the terminal output.
+### Using with VS code
+Clone the repository, open VS code, when prompted select to `Open in Container` or in the command palette select `Development Environment: Reopen in Container`. Wait for the container to build, authentic to Earth Engine following the steps below, then select the jupyter kernel and run the example.ipynb notebook.
 
 ### Dependencies
-The project uses these core Python libraries:
-- `earthengine-api` - Google Earth Engine Python API
-- `geemap` - Interactive mapping with GEE
-- `numpy` - Numerical computations
-- `pandas` - Data analysis
-- `folium` - Interactive maps
-- `ipyleaflet` - Interactive maps for Jupyter
-
 Dependencies are automatically installed when building the Docker image.
 
 ## Google Earth Engine Authentication
-When running the notebooks for the first time, you'll need to authenticate with Google Earth Engine:
-1. The notebook will prompt you to authenticate when you run the first GEE cell
+When opening the container for the first time, you'll need to authenticate with Google Earth Engine:
+1. VS code's terminal will prompt you to authenticate when you open the container
 2. Follow the authentication link provided
-3. Copy and paste the authentication token back into the notebook
+3. Copy and paste the authentication token back into the terminal
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
