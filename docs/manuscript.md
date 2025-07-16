@@ -5,14 +5,15 @@ authors:
     affiliation: University of California, Berkeley
     orcid: 0000-0001-8638-935X
     email: avanscoyoc@berkeley.edu
-    corresponding: true
     equal_contributor: true
+    corresponding: true
+
   - name: Wenjing Xu
     affiliation: Senckenberg Biodiversity and Climate Research Centre
     orcid: 0000-0001-5657-2364
     email: wenjing.xu@senckenberg.de 
-    corresponding: true
     equal_contributor: true
+    corresponding: true
   - name: Carl Boettiger
     affiliation: University of California, Berkeley
   - name: Justin Brashares
@@ -25,7 +26,7 @@ acknowledgements: We thank M.W. Brunson, C.E. Aslan, W. Ji, I. Dronova, A. Meren
 exports:
   - format: docx
   - format: pdf
-    template: arxiv_nips
+    template: springer
     output: manuscript.pdf
     show_date: false
   - format: md
