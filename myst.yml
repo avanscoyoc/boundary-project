@@ -10,7 +10,7 @@ project:
       affiliation: ucb
       corresponding: true
       email: avanscoyoc@berkeley.edu
-      equal_contributor: true
+      equal-contributor: true
     - name: Wenjing Xu
       orcid: 0000-0001-5657-2364
       affiliations:
@@ -18,7 +18,7 @@ project:
         - guf
       corresponding: true
       email: wenjing.xu@senckenberg.de 
-      equal_contributor: true
+      equal-contributor: true
     - name: Carl Boettiger
       affiliation: ucb
     - name: Justin Brashares
