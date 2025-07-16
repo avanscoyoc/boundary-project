@@ -6,14 +6,14 @@ authors:
     orcid: 0000-0001-8638-935X
     email: avanscoyoc@berkeley.edu
     equal_contributor: true
-    corresponding: true
+    #corresponding: true
 
   - name: Wenjing Xu
     affiliation: Senckenberg Biodiversity and Climate Research Centre
     orcid: 0000-0001-5657-2364
     email: wenjing.xu@senckenberg.de 
     equal_contributor: true
-    corresponding: true
+    #corresponding: true
   - name: Carl Boettiger
     affiliation: University of California, Berkeley
   - name: Justin Brashares
