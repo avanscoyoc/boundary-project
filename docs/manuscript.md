@@ -21,7 +21,7 @@ declarations:
 exports:
   - format: docx
   - format: pdf
-    template: arxiv_nips
+    template: springer
     output: manuscript.pdf
     referee: true
     line_numbers: true
