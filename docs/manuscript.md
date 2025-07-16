@@ -19,20 +19,14 @@ bibliography: references.bib
 abstract: |
   Recent global commitments to biodiversity conservation focus on safeguarding habitat connectivity to preserve landscape-scale ecological processes and the capacity for adaptation to rapid global change. While many key studies have quantified changes in forest cover to highlight the potential isolation of protected areas via their edges, biome-wide assessments of edges at protected areas boundaries have been few to none. Here, we quantified the rate of change in edges along XXXX protected area boundaries over 23-year period (2001 - 2023). We achieved a comparative biome-wide global assessment by using 500m MODIS satellite imagery and a pixel-based approach to compute the contrast in spectral values along the 10km boundary of XXXX protected areas representing all terrestrial biomes for all visible bands and several remote sensing indices. Nearly half the world’s protected areas showed accelerated islandization over a 23-year period (2001-2023). Surprisingly, protected areas in grassland and shrubland biomes showed the greatest rates of islandization over time. These findings highlight the challenges and opportunities for utilizing protected areas as the backbone of post-2020 initiatives for large-landscape conservation.
 
-appendix: No information available.  
-data_availability: All code is available on GitHub and data is available on Zenodo.  
-funding: This work was funded by NSF-GRFP and the Eric and Wendy Schmidt Center for Data Science and Environment.  
-competing_interests: The authors have no competing interests to declare.
+acknowledgements: Incomplete.
 
 exports:
   - format: docx
   - format: pdf
-    template: lapreprint
+    template: arxiv_nips
     output: manuscript.pdf
-    theme_color: 'blue'
-    line_spacing: onehalfspacing
-    venue_footer: arXiv
-    line_numbers: true
+    show_date: false
   - format: md
 ---
 
