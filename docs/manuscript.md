@@ -3,13 +3,30 @@ title: Islandization of terrestrial protected areas
 abstract: |
   Recent global commitments to biodiversity conservation focus on safeguarding habitat connectivity to preserve landscape-scale ecological processes and the capacity for adaptation to rapid global change. While many key studies have quantified changes in forest cover to highlight the potential isolation of protected areas via their edges, biome-wide assessments of edges at protected areas boundaries have been few to none. Here, we quantified the rate of change in edges along XXXX protected area boundaries over 23-year period (2001 - 2023). We achieved a comparative biome-wide global assessment by using 500m MODIS satellite imagery and a pixel-based approach to compute the contrast in spectral values along the 10km boundary of XXXX protected areas representing all terrestrial biomes for all visible bands and several remote sensing indices. Nearly half the world’s protected areas showed accelerated islandization over a 23-year period (2001-2023). Surprisingly, protected areas in grassland and shrubland biomes showed the greatest rates of islandization over time. These findings highlight the challenges and opportunities for utilizing protected areas as the backbone of post-2020 initiatives for large-landscape conservation.
 keywords: [protected areas, islandization, habitat continuity, MODIS, geospatial analysis]
+
 bibliography: references.bib
-acknowledgements: We thank M.W. Brunson, C.E. Aslan, W. Ji, I. Dronova, A. Merenlender, and A. Middleton for their comments on this study and manuscript. Special thanks to the Middleton and Brashares lab groups at UC Berkeley, and anonymous reviewers for helpful feedback and edits. 
+acknowledgements: We thank M.W. Brunson, C.E. Aslan, W. Ji, I. Dronova, A. Merenlender, and A. Middleton for their comments on this study and manuscript. Special thanks to the Middleton and Brashares lab groups at UC Berkeley, and anonymous reviewers for helpful feedback and edits.
+declarations: 
+  - Funding: National Science Foundation Graduate Research Fellowship 752814 (AV), Philomathia Graduate Fellowship (WX)
+  - Authors' contributions: 
+    - Conceptualization: AV, WX
+    - Methodology: WX, AV
+    - Investigation: AV, WX, JB
+    - Visualization: WX, AV
+    - Writing – original draft: AV, WX
+    - Writing – review & editing: AV, WX, JB
+  - Competing interests: Authors declare that they have no competing interests.
+  - Data Availability: All data, code, and materials used in this analysis are publicly available on Zenodo.
+
 exports:
   - format: docx
   - format: pdf
     template: arxiv_nips
     output: manuscript.pdf
+    referee: true
+    line_numbers: true
+    reference_style: nature
+    numbered_referencing: true
     show_date: false
   - format: md
 ---
