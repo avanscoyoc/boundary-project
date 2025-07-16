@@ -82,10 +82,12 @@ $$
 \mathrm{BSI} = \frac{(\mathrm{SWIR2} + \mathrm{RED}) - (\mathrm{NIR} + \mathrm{BLUE})}{(\mathrm{SWIR2} + \mathrm{RED}) + (\mathrm{NIR} + \mathrm{BLUE})}
 $$
 
-To validate the suitability of 500 m imagery, we visually compared MODIS-derived gradients from 2023 with those from 30 m Landsat-8 imagery (fig. S1). MODIS better captured broad-scale land cover transitions and was less sensitive to fine-scale spectral noise (e.g., individual trees, buildings, paddocks), while providing consistent coverage over the 23-year study period. Landsat data, by contrast, suffered from data gaps due to the ETM+ Scan Line Corrector failure [@Arvidson2006]. For the spatial scale of this study, which focused on protected areas greater than 200 km2, MODIS was most appropriate, though finer-resolution imagery (e.g., Landsat 30-meter, Sentinel 10 – 60-meter, Planet 0.5-meter) may be preferable for analyses that include small protected areas.
+To validate the suitability of 500 m imagery, we visually compared MODIS-derived gradients from 2023 with those from 30 m Landsat-8 imagery. Overall, MODIS better captured broad-scale land cover transitions and was less sensitive to fine-scale spectral noise (e.g., individual trees, buildings, paddocks), while providing consistent coverage over the 23-year study period [](#resolutions). Temporally, Landsat data suffered from data gaps due to the ETM+ Scan Line Corrector failure [@Arvidson2006]. For the spatial scale of this study, which focused on protected areas greater than 200 km{sup}`2`, MODIS was most appropriate, though finer-resolution imagery (e.g., Landsat 30-meter, Sentinel 10 – 60-meter, Planet 0.5-meter) may be preferable for analyses that include small protected areas.
 
 ```{figure} ../images/resolutions.png
-Fig. S1. Original protected area satellite imagery and spectral gradient calculation of a protected area. (A) Google satellite image; (B) 2020 annual composite MODIS image (RGB band combination 1-4-3); (C) 2020 annual composite Landsat-8 image (RGB band combination 4-3-2); (D) gradient image calculated from MODIS (b), (E) gradient image calculated from Landsat-8 (C). As shown in (D), MODIS 500-meter pixel size was most adept at reducing fine-scale heterogeneity while retaining broad-scale patterns. 
+:label: resolutions
+:caption-align: left
+Original protected area satellite imagery and spectral gradient calculation of a protected area. (A) Google satellite image; (B) 2020 annual composite MODIS image (RGB band combination 1-4-3); (C) 2020 annual composite Landsat-8 image (RGB band combination 4-3-2); (D) gradient image calculated from MODIS; (E) gradient image calculated from Landsat-8. As shown in (D), MODIS 500-meter pixel size was most adept at reducing fine-scale heterogeneity while retaining broad-scale patterns. 
 ```
 
 
