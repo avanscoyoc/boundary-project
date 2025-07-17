@@ -140,7 +140,7 @@ class FeatureProcessor:
         self.geo_ops = geo_ops
         self.img_ops = img_ops
         self.stats_ops = stats_ops
-        self.bands_to_process = ['NDVI', 'BSI']#['sur_refl_b01', 'sur_refl_b02', 'sur_refl_b03', 'sur_refl_b04', 'NDVI', 'BSI']
+        self.bands_to_process = ['sur_refl_b01', 'sur_refl_b03', 'sur_refl_b04', 'NDVI', 'BSI']
         
     def collect_feature_info(self, pa, geom):
         """Collect basic protected area feature information"""
@@ -193,34 +193,6 @@ class ExportResults:
     def __init__(self):
         self.timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
-    def export_table_to_cloud(self, feature_collection, wdpaid, year):
-        task = ee.batch.Export.table.toCloudStorage(
-        collection=feature_collection,
-        description=f'{wdpaid}_{year}',
-        bucket='dse-staff',
-        fileNamePrefix=f'protected_areas/tables/{wdpaid}_{year}',
-        fileFormat='CSV'
-        )
-        task.start()
-        return print(f"Export task started for {wdpaid}, {year}")    
-
-    def export_image_to_cloud(self, image, band_name, wdpaid, year):
-        """Save Image as a COG and upload to GCS."""
-        task = ee.batch.Export.image.toCloudStorage(
-        image=image,
-        description=f'image_{wdpaid}_{year}',
-        bucket='dse-staff', 
-        fileNamePrefix=f'protected_areas/images/{band_name}_{wdpaid}_{year}',  
-        fileFormat='GeoTIFF', 
-        formatOptions={
-            'cloudOptimized': True,  
-        },
-        maxPixels=1e8,  
-        scale=500  
-        )
-        task.start()
-        return print(f"Export task started for {wdpaid}, {year}") 
-    
     def combine_gcs_csvs(self, bucket_name, folder_path):
         """Combine all CSV files from a GCS folder into a single DataFrame."""
         bucket = storage.Client(bucket_name).bucket(bucket_name)
