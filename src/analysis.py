@@ -12,11 +12,10 @@ def run_analysis(wdpaid, year):
     geo_ops = GeometryOperations()
     img_ops = ImageOperations()
     stats_ops = StatsOperations()
-    viz = Visualization()
     feature_processor = FeatureProcessor(geo_ops, img_ops, stats_ops)
 
     # Load and process protected area geometry
-    pa = load_protected_area(wdpaid)
+    pa = load_protected_area_by_id(wdpaid)
     pa_geometry = pa.geometry()
     aoi = geo_ops.buffer_polygon(pa_geometry)
     aoi = geo_ops.mask_water(aoi)
@@ -37,7 +36,7 @@ def run_analysis(wdpaid, year):
         collection=stats_fc,
         description=f'{wdpaid}_{year}',
         bucket='dse-staff',
-        fileNamePrefix=f'protected_areas/tables/{wdpaid}_{year}',
+        fileNamePrefix=f'protected_areas/movement/{wdpaid}_{year}_NDVI',
         fileFormat='CSV'
     )
     task.start()
@@ -98,7 +97,7 @@ def run_analysis_image(wdpaid, year, band_name, buffer_size):
     feature_processor = FeatureProcessor(geo_ops, img_ops, stats_ops)
     exporter = ExportResults()
 
-    pa_geometry = load_protected_area(wdpaid).geometry()
+    pa_geometry = load_protected_area_by_id(wdpaid).geometry()
     aoi = geo_ops.buffer_polygon(pa_geometry, buffer_size)
     aoi = geo_ops.mask_water(aoi)
 

@@ -1,37 +1,49 @@
 import ee
-import os
 import pandas as pd
 import geopandas as gpd
-import json
-        
 
-def load_protected_area():
-    """Load a protected area by name from the WDPA dataset"""
-    protected_areas = ee.FeatureCollection("WCMC/WDPA/202106/polygons")
-    
+
+def filter_protected_areas():
+    """Filter protected area dataset by size, status, designation, and marine status."""
+    #protected_areas = ee.FeatureCollection("WCMC/WDPA/202106/polygons")
+    protected_areas = ee.FeatureCollection("WCMC/WDPA/current/polygons")
     marine_filter = ee.Filter.eq("MARINE", "0")
     not_mpa_filter = ee.Filter.neq("DESIG_ENG", "Marine Protected Area")
     status_filter = ee.Filter.inList("STATUS", ["Designated", "Established", "Inscribed"])
     designation_filter = ee.Filter.neq("DESIG_ENG", "UNESCO-MAB Biosphere Reserve")
-    area_filter = ee.Filter.gte("GIS_AREA", 100)
-    #excluded_pids = ["555655917", "555656005", "555656013", "555665477", "555656021",
-    #                "555665485", "555556142", "187", "555703455", "555563456", "15894"]
-    #pids_filter = ee.Filter.inList("WDPA_PID", excluded_pids).Not()
-   
+    area_filter = ee.Filter.gte("GIS_AREA", 200)
+    excluded_pids = ["555655917", "555656005", "555656013", "555665477", "555656021",
+                    "555665485", "555556142", "187", "555703455", "555563456", "15894"]
+    pids_filter = ee.Filter.inList("WDPA_PID", excluded_pids).Not()
     combined_filter = ee.Filter.And(
         marine_filter,
         not_mpa_filter,
         status_filter,
         designation_filter,
-    #    pids_filter,
+        pids_filter,
         area_filter
        
     )
-
     data = protected_areas.filter(combined_filter)
-    #pa = data.filter(ee.Filter.eq('WDPA_PID', name)).first()
     
     return data
+
+def load_protected_area_by_id(wdpa_id):
+    protected_areas = ee.FeatureCollection("WCMC/WDPA/current/polygons")
+    pa = protected_areas.filter(ee.Filter.eq('WDPA_PID', wdpa_id)).first()
+
+    return pa
+
+def pas_at_movement_sites(sites): 
+    """Filter protected areas to those that intersect with \
+          the 50km buffer of centroid animal movement locations."""
+    pas = filter_protected_areas()
+    filtered = pas.filterBounds(sites)
+    wdpa_pids_ee = filtered.aggregate_array('WDPA_PID')
+    wdpaids = wdpa_pids_ee.getInfo()
+    
+    return wdpaids
+
 
 def load_local_data(wdpa_id):
     """Load protected area from local shapefile and convert to EE Feature"""

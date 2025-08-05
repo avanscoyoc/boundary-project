@@ -7,14 +7,14 @@ from config import *
 ee.Authenticate()
 ee.Initialize(project='dse-staff')
 
+
 def main():
     start = time.time()
+    
+    sites = ee.FeatureCollection("projects/dse-staff/assets/movement_metadata").geometry().buffer(50000) #50km
+    wdpaids = pas_at_movement_sites(sites)[:5]
 
-    shp_path = '/workspace/data/global_wdpa_June2021/Global_wdpa_wInfo_June2021.shp'
-    gdf = gpd.read_file(shp_path)
-    wdpaids = gdf['WDPA_PID'].head(5).tolist()
-
-    run_all(wdpaids, start_year=2001, n_years=23, max_concurrent=15)
+    run_all(wdpaids, start_year=2016, n_years=1, max_concurrent=15)
 
     end = time.time()
     print(f"Total elapsed time: {end - start:.2f} seconds")

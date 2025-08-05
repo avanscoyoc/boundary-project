@@ -1,4 +1,3 @@
-from glob import glob
 import ee
 import geemap
 import os
@@ -9,7 +8,6 @@ from google.cloud import storage
 import matplotlib.pyplot as plt
 import tifffile
 import imageio
-import numpy as np
 from IPython.display import Image, display
 
 
@@ -78,17 +76,7 @@ class ImageOperations:
             }
         ).rename("NDVI")
 
-        BSI = image.expression(
-            "((SWIR2 + RED) - (NIR + BLUE)) / ((SWIR2 + RED) + (NIR + BLUE))",
-            {
-                'SWIR2': image.select("sur_refl_b07"),
-                'RED': image.select("sur_refl_b01"), 
-                'NIR': image.select("sur_refl_b02"),
-                'BLUE': image.select("sur_refl_b03")
-            }
-        ).rename("BSI")
-
-        return image.addBands([NDVI, BSI])
+        return image.addBands([NDVI])
 
     def get_gradient_magnitude(self, image):
         """Calculate gradient magnitude"""
@@ -140,7 +128,7 @@ class FeatureProcessor:
         self.geo_ops = geo_ops
         self.img_ops = img_ops
         self.stats_ops = stats_ops
-        self.bands_to_process = ['sur_refl_b01', 'sur_refl_b03', 'sur_refl_b04', 'NDVI', 'BSI']
+        self.bands_to_process = ['NDVI']
         
     def collect_feature_info(self, pa, geom):
         """Collect basic protected area feature information"""
