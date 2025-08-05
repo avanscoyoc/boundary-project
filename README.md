@@ -27,10 +27,14 @@ boundary-project
 ### Prerequisites
 - VS code installed on your machine (if running locally)
 - Docker installed on your machine (if running locally)
-- Access to a JupyterHub instance (if running on a browser)
 
-### Using with VS code
+### Running the example.ipynb with VS code
 Clone the repository, open VS code, when prompted select to `Open in Container` or in the command palette select `Development Environment: Reopen in Container`. Wait for the container to build, authentic to Earth Engine following the steps below, then select the jupyter kernel and run the example.ipynb notebook.
+
+### Running the full workflow 
+```{bash}
+python src/main.py
+```
 
 ### Dependencies
 Dependencies are automatically installed when building the Docker image.

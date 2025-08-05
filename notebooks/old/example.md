@@ -66,7 +66,7 @@ Next, we select a protected area to analyze. We obtained data for protected area
 For our analysis we chose terrestrial PAs with a valid geometry (not a point), PAs with status of “designated”, “established”, or “inscribed”, and PAs without a “UNESCO-MAB Biosphere Reserve” designation. We also only selected protected areas larger than 200 km2 to ensure that the PA was wide enough to prevent the buffers from overlapping each other.
 
 ```{code-cell} ipython3
-yosemite = load_protected_area('916').geometry()
+yosemite = load_protected_area_by_id('916').geometry()
 
 Map = geemap.Map()
 Map.add_basemap('HYBRID')
