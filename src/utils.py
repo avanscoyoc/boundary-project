@@ -16,13 +16,14 @@ class GeometryOperations:
         self.max_error = max_error
         self.water_mask = ee.Image("JRC/GSW1_0/GlobalSurfaceWater")
 
-    def buffer_polygon(self, geom, buffer_distance=10000):
+    def buffer_polygon(self, feat, buffer_distance):
         """Create buffer around polygon"""
-        out = geom.buffer(buffer_distance)
-        inn = geom.buffer(-buffer_distance)
-        aoi = out.difference(inn, self.max_error)
-        return aoi
-
+        feat = ee.Feature(feat)
+        out = feat.buffer(buffer_distance).geometry()
+        inn = feat.buffer(-buffer_distance).geometry()
+        geom = out.difference(inn, self.max_error)
+        return geom
+    
     def mask_water(self, feat):
         """Mask water bodies from feature"""
         water_no_holes = self.water_mask.select('max_extent')\
@@ -37,6 +38,15 @@ class GeometryOperations:
             eightConnected=False)
         geom = feat.difference(water_vect.geometry(), maxError=self.max_error)
         return geom
+    
+    def make_ribbons(self, geom, inner_km = 1, outer_km = 5):
+        """Create non-overlapping concentric buffers around polygon"""
+        km  = 1000
+        aoi = self.mask_water(self.buffer_polygon(geom, outer_km * km))   
+        inner_ribbon = self.mask_water(self.buffer_polygon(geom, inner_km * km))     
+        outer_ribbon = aoi.difference(inner_ribbon, self.max_error)
+
+        return aoi, outer_ribbon, inner_ribbon
     
     def get_biome(self, geom): 
         """Get biome with largest overlap for a feature, add BIOME_NAME property"""
@@ -85,7 +95,7 @@ class ImageOperations:
         gradient_y = gradient.select('y')
         magnitude = gradient_x.pow(2).add(gradient_y.pow(2)).sqrt()
         return magnitude
-
+    
 
 class StatsOperations:
     def __init__(self):
@@ -99,6 +109,9 @@ class StatsOperations:
                 sharedInputs=True
             ).combine(
                 reducer2=ee.Reducer.count(),
+                sharedInputs=True
+            ).combine(
+                reducer2=ee.Reducer.median(),
                 sharedInputs=True
             ),
             geometry=layer.geometry(),
@@ -144,15 +157,15 @@ class FeatureProcessor:
             'BIOME_NAME': self.geo_ops.get_biome(geom),
         }
     
-    def process_all_bands_ee(self, image, pa_geometry, aoi, feature_info, year):
+    def process_all_bands_ee(self, image, outer_ribbon, inner_ribbon, feature_info, year):
         """Process all bands and return a list of ee.Feature (one per band)"""
         features = []
         for band_name in self.bands_to_process:
             single_band = image.select(band_name)
-            buffer_img = self.img_ops.get_gradient_magnitude(single_band).clip(aoi)
-            boundary = self.geo_ops.buffer_polygon(pa_geometry, 1000)
-            boundary_img = buffer_img.clip(boundary)
-
+            gradient = self.img_ops.get_gradient_magnitude(single_band)
+            boundary_img = gradient.clip(inner_ribbon)
+            buffer_img = gradient.clip(outer_ribbon)
+            
             # Calculate stats as EE dictionaries
             boundary_stats = self.stats_ops.calculate_gradient_statistics(boundary_img, name='boundary')
             buffer_stats = self.stats_ops.calculate_gradient_statistics(buffer_img, name='buffer')
@@ -170,8 +183,8 @@ class FeatureProcessor:
                 'gHM': feature_info['gHM'],
                 'year': year,
                 'band_name': band_name,
-                **{f"boundary_{k}": boundary_stats.get(k) for k in ['x_mean', 'x_stdDev', 'x_count']},
-                **{f"buffer_{k}": buffer_stats.get(k) for k in ['x_mean', 'x_stdDev', 'x_count']}
+                **{f"boundary_{k}": boundary_stats.get(k) for k in ['x_mean', 'x_stdDev', 'x_count', 'x_median']},
+                **{f"buffer_{k}": buffer_stats.get(k) for k in ['x_mean', 'x_stdDev', 'x_count', 'x_median']}
             }
             features.append(ee.Feature(None, props))
         return features
