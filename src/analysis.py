@@ -17,8 +17,9 @@ def run_analysis(wdpaid, year):
     # Load and process protected area geometry
     pa = load_protected_area_by_id(wdpaid)
     pa_geometry = pa.geometry()
-    aoi = geo_ops.buffer_polygon(pa_geometry)
-    aoi = geo_ops.mask_water(aoi)
+    aoi, outer_ribbon, inner_ribbon = geo_ops.make_ribbons(pa_geometry, 
+                                                      inner_km=1, 
+                                                      outer_km=5)
 
     # Process imagery, add indices
     modis_ic = img_ops.modis.filter(img_ops.filter_for_year(aoi, year))
@@ -28,7 +29,11 @@ def run_analysis(wdpaid, year):
 
     # Add feature info, process bands to calculate gradient, edge index, mean gHM
     feature_info = feature_processor.collect_feature_info(pa, aoi)
-    features = feature_processor.process_all_bands_ee(image, pa_geometry, aoi, feature_info, year)
+    features = feature_processor.process_all_bands_ee(image, pa_geometry, 
+                                                      outer_ribbon=outer_ribbon, 
+                                                      inner_ribbon=inner_ribbon,
+                                                      feature_info=feature_info, 
+                                                      year=year)
     stats_fc = ee.FeatureCollection(features)
 
     # Save results
