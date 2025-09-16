@@ -27,7 +27,7 @@ def run_analysis(wdpaid, year):
 
     # Add feature info, process bands to calculate gradient, edge index, mean gHM
     feature_info = feature_processor.collect_feature_info(pa, aoi)
-    features = feature_processor.process_all_bands_ee(image, pa_geometry, 
+    features = feature_processor.process_all_bands_ee(image=image, 
                                                       outer_ribbon=outer_ribbon, 
                                                       inner_ribbon=inner_ribbon,
                                                       feature_info=feature_info, 

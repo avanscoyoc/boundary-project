@@ -141,7 +141,7 @@ class FeatureProcessor:
         self.geo_ops = geo_ops
         self.img_ops = img_ops
         self.stats_ops = stats_ops
-        self.bands_to_process = ['NDVI']
+        self.bands_to_process = ['NDVI', 'sur_refl_b01', 'sur_refl_b02', 'sur_refl_b03']
         
     def collect_feature_info(self, pa, geom):
         """Collect basic protected area feature information"""
