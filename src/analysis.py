@@ -1,7 +1,5 @@
 from utils import *
 from config import *
-import pandas as pd
-import concurrent.futures
 import ee
 import time
 
