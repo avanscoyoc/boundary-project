@@ -5,8 +5,7 @@ import geopandas as gpd
 
 def filter_protected_areas():
     """Filter protected area dataset by size, status, designation, and marine status."""
-    #protected_areas = ee.FeatureCollection("WCMC/WDPA/202106/polygons")
-    protected_areas = ee.FeatureCollection("WCMC/WDPA/current/polygons")
+    protected_areas = ee.FeatureCollection("WCMC/WDPA/202106/polygons")
     marine_filter = ee.Filter.eq("MARINE", "0")
     not_mpa_filter = ee.Filter.neq("DESIG_ENG", "Marine Protected Area")
     status_filter = ee.Filter.inList("STATUS", ["Designated", "Established", "Inscribed"])
