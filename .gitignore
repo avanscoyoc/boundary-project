@@ -3,3 +3,4 @@ __pycache__
 # MyST build outputs
 _build
 .DS_Store
+results
