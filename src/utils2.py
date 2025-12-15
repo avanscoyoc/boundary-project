@@ -133,3 +133,89 @@ class GeometryOperations:
             return non_zero.loc[non_zero['STATUS_YR'].idxmin()]
         else:
             return group_df.iloc[0]
+    
+    def create_radial_segments(self, zones_gdf, num_segments=10):
+        """
+        Divide zones into segments based on equal-length divisions of the center zone boundary.
+        Creates perpendicular cuts across all zones at division points.
+        """
+        from shapely.geometry import LineString, Point, MultiLineString
+        from shapely.ops import split, linemerge, unary_union, polygonize
+        import numpy as np
+        
+        segmented_zones = []
+        
+        for wdpa_pid, park_zones in zones_gdf.groupby('WDPA_PID'):
+            center_zone = park_zones[park_zones['zone'] == '-1_1km'].iloc[0]
+            center_geom = center_zone.geometry
+            
+            # Get boundary and divide into equal-length segments
+            boundary = center_geom.boundary
+            if boundary.geom_type == 'MultiLineString':
+                boundary = linemerge(boundary)
+            
+            total_length = boundary.length
+            segment_length = total_length / num_segments
+            
+            # Get maximum extent needed
+            union_geom = park_zones.geometry.unary_union
+            max_distance = union_geom.bounds
+            max_extent = max(max_distance[2] - max_distance[0], max_distance[3] - max_distance[1]) * 2
+            
+            cutting_lines = []
+            
+            for i in range(num_segments):
+                point = boundary.interpolate(i * segment_length)
+                
+                # Calculate perpendicular direction
+                epsilon = min(1, segment_length / 10)
+                point_before = boundary.interpolate(i * segment_length - epsilon)
+                point_after = boundary.interpolate(i * segment_length + epsilon)
+                
+                tx = point_after.x - point_before.x
+                ty = point_after.y - point_before.y
+                
+                px, py = -ty, tx
+                norm = np.sqrt(px**2 + py**2)
+                if norm > 0:
+                    px, py = px/norm * max_extent, py/norm * max_extent
+                    
+                    line = LineString([
+                        (point.x - px, point.y - py),
+                        (point.x + px, point.y + py)
+                    ])
+                    cutting_lines.append(line)
+            
+            # Combine all cutting lines into one MultiLineString
+            all_lines = MultiLineString(cutting_lines)
+            
+            # Split each zone using all lines at once
+            for idx, zone_row in park_zones.iterrows():
+                zone_geom = zone_row.geometry
+                
+                try:
+                    # Split with all lines at once
+                    split_result = split(zone_geom, all_lines)
+                    
+                    # Assign segment numbers to each piece
+                    for seg_geom in split_result.geoms:
+                        if seg_geom.is_empty or seg_geom.area < 1:
+                            continue
+                        
+                        seg_centroid = seg_geom.centroid
+                        dist = boundary.project(Point(seg_centroid.x, seg_centroid.y))
+                        segment_num = min(int(dist / segment_length) + 1, num_segments)
+                        
+                        new_row = zone_row.copy()
+                        new_row['geometry'] = seg_geom
+                        new_row['segment'] = segment_num
+                        segmented_zones.append(new_row)
+                        
+                except Exception as e:
+                    print(f"Error splitting WDPA_PID {wdpa_pid}, zone {zone_row['zone']}: {e}")
+                    # If split fails completely, keep original as segment 1
+                    new_row = zone_row.copy()
+                    new_row['segment'] = 1
+                    segmented_zones.append(new_row)
+        
+        return gpd.GeoDataFrame(segmented_zones, crs=zones_gdf.crs)
