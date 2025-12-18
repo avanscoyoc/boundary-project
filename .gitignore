@@ -1,7 +1,4 @@
-data
 __pycache__
-# MyST build outputs
-_build
 .DS_Store
+/data/
 /results/
-/output/

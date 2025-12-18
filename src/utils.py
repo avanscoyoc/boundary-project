@@ -630,7 +630,7 @@ def remove_pa_transects_in_chunks(wdpa_gdf, wdpa_buffer_dict, sample_dist, trans
     
     Processes protected areas in batches, generating transects, filtering problematic
     ones, and writing results to sequential chunk files to avoid memory issues with
-    large datasets. Tracks comprehensive statistics throughout processing.
+    large datasets. Tracks statistics throughout processing.
     
     Parameters
     ----------
