@@ -13,6 +13,30 @@ from shapely.geometry import Polygon, MultiPolygon
 # =====================================================================
 
 def get_pa_filter(type="Polygon"):
+    """
+    Create a combined filter for WDPA (World Database on Protected Areas) features.
+    
+    Filters out marine areas, marine protected areas, UNESCO biosphere reserves,
+    and applies constraints on area, status, and excludes specific problem PIDs.
+    
+    Parameters
+    ----------
+    type : str, optional
+        Geometry type to filter for (default is "Polygon").
+    
+    Returns
+    -------
+    ee.Filter
+        Combined Earth Engine filter object for WDPA feature collection.
+    
+    Notes
+    -----
+    - Excludes marine areas (MARINE == "0")
+    - Excludes Marine Protected Areas and UNESCO-MAB Biosphere Reserves
+    - Only includes areas with status: Designated, Established, or Inscribed
+    - Requires minimum area of 200 km²
+    - Excludes specific problematic WDPA_PIDs
+    """
     polygon_filter = ee.Filter.eq("geometry_type", type)
     not_marine_filter = ee.Filter.eq("MARINE", "0")
     not_mpa_filter = ee.Filter.neq("DESIG_ENG", "Marine Protected Area")
@@ -36,11 +60,44 @@ def get_pa_filter(type="Polygon"):
 
 
 def set_geometry_type(feature):
+    """
+    Add geometry type as a property to an Earth Engine feature.
+    
+    Parameters
+    ----------
+    feature : ee.Feature
+        Earth Engine feature to process.
+    
+    Returns
+    -------
+    ee.Feature
+        Feature with added 'geometry_type' property.
+    """
     return feature.set('geometry_type', feature.geometry().type())
 
 
 def get_biome(pa_feature):
-    """Get biome name for a protected area feature from ecoregions."""
+    """
+    Assign biome name to a protected area feature from RESOLVE Ecoregions.
+    
+    Uses the centroid of the protected area to determine which ecoregion it falls
+    within, then extracts the biome name from that ecoregion.
+    
+    Parameters
+    ----------
+    pa_feature : ee.Feature
+        Protected area feature from WDPA.
+    
+    Returns
+    -------
+    ee.Feature
+        Protected area feature with added 'BIOME_NAME' property.
+    
+    Notes
+    -----
+    Uses RESOLVE/ECOREGIONS/2017 dataset. If no intersecting ecoregion is found,
+    sets BIOME_NAME to 'Unknown'.
+    """
     # Get ECOREGIONS dynamically
     ECOREGIONS = ee.FeatureCollection("RESOLVE/ECOREGIONS/2017")
     
@@ -59,17 +116,29 @@ def get_biome(pa_feature):
 
 def check_task_status(submitted_tasks):
     """
-    Check status of submitted Earth Engine tasks and remove completed ones.
+    Check status of submitted Earth Engine tasks and filter out completed ones.
     
-    Parameters:
-    -----------
-    submitted_tasks : list
-        List of tuples (task_object, year)
+    Prints status messages for completed, failed, or cancelled tasks and returns
+    only tasks that are still running.
     
-    Returns:
-    --------
-    tuple: (active_tasks, num_active)
-        Updated list of active tasks and count of active tasks
+    Parameters
+    ----------
+    submitted_tasks : list of tuple
+        List of tuples where each tuple contains (task_object, year).
+        task_object is an ee.batch.Task instance.
+    
+    Returns
+    -------
+    tuple of (list, int)
+        - active_tasks : list of tuple
+            Filtered list containing only active tasks.
+        - num_active : int
+            Count of active tasks.
+    
+    Notes
+    -----
+    Completed states include: 'COMPLETED', 'FAILED', 'CANCELLED'.
+    Active states include: 'READY', 'RUNNING'.
     """
     active_tasks = []
     for task_obj, year in submitted_tasks:
@@ -86,7 +155,31 @@ def check_task_status(submitted_tasks):
 # =====================================================================
 
 def fill_holes(gdf, max_hole_area=2250000):  # 1500m * 1500m = 2250000 sq meters
-    """Fill small holes in polygons using vector operations - handles MultiPolygons"""
+    """
+    Fill small holes in polygon geometries while preserving large holes.
+    
+    Processes both Polygon and MultiPolygon geometries, removing interior holes
+    (donuts) that are smaller than the specified threshold area. This is useful
+    for cleaning protected area boundaries that may have small gaps.
+    
+    Parameters
+    ----------
+    gdf : GeoDataFrame
+        GeoDataFrame containing polygon geometries to process.
+    max_hole_area : float, optional
+        Maximum area (in square meters) for holes to be filled. Holes larger than
+        this will be preserved. Default is 2,250,000 m² (1500m × 1500m).
+    
+    Returns
+    -------
+    GeoDataFrame
+        Copy of input GeoDataFrame with filled geometries.
+    
+    Notes
+    -----
+    Handles both Polygon and MultiPolygon geometry types. For MultiPolygons,
+    each component polygon is processed independently.
+    """
     
     filled_geoms = []
     for geom in gdf.geometry:
@@ -122,7 +215,34 @@ def fill_holes(gdf, max_hole_area=2250000):  # 1500m * 1500m = 2250000 sq meters
 
 
 def find_overlap_groups(gdf, overlap_threshold=90):
-    """Find groups of geometries that overlap above threshold"""
+    """
+    Identify groups of geometries with significant spatial overlap.
+    
+    Finds sets of protected areas where the intersection area exceeds the specified
+    percentage threshold relative to either geometry. Uses a greedy algorithm where
+    each group is built starting from an unprocessed geometry.
+    
+    Parameters
+    ----------
+    gdf : GeoDataFrame
+        GeoDataFrame containing geometries to analyze for overlaps.
+    overlap_threshold : float, optional
+        Minimum overlap percentage (0-100) to consider geometries as overlapping.
+        Default is 90%. Overlap is calculated as the maximum of:
+        (intersection_area / geom1_area) * 100 or (intersection_area / geom2_area) * 100.
+    
+    Returns
+    -------
+    list of list
+        List of overlap groups, where each group is a list of integer indices
+        from the input GeoDataFrame. Geometries that don't overlap significantly
+        with any others are returned as single-element groups.
+    
+    Notes
+    -----
+    Uses spatial indexing implicitly through iterrows. For very large datasets,
+    consider using spatial index (sindex) for better performance.
+    """
 
     print(f"Finding overlap groups with >{overlap_threshold}% overlap...")
     
@@ -167,7 +287,28 @@ def find_overlap_groups(gdf, overlap_threshold=90):
 
 
 def get_min_year_from_group(group_df):
-    """Get the row with minimum non-zero STATUS_YR, or first row if all are 0"""
+    """
+    Select the oldest protected area from a group based on establishment year.
+    
+    Returns the row with the minimum non-zero STATUS_YR value. If all STATUS_YR
+    values are 0 (unknown), returns the first row.
+    
+    Parameters
+    ----------
+    group_df : DataFrame
+        DataFrame subset containing a group of overlapping protected areas.
+        Must have a 'STATUS_YR' column.
+    
+    Returns
+    -------
+    Series
+        Row from the input DataFrame representing the oldest protected area.
+    
+    Notes
+    -----
+    Used for deduplication when multiple protected areas overlap significantly.
+    Prioritizes older designations as they typically represent the original boundary.
+    """
 
     non_zero = group_df[group_df['STATUS_YR'] != 0]
     if len(non_zero) > 0:
@@ -182,20 +323,35 @@ def get_min_year_from_group(group_df):
 
 def evenspace(xy, sep, start=0):
     """
-    Creates points along lines with a set distance.
+    Generate evenly spaced points along a polyline at specified intervals.
     
-    Parameters:
-    -----------
-    xy : array-like
-        Nx2 array of coordinates (x, y)
+    Creates sample points at regular distance intervals along a line defined by
+    vertices. Returns point coordinates along with segment information and angle.
+    The last point is excluded to avoid duplication at the start/end of closed loops.
+    
+    Parameters
+    ----------
+    xy : array-like of shape (N, 2)
+        Array of coordinates defining the polyline vertices, where each row is [x, y].
     sep : float
-        Separation distance between points
+        Separation distance between consecutive points along the line (in map units).
     start : float, optional
-        Starting distance along the line (default=0)
+        Starting distance along the line for the first point. Default is 0.
     
-    Returns:
-    --------
-    DataFrame with columns: x, y, x0, y0, x1, y1, theta
+    Returns
+    -------
+    DataFrame
+        DataFrame with columns:
+        - x, y : Coordinates of the evenly spaced points
+        - x0, y0 : Start coordinates of the line segment containing each point
+        - x1, y1 : End coordinates of the line segment containing each point
+        - theta : Angle (in radians) of the line segment at each point
+    
+    Notes
+    -----
+    Returns empty DataFrame if the line length is too short to place any points.
+    The theta angle is calculated from segment direction and used for perpendicular
+    transect generation.
     """
     xy = np.array(xy)
     
@@ -247,20 +403,36 @@ def evenspace(xy, sep, start=0):
 
 def transect(tpts, tlen, npts=1):
     """
-    Creates points perpendicular to a line with set distance.
+    Generate perpendicular transect points from boundary sample points.
     
-    Parameters:
-    -----------
+    Creates transects perpendicular to a polyline, with multiple points at regular
+    intervals extending both inward and outward from the boundary. Each transect
+    includes a center point (position 0) and symmetric points on both sides.
+    
+    Parameters
+    ----------
     tpts : DataFrame
-        DataFrame from evenspace with columns: x, y, theta
+        DataFrame from evenspace() containing boundary points with columns:
+        x, y (point coordinates) and theta (line angle in radians).
     tlen : float
-        Length of transect steps
+        Distance between consecutive points along each transect (in map units).
     npts : int, optional
-        Number of points on one side in addition to center (default=1)
+        Number of points on each side of the boundary point (not including center).
+        Default is 1. Total points per transect = 2*npts + 1.
     
-    Returns:
-    --------
-    DataFrame with columns: transectID, point_position, x, y
+    Returns
+    -------
+    DataFrame
+        Long-format DataFrame with columns:
+        - transectID : Integer identifier for each transect (1-indexed)
+        - point_position : Position along transect (negative=inward, 0=boundary, positive=outward)
+        - x, y : Coordinates of each transect point
+    
+    Notes
+    -----
+    Point positions are labeled as floats: negative values (e.g., -2.0, -1.0) for
+    inward points, 0.0 for boundary, and positive values (e.g., +1.0, +2.0) for
+    outward points.
     """
     if len(tpts) == 0:
         return pd.DataFrame(columns=['transectID', 'point_position', 'x', 'y'])
@@ -310,7 +482,23 @@ def transect(tpts, tlen, npts=1):
 
 
 def extract_coords(geom):
-    """Extract coordinates from geometry (Polygon or MultiPolygon)."""
+    """
+    Extract exterior boundary coordinates from a polygon geometry.
+    
+    For MultiPolygon geometries, extracts coordinates from the largest component
+    polygon by area.
+    
+    Parameters
+    ----------
+    geom : shapely.geometry.Polygon or shapely.geometry.MultiPolygon
+        Input geometry to extract coordinates from.
+    
+    Returns
+    -------
+    numpy.ndarray or None
+        Array of shape (N, 2) containing [x, y] coordinates of the exterior boundary.
+        Returns None if geometry type is not Polygon or MultiPolygon.
+    """
     if geom.geom_type == 'Polygon':
         return np.array(geom.exterior.coords)
     elif geom.geom_type == 'MultiPolygon':
@@ -322,7 +510,33 @@ def extract_coords(geom):
 
 
 def create_transects(park_row, sample_dist, transect_unit, transect_pts):
-    """Process a single park to generate transect points."""
+    """
+    Generate complete transect point dataset for a single protected area.
+    
+    Combines boundary sampling, perpendicular transect generation, and attribute
+    assignment into a single processing function. Returns a DataFrame with all
+    transect points and their associated protected area metadata.
+    
+    Parameters
+    ----------
+    park_row : tuple of (int, Series)
+        Tuple containing (index, row_data) from iterrows(), where row_data
+        contains geometry and all protected area attributes.
+    sample_dist : float
+        Distance between boundary sample points (in meters).
+    transect_unit : float
+        Distance between points along each transect (in meters).
+    transect_pts : int
+        Number of points on each side of the boundary (not including center).
+    
+    Returns
+    -------
+    DataFrame or None
+        DataFrame containing all transect points with columns for coordinates
+        (x, y), transect identifiers (transectID, point_position), and all
+        protected area attributes. Returns None if geometry is invalid or
+        insufficient boundary points are generated.
+    """
     park_data = park_row[1]  # Get the Series from (index, Series) tuple
     geom = park_data.geometry
     
@@ -350,24 +564,36 @@ def create_transects(park_row, sample_dist, transect_unit, transect_pts):
 
 def remove_bad_transects(transect_df, park_geom, buffer_geom, crs):
     """
-    Filter out bad transects where inner points are either:
-    1. Inside the inner buffer (indicates bad angle)
-    2. Outside the PA polygon (crossed to opposite side)
+    Filter out problematic transects based on inner point spatial relationships.
     
-    Parameters:
-    -----------
+    Removes transects where the inward-facing points (negative positions) exhibit
+    geometric issues:
+    1. Points fall inside the inner buffer zone (indicates bad transect angle)
+    2. Points fall outside the protected area polygon (transect crossed to opposite side)
+    
+    Parameters
+    ----------
     transect_df : DataFrame
-        Transect points with columns: transectID, point_position, x, y, etc.
-    park_geom : shapely geometry
-        Protected area polygon geometry
-    buffer_geom : shapely geometry
-        Inner buffer geometry
-    crs : CRS
-        Coordinate reference system
+        Transect points containing transectID, point_position, x, y columns,
+        plus additional protected area attributes.
+    park_geom : shapely.geometry.Polygon or MultiPolygon
+        Protected area boundary geometry.
+    buffer_geom : shapely.geometry.Polygon or MultiPolygon
+        Inner buffer geometry (typically 5500m inward from boundary).
+    crs : pyproj.CRS or str
+        Coordinate reference system for spatial operations.
     
-    Returns:
-    --------
-    tuple: (filtered_df, n_bad_inside_buffer, n_bad_outside_pa)
+    Returns
+    -------
+    tuple of (DataFrame, int, int)
+        - filtered_df : DataFrame with bad transects removed
+        - n_bad_inside_buffer : Number of transects removed due to points in buffer
+        - n_bad_outside_pa : Number of transects removed due to points outside PA
+    
+    Notes
+    -----
+    Only examines inner points (point_position < 0). If a transect is flagged by
+    either criterion, all points belonging to that transect are removed.
     """
     # Get inner points only (negative positions)
     inner_pts = transect_df[transect_df['point_position'] < 0].copy()
@@ -400,29 +626,48 @@ def remove_bad_transects(transect_df, park_geom, buffer_geom, crs):
 def remove_pa_transects_in_chunks(wdpa_gdf, wdpa_buffer_dict, sample_dist, transect_unit, 
                           transect_pts, output_dir, chunk_size=500):
     """
-    Process protected areas to generate transect points, filter bad transects,
-    and write results to chunk files.
+    Generate and filter transects for protected areas with streaming chunk output.
     
-    Parameters:
-    -----------
+    Processes protected areas in batches, generating transects, filtering problematic
+    ones, and writing results to sequential chunk files to avoid memory issues with
+    large datasets. Tracks comprehensive statistics throughout processing.
+    
+    Parameters
+    ----------
     wdpa_gdf : GeoDataFrame
-        Protected areas geodataframe
+        Protected areas geodataframe with geometry and WDPA attributes.
     wdpa_buffer_dict : dict
-        Dictionary mapping WDPA_PID to inner buffer geometries
+        Dictionary mapping WDPA_PID (str) to inner buffer geometries (shapely.geometry).
     sample_dist : float
-        Transect spacing in meters
+        Distance between boundary sample points in meters (e.g., 500).
     transect_unit : float
-        Distance between samples along a transect in meters
+        Distance between consecutive points along each transect in meters (e.g., 2500).
     transect_pts : int
-        Number of points on each side of boundary point
+        Number of points on each side of the boundary point (e.g., 2 for 5 total points).
     output_dir : str
-        Output directory for chunk files
+        Directory path where chunk CSV files will be written.
     chunk_size : int, optional
-        Number of PAs to process before writing a chunk (default=500)
+        Number of protected areas to process before writing a chunk file.
+        Default is 500 (~1 million points per chunk).
     
-    Returns:
-    --------
-    dict with processing statistics
+    Returns
+    -------
+    dict
+        Statistics dictionary with keys:
+        - total_pas : Total number of PAs processed
+        - empty_buffer : Number of PAs with missing or empty buffers
+        - all_filtered : Number of PAs where all transects were filtered out
+        - bad_inside_buffer : Total transects filtered (points in buffer)
+        - bad_outside_pa : Total transects filtered (points outside PA)
+        - pas_processed : Number of PAs that yielded valid transects
+        - total_points : Total number of transect points generated
+        - total_transects : Total number of valid transects
+        - chunk_files : List of created chunk file paths
+    
+    Notes
+    -----
+    Uses streaming approach with periodic garbage collection to handle datasets
+    with millions of points. Progress printed every chunk completion.
     """
     
     os.makedirs(output_dir, exist_ok=True)
@@ -505,16 +750,30 @@ def remove_pa_transects_in_chunks(wdpa_gdf, wdpa_buffer_dict, sample_dist, trans
 
 def transform_chunks_crs(chunk_pattern, source_crs, target_crs):
     """
-    Transform CRS of all chunk files matching the pattern.
+    Transform coordinate reference system for all chunk files in place.
     
-    Parameters:
-    -----------
+    Reads each chunk file, converts x,y coordinates from source CRS to target CRS,
+    and overwrites the original file. Processes chunks sequentially to avoid loading
+    all data into memory simultaneously.
+    
+    Parameters
+    ----------
     chunk_pattern : str
-        Glob pattern for chunk files (e.g., '../data/transect_chunks/chunk_*.csv')
+        Glob pattern to match chunk CSV files (e.g., '../data/transect_chunks/chunk_*.csv').
     source_crs : str
-        Source CRS (e.g., 'ESRI:54009')
+        Source coordinate reference system identifier (e.g., 'ESRI:54009' for Mollweide).
     target_crs : str
-        Target CRS (e.g., 'EPSG:4326')
+        Target coordinate reference system identifier (e.g., 'EPSG:4326' for WGS84).
+    
+    Returns
+    -------
+    None
+        Modifies chunk files in place.
+    
+    Notes
+    -----
+    Progress is printed every 3 chunks and at completion. Uses GeoPandas for CRS
+    transformation which provides high accuracy reprojection.
     """
 
     chunk_files = sorted(glob.glob(chunk_pattern))
@@ -540,18 +799,45 @@ def transform_chunks_crs(chunk_pattern, source_crs, target_crs):
 def combine_chunks_to_files(chunk_pattern, transect_output, attributes_output, 
                             transect_cols=['WDPA_PID', 'transectID', 'point_position', 'x', 'y']):
     """
-    Combine chunk files into two outputs: transects (essential columns) and attributes (metadata).
+    Combine chunk files into separate transect and attribute datasets.
     
-    Parameters:
-    -----------
+    Creates two output files: a minimal transect file containing only essential
+    geometric and identifier columns (suitable for Earth Engine ingestion), and
+    a separate attributes file containing protected area metadata that can be
+    rejoined later via WDPA_PID.
+    
+    Parameters
+    ----------
     chunk_pattern : str
-        Glob pattern for chunk files (e.g., '../data/transect_chunks/chunk_*.csv')
+        Glob pattern to match chunk CSV files (e.g., '../data/transect_chunks/chunk_*.csv').
     transect_output : str
-        Output path for transects file with essential columns
+        Output file path for the transects dataset (typically transects_final.csv).
     attributes_output : str
-        Output path for attributes file with metadata keyed by WDPA_PID
-    transect_cols : list, optional
-        List of essential columns for transects (default: ['WDPA_PID', 'transectID', 'point_position', 'x', 'y'])
+        Output file path for the attributes dataset (typically attributes_final.csv).
+    transect_cols : list of str, optional
+        Columns to include in the transects output file. Default is
+        ['WDPA_PID', 'transectID', 'point_position', 'x', 'y'].
+    
+    Returns
+    -------
+    None
+        Writes two CSV files to disk.
+    
+    Notes
+    -----
+    - Transect file: Contains millions of points with minimal columns for efficiency
+    - Attributes file: Contains one row per protected area with all metadata
+    - Uses streaming writes for transect file to minimize memory usage
+    - Automatically determines attribute columns from first chunk
+    - Prints file sizes and unique PA counts for verification
+    
+    Examples
+    --------
+    >>> combine_chunks_to_files(
+    ...     '../data/transect_chunks/chunk_*.csv',
+    ...     '../data/transects_final.csv',
+    ...     '../data/attributes_final.csv'
+    ... )
     """
     
     chunk_files = sorted(glob.glob(chunk_pattern))

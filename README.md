@@ -1,24 +1,17 @@
 # boundary-project
 
 ## Overview
-This project contains an analysis of habitat continuity and islandization in protected areas using MODIS and geospatial methods. The `example.ipynb` in the notebooks folder includes code for a step-by-step walk through of the analysis; this includes protected area filtering, MODIS imagery retrieval, geometry operations, data processing, gradient calculation, result export, and visualization functionality. The `src` folder contains the application to run the full analysis and includes functions called in the `analysis.py` analysis and `example.ipynb` scripts. The working manuscript is located in the `docs` folder.
+This project contains an analysis of habitat continuity and islandization in protected areas using MODIS and geospatial methods. The `example.ipynb` in the notebooks folder includes code for a step-by-step walk through of the analysis; this includes protected area filtering, MODIS imagery retrieval, geometry operations, data processing, gradient calculation, result export, and visualization functionality. The `src` folder contains the ordered steps to run the full analysis and includes functions called in the `analysis.py` analysis and `example.ipynb` scripts. The working manuscript is located in the `docs` folder.
 
 ## Project Structure
 ```
 boundary-project
 ├── .devcontainer             # startup container 
-├── docs                      # manuscript, references
-├── images                    # supporting graphics
-├── notebooks
-│   ├── example.ipynb         # example workflow, step-by-step 
-│   └── visualization.ipynb   # functions for visualizations
-├── output                    # outputs for example workflow
 ├── src
 │   ├── analysis.py           # 3. full workflow function, iteration function 
 │   ├── config.py             # 1. functions to load/filter protected area data
 │   ├── main.py               # 4. main execution function
 │   └── utils.py              # 2. all geometric, image, feature, export, viz functions
-├── myst.yml                  # latex frontmatter
 └── README.md
 ```
 
