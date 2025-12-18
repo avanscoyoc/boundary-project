@@ -1,10 +1,14 @@
 import ee
+import os
+import gc
+import glob
 import pandas as pd
 import geopandas as gpd
 import numpy as np
 from shapely.geometry import Polygon, MultiPolygon
 
 
+# =====================================================================
 # Earth Engine Functions
 # =====================================================================
 
@@ -53,6 +57,31 @@ def get_biome(pa_feature):
     return pa_feature.set('BIOME_NAME', biome_name)
 
 
+def check_task_status(submitted_tasks):
+    """
+    Check status of submitted Earth Engine tasks and remove completed ones.
+    
+    Parameters:
+    -----------
+    submitted_tasks : list
+        List of tuples (task_object, year)
+    
+    Returns:
+    --------
+    tuple: (active_tasks, num_active)
+        Updated list of active tasks and count of active tasks
+    """
+    active_tasks = []
+    for task_obj, year in submitted_tasks:
+        task_status = task_obj.status()
+        if task_status['state'] in ['COMPLETED', 'FAILED', 'CANCELLED']:
+            print(f"Task {year} {task_status['state']}")
+        else:
+            active_tasks.append((task_obj, year))
+    return active_tasks, len(active_tasks)
+
+
+# =====================================================================
 # Geometry Processing Functions  
 # =====================================================================
 
@@ -94,6 +123,7 @@ def fill_holes(gdf, max_hole_area=2250000):  # 1500m * 1500m = 2250000 sq meters
 
 def find_overlap_groups(gdf, overlap_threshold=90):
     """Find groups of geometries that overlap above threshold"""
+
     print(f"Finding overlap groups with >{overlap_threshold}% overlap...")
     
     overlap_groups = []
@@ -138,6 +168,7 @@ def find_overlap_groups(gdf, overlap_threshold=90):
 
 def get_min_year_from_group(group_df):
     """Get the row with minimum non-zero STATUS_YR, or first row if all are 0"""
+
     non_zero = group_df[group_df['STATUS_YR'] != 0]
     if len(non_zero) > 0:
         return non_zero.loc[non_zero['STATUS_YR'].idxmin()]
@@ -145,7 +176,8 @@ def get_min_year_from_group(group_df):
         return group_df.iloc[0]
 
 
-# Transect Generation Functions
+# =====================================================================
+# Transect Creation / Filtering Functions
 # =====================================================================
 
 def evenspace(xy, sep, start=0):
@@ -314,3 +346,254 @@ def create_transects(park_row, sample_dist, transect_unit, transect_pts):
     transect_pts_df = transect_pts_df.assign(**base_props)
     
     return transect_pts_df
+
+
+def remove_bad_transects(transect_df, park_geom, buffer_geom, crs):
+    """
+    Filter out bad transects where inner points are either:
+    1. Inside the inner buffer (indicates bad angle)
+    2. Outside the PA polygon (crossed to opposite side)
+    
+    Parameters:
+    -----------
+    transect_df : DataFrame
+        Transect points with columns: transectID, point_position, x, y, etc.
+    park_geom : shapely geometry
+        Protected area polygon geometry
+    buffer_geom : shapely geometry
+        Inner buffer geometry
+    crs : CRS
+        Coordinate reference system
+    
+    Returns:
+    --------
+    tuple: (filtered_df, n_bad_inside_buffer, n_bad_outside_pa)
+    """
+    # Get inner points only (negative positions)
+    inner_pts = transect_df[transect_df['point_position'] < 0].copy()
+    
+    if len(inner_pts) == 0:
+        return transect_df, 0, 0
+    
+    # Create minimal geodataframe for spatial check
+    inner_gdf = gpd.GeoDataFrame(
+        inner_pts[['WDPA_PID', 'transectID']],
+        geometry=gpd.points_from_xy(inner_pts['x'], inner_pts['y']),
+        crs=crs
+    )
+    
+    # Mark inner points inside the inner buffer as bad (bad angle)
+    bad_inside_buffer = inner_gdf[inner_gdf.geometry.within(buffer_geom)]['transectID'].unique()
+    
+    # Mark inner points outside the PA polygon as bad (crossed to opposite side)
+    bad_outside_pa = inner_gdf[~inner_gdf.geometry.within(park_geom)]['transectID'].unique()
+    
+    # Combine both sets of bad transects
+    bad_transects = np.unique(np.concatenate([bad_inside_buffer, bad_outside_pa]))
+    
+    # Filter out bad transects
+    filtered_df = transect_df[~transect_df['transectID'].isin(bad_transects)]
+    
+    return filtered_df, len(bad_inside_buffer), len(bad_outside_pa)
+
+
+def remove_pa_transects_in_chunks(wdpa_gdf, wdpa_buffer_dict, sample_dist, transect_unit, 
+                          transect_pts, output_dir, chunk_size=500):
+    """
+    Process protected areas to generate transect points, filter bad transects,
+    and write results to chunk files.
+    
+    Parameters:
+    -----------
+    wdpa_gdf : GeoDataFrame
+        Protected areas geodataframe
+    wdpa_buffer_dict : dict
+        Dictionary mapping WDPA_PID to inner buffer geometries
+    sample_dist : float
+        Transect spacing in meters
+    transect_unit : float
+        Distance between samples along a transect in meters
+    transect_pts : int
+        Number of points on each side of boundary point
+    output_dir : str
+        Output directory for chunk files
+    chunk_size : int, optional
+        Number of PAs to process before writing a chunk (default=500)
+    
+    Returns:
+    --------
+    dict with processing statistics
+    """
+    
+    os.makedirs(output_dir, exist_ok=True)
+    crs = wdpa_gdf.crs
+    
+    print(f"Processing {len(wdpa_gdf)} protected areas with streaming filter...")
+    chunk_files = []
+    chunk_num = 0
+    chunk_data = []
+    total_points = 0
+    total_transects = 0
+    pas_processed = 0
+    
+    # Diagnostic counters
+    empty_buffer = 0
+    all_filtered = 0
+    bad_inside_buffer = 0
+    bad_outside_pa = 0
+    
+    for idx, (_, park_row) in enumerate(wdpa_gdf.iterrows()):
+        # Generate transects for single PA
+        transect_df = create_transects((idx, park_row), sample_dist, transect_unit, transect_pts)
+        
+        if transect_df is None:
+            continue
+        
+        # Check buffer exists and is not empty
+        pid = park_row['WDPA_PID']
+        if pid not in wdpa_buffer_dict or wdpa_buffer_dict[pid].is_empty:
+            empty_buffer += 1
+            continue
+        
+        # Filter bad transects
+        buffer_geom = wdpa_buffer_dict[pid]
+        transect_df, n_bad_inside, n_bad_outside = remove_bad_transects(
+            transect_df, park_row.geometry, buffer_geom, crs
+        )
+        bad_inside_buffer += n_bad_inside
+        bad_outside_pa += n_bad_outside
+        
+        # Add to chunk data if any transects remain
+        if len(transect_df) > 0:
+            total_points += len(transect_df)
+            total_transects += transect_df['transectID'].nunique()
+            pas_processed += 1
+            chunk_data.append(transect_df)
+        else:
+            all_filtered += 1
+        
+        # Write chunk every N PAs
+        if len(chunk_data) >= chunk_size:
+            chunk_file = f"{output_dir}/chunk_{chunk_num:03d}.csv"
+            pd.concat(chunk_data, ignore_index=True).to_csv(chunk_file, index=False)
+            chunk_files.append(chunk_file)
+            chunk_data = []
+            chunk_num += 1
+            gc.collect()
+            print(f"  Processed {idx + 1}/{len(wdpa_gdf)} PAs, wrote chunk {chunk_num} | Total points: {total_points:,}")
+    
+    # Write final chunk
+    if chunk_data:
+        chunk_file = f"{output_dir}/chunk_{chunk_num:03d}.csv"
+        pd.concat(chunk_data, ignore_index=True).to_csv(chunk_file, index=False)
+        chunk_files.append(chunk_file)
+        print(f"  Wrote final chunk {chunk_num + 1}")
+    
+    # Return statistics
+    return {
+        'total_pas': idx + 1,
+        'empty_buffer': empty_buffer,
+        'all_filtered': all_filtered,
+        'bad_inside_buffer': bad_inside_buffer,
+        'bad_outside_pa': bad_outside_pa,
+        'pas_processed': pas_processed,
+        'total_points': total_points,
+        'total_transects': total_transects,
+        'chunk_files': chunk_files
+    }
+
+
+def transform_chunks_crs(chunk_pattern, source_crs, target_crs):
+    """
+    Transform CRS of all chunk files matching the pattern.
+    
+    Parameters:
+    -----------
+    chunk_pattern : str
+        Glob pattern for chunk files (e.g., '../data/transect_chunks/chunk_*.csv')
+    source_crs : str
+        Source CRS (e.g., 'ESRI:54009')
+    target_crs : str
+        Target CRS (e.g., 'EPSG:4326')
+    """
+
+    chunk_files = sorted(glob.glob(chunk_pattern))
+    print(f"Transforming {len(chunk_files)} chunks from {source_crs} to {target_crs}...")
+    
+    for i, chunk_file in enumerate(chunk_files, start=1):
+        chunk = pd.read_csv(chunk_file, low_memory=False)
+        chunk_gdf = gpd.GeoDataFrame(
+            chunk, 
+            geometry=gpd.points_from_xy(chunk['x'], chunk['y']), 
+            crs=source_crs
+        )
+        chunk_gdf = chunk_gdf.to_crs(target_crs)
+        chunk['x'] = chunk_gdf.geometry.x
+        chunk['y'] = chunk_gdf.geometry.y
+        chunk.to_csv(chunk_file, index=False)
+        if i % 3 == 0 or i == len(chunk_files):
+            print(f"  Transformed {i}/{len(chunk_files)} chunks")
+    
+    print("CRS transformation complete!")
+
+
+def combine_chunks_to_files(chunk_pattern, transect_output, attributes_output, 
+                            transect_cols=['WDPA_PID', 'transectID', 'point_position', 'x', 'y']):
+    """
+    Combine chunk files into two outputs: transects (essential columns) and attributes (metadata).
+    
+    Parameters:
+    -----------
+    chunk_pattern : str
+        Glob pattern for chunk files (e.g., '../data/transect_chunks/chunk_*.csv')
+    transect_output : str
+        Output path for transects file with essential columns
+    attributes_output : str
+        Output path for attributes file with metadata keyed by WDPA_PID
+    transect_cols : list, optional
+        List of essential columns for transects (default: ['WDPA_PID', 'transectID', 'point_position', 'x', 'y'])
+    """
+    
+    chunk_files = sorted(glob.glob(chunk_pattern))
+    print(f"Found {len(chunk_files)} chunk files")
+    print(f"Combining into:\n  - {transect_output}\n  - {attributes_output}")
+    
+    # Get all columns from first chunk to determine attribute columns
+    first_chunk = pd.read_csv(chunk_files[0], low_memory=False)
+    all_cols = first_chunk.columns.tolist()
+    attr_cols = [col for col in all_cols if col not in ['transectID', 'point_position', 'x', 'y']]
+    
+    print(f"\nTransect columns: {transect_cols}")
+    print(f"Attribute columns: {attr_cols}")
+    
+    # Write transects file
+    print("\nWriting transects file...")
+    first_chunk[transect_cols].to_csv(transect_output, index=False, mode='w')
+    print(f"  Wrote chunk 1/{len(chunk_files)}")
+    
+    for i, chunk_file in enumerate(chunk_files[1:], start=2):
+        chunk = pd.read_csv(chunk_file, low_memory=False)
+        chunk[transect_cols].to_csv(transect_output, index=False, mode='a', header=False)
+        print(f"  Wrote chunk {i}/{len(chunk_files)}")
+        del chunk
+    
+    print(f"Transects saved: {os.path.getsize(transect_output) / 1024**2:.1f} MB")
+    
+    # Extract unique attributes by WDPA_PID
+    print("\nExtracting unique attributes by WDPA_PID...")
+    all_attributes = []
+    for i, chunk_file in enumerate(chunk_files, start=1):
+        chunk = pd.read_csv(chunk_file, low_memory=False)
+        # Get unique rows per WDPA_PID with all attribute columns
+        unique_attrs = chunk[attr_cols].drop_duplicates(subset=['WDPA_PID'])
+        all_attributes.append(unique_attrs)
+        if i % 3 == 0 or i == len(chunk_files):
+            print(f"  Processed {i}/{len(chunk_files)} chunks")
+    
+    # Combine and deduplicate
+    attributes_df = pd.concat(all_attributes, ignore_index=True).drop_duplicates(subset=['WDPA_PID'])
+    attributes_df.to_csv(attributes_output, index=False)
+    
+    print(f"\nAttributes saved: {os.path.getsize(attributes_output) / 1024**2:.1f} MB")
+    print(f"Unique WDPA_PIDs: {len(attributes_df)}")
+    print("\nCombining complete!")
