@@ -425,7 +425,7 @@ def transect(tpts, tlen, npts=1):
     DataFrame
         Long-format DataFrame with columns:
         - transectID : Integer identifier for each transect (1-indexed)
-        - point_position : Position along transect (negative=inward, 0=boundary, positive=outward)
+        - pointID : Position along transect (negative=inward, 0=boundary, positive=outward)
         - x, y : Coordinates of each transect point
     
     Notes
@@ -435,7 +435,7 @@ def transect(tpts, tlen, npts=1):
     outward points.
     """
     if len(tpts) == 0:
-        return pd.DataFrame(columns=['transectID', 'point_position', 'x', 'y'])
+        return pd.DataFrame(columns=['transectID', 'pointID', 'x', 'y'])
     
     tpts = tpts.copy()
     tpts['thetaT'] = tpts['theta'] + np.pi / 2
@@ -470,13 +470,13 @@ def transect(tpts, tlen, npts=1):
         for j, name in enumerate(all_names):
             result.append({
                 'transectID': i + 1,
-                'point_position': float(name),
+                'pointID': float(name),
                 'x': xx[i, j],
                 'y': yy[i, j]
             })
     
     xy = pd.DataFrame(result)
-    xy = xy.sort_values(['transectID', 'point_position']).reset_index(drop=True)
+    xy = xy.sort_values(['transectID', 'pointID']).reset_index(drop=True)
     
     return xy
 
@@ -533,7 +533,7 @@ def create_transects(park_row, sample_dist, transect_unit, transect_pts):
     -------
     DataFrame or None
         DataFrame containing all transect points with columns for coordinates
-        (x, y), transect identifiers (transectID, point_position), and all
+        (x, y), transect identifiers (transectID, pointID), and all
         protected area attributes. Returns None if geometry is invalid or
         insufficient boundary points are generated.
     """
@@ -574,7 +574,7 @@ def remove_bad_transects(transect_df, park_geom, buffer_geom, crs):
     Parameters
     ----------
     transect_df : DataFrame
-        Transect points containing transectID, point_position, x, y columns,
+        Transect points containing transectID, pointID, x, y columns,
         plus additional protected area attributes.
     park_geom : shapely.geometry.Polygon or MultiPolygon
         Protected area boundary geometry.
@@ -592,11 +592,11 @@ def remove_bad_transects(transect_df, park_geom, buffer_geom, crs):
     
     Notes
     -----
-    Only examines inner points (point_position < 0). If a transect is flagged by
+    Only examines inner points (pointID < 0). If a transect is flagged by
     either criterion, all points belonging to that transect are removed.
     """
     # Get inner points only (negative positions)
-    inner_pts = transect_df[transect_df['point_position'] < 0].copy()
+    inner_pts = transect_df[transect_df['pointID'] < 0].copy()
     
     if len(inner_pts) == 0:
         return transect_df, 0, 0
@@ -624,13 +624,13 @@ def remove_bad_transects(transect_df, park_geom, buffer_geom, crs):
 
 
 def remove_pa_transects_in_chunks(wdpa_gdf, wdpa_buffer_dict, sample_dist, transect_unit, 
-                          transect_pts, output_dir, chunk_size=500):
+                          transect_pts, output_dir, chunk_size=500, output_crs='EPSG:4326'):
     """
     Generate and filter transects for protected areas with streaming chunk output.
     
     Processes protected areas in batches, generating transects, filtering problematic
-    ones, and writing results to sequential chunk files to avoid memory issues with
-    large datasets. Tracks statistics throughout processing.
+    ones, and writing results to sequential shapefile chunks to avoid memory issues.
+    Writes directly in EPSG:4326 for GEE upload efficiency.
     
     Parameters
     ----------
@@ -645,10 +645,12 @@ def remove_pa_transects_in_chunks(wdpa_gdf, wdpa_buffer_dict, sample_dist, trans
     transect_pts : int
         Number of points on each side of the boundary point (e.g., 2 for 5 total points).
     output_dir : str
-        Directory path where chunk CSV files will be written.
+        Directory path where chunk shapefiles will be written.
     chunk_size : int, optional
         Number of protected areas to process before writing a chunk file.
         Default is 500 (~1 million points per chunk).
+    output_crs : str, optional
+        Output coordinate reference system. Default 'EPSG:4326' for GEE.
     
     Returns
     -------
@@ -662,16 +664,17 @@ def remove_pa_transects_in_chunks(wdpa_gdf, wdpa_buffer_dict, sample_dist, trans
         - pas_processed : Number of PAs that yielded valid transects
         - total_points : Total number of transect points generated
         - total_transects : Total number of valid transects
-        - chunk_files : List of created chunk file paths
+        - chunk_files : List of created shapefile paths
     
     Notes
     -----
-    Uses streaming approach with periodic garbage collection to handle datasets
-    with millions of points. Progress printed every chunk completion.
+    Writes shapefiles directly in target CRS to eliminate separate transformation step.
+    Uses streaming approach with periodic garbage collection. Only keeps WDPA_PID,
+    transectID, pointID columns for GEE upload efficiency.
     """
     
     os.makedirs(output_dir, exist_ok=True)
-    crs = wdpa_gdf.crs
+    source_crs = wdpa_gdf.crs
     
     print(f"Processing {len(wdpa_gdf)} protected areas with streaming filter...")
     chunk_files = []
@@ -703,7 +706,7 @@ def remove_pa_transects_in_chunks(wdpa_gdf, wdpa_buffer_dict, sample_dist, trans
         # Filter bad transects
         buffer_geom = wdpa_buffer_dict[pid]
         transect_df, n_bad_inside, n_bad_outside = remove_bad_transects(
-            transect_df, park_row.geometry, buffer_geom, crs
+            transect_df, park_row.geometry, buffer_geom, source_crs
         )
         bad_inside_buffer += n_bad_inside
         bad_outside_pa += n_bad_outside
@@ -719,8 +722,21 @@ def remove_pa_transects_in_chunks(wdpa_gdf, wdpa_buffer_dict, sample_dist, trans
         
         # Write chunk every N PAs
         if len(chunk_data) >= chunk_size:
-            chunk_file = f"{output_dir}/chunk_{chunk_num:03d}.csv"
-            pd.concat(chunk_data, ignore_index=True).to_csv(chunk_file, index=False)
+            chunk_file = f"{output_dir}/chunk_{chunk_num:03d}.shp"
+            chunk_combined = pd.concat(chunk_data, ignore_index=True)
+            
+            # Create GeoDataFrame in source CRS, transform to output CRS
+            chunk_gdf = gpd.GeoDataFrame(
+                chunk_combined,
+                geometry=gpd.points_from_xy(chunk_combined['x'], chunk_combined['y']),
+                crs=source_crs
+            ).to_crs(output_crs)
+            
+            # Keep only essential columns for GEE (drop x, y - stored in geometry)
+            chunk_gdf = chunk_gdf[['WDPA_PID', 'transectID', 'pointID', 'geometry']]
+
+            chunk_gdf.to_file(chunk_file)
+            
             chunk_files.append(chunk_file)
             chunk_data = []
             chunk_num += 1
@@ -729,8 +745,19 @@ def remove_pa_transects_in_chunks(wdpa_gdf, wdpa_buffer_dict, sample_dist, trans
     
     # Write final chunk
     if chunk_data:
-        chunk_file = f"{output_dir}/chunk_{chunk_num:03d}.csv"
-        pd.concat(chunk_data, ignore_index=True).to_csv(chunk_file, index=False)
+        chunk_file = f"{output_dir}/chunk_{chunk_num:03d}.shp"
+        chunk_combined = pd.concat(chunk_data, ignore_index=True)
+        
+        chunk_gdf = gpd.GeoDataFrame(
+            chunk_combined,
+            geometry=gpd.points_from_xy(chunk_combined['x'], chunk_combined['y']),
+            crs=source_crs
+        ).to_crs(output_crs)
+        
+        chunk_gdf = chunk_gdf[['WDPA_PID', 'transectID', 'pointID', 'geometry']]
+
+        chunk_gdf.to_file(chunk_file)
+        
         chunk_files.append(chunk_file)
         print(f"  Wrote final chunk {chunk_num + 1}")
     
@@ -748,75 +775,26 @@ def remove_pa_transects_in_chunks(wdpa_gdf, wdpa_buffer_dict, sample_dist, trans
     }
 
 
-def transform_chunks_crs(chunk_pattern, source_crs, target_crs):
-    """
-    Transform coordinate reference system for all chunk files in place.
-    
-    Reads each chunk file, converts x,y coordinates from source CRS to target CRS,
-    and overwrites the original file. Processes chunks sequentially to avoid loading
-    all data into memory simultaneously.
-    
-    Parameters
-    ----------
-    chunk_pattern : str
-        Glob pattern to match chunk CSV files (e.g., '../data/transect_chunks/chunk_*.csv').
-    source_crs : str
-        Source coordinate reference system identifier (e.g., 'ESRI:54009' for Mollweide).
-    target_crs : str
-        Target coordinate reference system identifier (e.g., 'EPSG:4326' for WGS84).
-    
-    Returns
-    -------
-    None
-        Modifies chunk files in place.
-    
-    Notes
-    -----
-    Progress is printed every 3 chunks and at completion. Uses GeoPandas for CRS
-    transformation which provides high accuracy reprojection.
-    """
-
-    chunk_files = sorted(glob.glob(chunk_pattern))
-    print(f"Transforming {len(chunk_files)} chunks from {source_crs} to {target_crs}...")
-    
-    for i, chunk_file in enumerate(chunk_files, start=1):
-        chunk = pd.read_csv(chunk_file, low_memory=False)
-        chunk_gdf = gpd.GeoDataFrame(
-            chunk, 
-            geometry=gpd.points_from_xy(chunk['x'], chunk['y']), 
-            crs=source_crs
-        )
-        chunk_gdf = chunk_gdf.to_crs(target_crs)
-        chunk['x'] = chunk_gdf.geometry.x
-        chunk['y'] = chunk_gdf.geometry.y
-        chunk.to_csv(chunk_file, index=False)
-        if i % 3 == 0 or i == len(chunk_files):
-            print(f"  Transformed {i}/{len(chunk_files)} chunks")
-    
-    print("CRS transformation complete!")
-
-
 def combine_chunks_to_files(chunk_pattern, transect_output, attributes_output, 
-                            transect_cols=['WDPA_PID', 'transectID', 'point_position', 'x', 'y']):
+                            transect_cols=['WDPA_PID', 'transectID', 'pointID', 'x', 'y']):
     """
-    Combine chunk files into separate transect and attribute datasets.
+    Combine chunk shapefiles into separate transect CSV and attribute CSV files.
     
-    Creates two output files: a minimal transect file containing only essential
-    geometric and identifier columns (suitable for Earth Engine ingestion), and
-    a separate attributes file containing protected area metadata that can be
-    rejoined later via WDPA_PID.
+    Reads shapefile chunks, extracts x,y from geometry, and creates two output
+    files: a minimal transect CSV for analysis and an attributes CSV with
+    protected area metadata that can be rejoined via WDPA_PID.
     
     Parameters
     ----------
     chunk_pattern : str
-        Glob pattern to match chunk CSV files (e.g., '../data/transect_chunks/chunk_*.csv').
+        Glob pattern to match chunk shapefiles (e.g., '../data/transect_chunks/chunk_*.shp').
     transect_output : str
         Output file path for the transects dataset (typically transects_final.csv).
     attributes_output : str
         Output file path for the attributes dataset (typically attributes_final.csv).
     transect_cols : list of str, optional
         Columns to include in the transects output file. Default is
-        ['WDPA_PID', 'transectID', 'point_position', 'x', 'y'].
+        ['WDPA_PID', 'transectID', 'pointID', 'x', 'y'].
     
     Returns
     -------
@@ -825,16 +803,16 @@ def combine_chunks_to_files(chunk_pattern, transect_output, attributes_output,
     
     Notes
     -----
+    - Reads from shapefiles and extracts x,y coordinates from geometry
     - Transect file: Contains millions of points with minimal columns for efficiency
     - Attributes file: Contains one row per protected area with all metadata
     - Uses streaming writes for transect file to minimize memory usage
-    - Automatically determines attribute columns from first chunk
     - Prints file sizes and unique PA counts for verification
     
     Examples
     --------
     >>> combine_chunks_to_files(
-    ...     '../data/transect_chunks/chunk_*.csv',
+    ...     '../data/transect_chunks/chunk_*.shp',
     ...     '../data/transects_final.csv',
     ...     '../data/attributes_final.csv'
     ... )
@@ -845,9 +823,13 @@ def combine_chunks_to_files(chunk_pattern, transect_output, attributes_output,
     print(f"Combining into:\n  - {transect_output}\n  - {attributes_output}")
     
     # Get all columns from first chunk to determine attribute columns
-    first_chunk = pd.read_csv(chunk_files[0], low_memory=False)
+    first_gdf = gpd.read_file(chunk_files[0])
+    first_chunk = pd.DataFrame(first_gdf.drop(columns='geometry'))
+    first_chunk['x'] = first_gdf.geometry.x
+    first_chunk['y'] = first_gdf.geometry.y
+    
     all_cols = first_chunk.columns.tolist()
-    attr_cols = [col for col in all_cols if col not in ['transectID', 'point_position', 'x', 'y']]
+    attr_cols = [col for col in all_cols if col not in ['transectID', 'pointID', 'x', 'y']]
     
     print(f"\nTransect columns: {transect_cols}")
     print(f"Attribute columns: {attr_cols}")
@@ -858,10 +840,14 @@ def combine_chunks_to_files(chunk_pattern, transect_output, attributes_output,
     print(f"  Wrote chunk 1/{len(chunk_files)}")
     
     for i, chunk_file in enumerate(chunk_files[1:], start=2):
-        chunk = pd.read_csv(chunk_file, low_memory=False)
+        chunk_gdf = gpd.read_file(chunk_file)
+        chunk = pd.DataFrame(chunk_gdf.drop(columns='geometry'))
+        chunk['x'] = chunk_gdf.geometry.x
+        chunk['y'] = chunk_gdf.geometry.y
+
         chunk[transect_cols].to_csv(transect_output, index=False, mode='a', header=False)
         print(f"  Wrote chunk {i}/{len(chunk_files)}")
-        del chunk
+        del chunk, chunk_gdf
     
     print(f"Transects saved: {os.path.getsize(transect_output) / 1024**2:.1f} MB")
     
@@ -869,7 +855,11 @@ def combine_chunks_to_files(chunk_pattern, transect_output, attributes_output,
     print("\nExtracting unique attributes by WDPA_PID...")
     all_attributes = []
     for i, chunk_file in enumerate(chunk_files, start=1):
-        chunk = pd.read_csv(chunk_file, low_memory=False)
+        chunk_gdf = gpd.read_file(chunk_file)
+        chunk = pd.DataFrame(chunk_gdf.drop(columns='geometry'))
+        chunk['x'] = chunk_gdf.geometry.x
+        chunk['y'] = chunk_gdf.geometry.y
+
         # Get unique rows per WDPA_PID with all attribute columns
         unique_attrs = chunk[attr_cols].drop_duplicates(subset=['WDPA_PID'])
         all_attributes.append(unique_attrs)
