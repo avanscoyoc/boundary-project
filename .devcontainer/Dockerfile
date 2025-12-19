@@ -47,4 +47,6 @@ RUN pip3 install --no-cache-dir \
     tifffile \
     imagecodecs \
     seaborn \
-    statsmodels 
+    statsmodels \
+    pyarrow \
+    dask[dataframe]
