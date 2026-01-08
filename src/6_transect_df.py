@@ -7,26 +7,35 @@ import glob
 # Create transectID level dataset (pandas chunked approach)
 #########################################################################
 
-
-
 print("Pivoting data in pandas chunks...")
-files = glob.glob("../data/results_long_chunks/*.parquet")
+files = glob.glob("../data/results_sorted_chunks/*.parquet")
 result_list = []
 covar_list = []
 for f in files:
     df = pd.read_parquet(f)
-    pts = df.pivot_table(
+     # Pivot long: year/value
+    long = (
+        df
+        .melt(id_vars=['WDPA_PID', 'transectID', 'pointID', 'max_extent', 'gHM', 'elevation', 'slope'],
+              value_vars=[str(y) for y in range(2001, 2022)],
+              var_name='year', value_name='value')
+        .dropna(subset=['value'])
+    )
+    long['year'] = long['year'].astype('int16')
+    long['value'] = long['value'].astype('float32')
+    # Pivot wide: pointID to columns
+    pts = long.pivot_table(
         index=['WDPA_PID', 'year', 'transectID'],
         columns='pointID', values='value', aggfunc='first'
     )
     pts = pts.rename(columns={2: 'pt_2', 1: 'pt_1', 0: 'pt_0', -1: 'pt_m1', -2: 'pt_m2'})
     pts = pts.dropna(subset=['pt_2', 'pt_1', 'pt_0', 'pt_m1', 'pt_m2'])
     result_list.append(pts)
-    covars = df.groupby(['WDPA_PID','year','transectID']).agg(
+    covars = long.groupby(['WDPA_PID','year','transectID']).agg(
         trnst_max_extent=('max_extent','max'),
-        gHM_mean_outer=('gHM', lambda x: x[df.loc[x.index,'pointID'].isin([1,2])].mean()),
-        elevation_pt0=('elevation', lambda x: x[df.loc[x.index,'pointID']==0].iloc[0]),
-        slope_pt0=('slope', lambda x: x[df.loc[x.index,'pointID']==0].iloc[0])
+        gHM_mean_outer=('gHM', lambda x: x[long.loc[x.index,'pointID'].isin([1,2])].mean()),
+        elevation_pt0=('elevation', lambda x: x[long.loc[x.index,'pointID']==0].iloc[0]),
+        slope_pt0=('slope', lambda x: x[long.loc[x.index,'pointID']==0].iloc[0])
     )
     covar_list.append(covars)
 final_pts = pd.concat(result_list)
@@ -34,8 +43,6 @@ final_covars = pd.concat(covar_list)
 print("Concatenated pivoted data shape:", final_pts.shape)
 
 transect_df = final_pts.join(final_covars)
-
-transect_df = pts.join(covars)
 
 print("Computing edge...")
 transect_df['edge'] = (
