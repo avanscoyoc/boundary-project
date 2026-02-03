@@ -150,6 +150,137 @@ def check_task_status(submitted_tasks):
     return active_tasks, len(active_tasks)
 
 
+# Index configurations for gradient computation
+INDEX_CONFIGS = {
+    'ndvi': {
+        'collection': 'MODIS/061/MOD13A1',
+        'band': 'NDVI',
+        'scale_factor': 0.0001,
+        'needs_masking': False,
+        'description': 'Normalized Difference Vegetation Index'
+    },
+    'ndbi': {
+        'collection': 'MODIS/061/MOD09GA',
+        'needs_masking': True,
+        'scale_factor': 0.0001,  # Applied in mask function
+        'description': 'Normalized Difference Built-up Index'
+    },
+    'lai': {
+        'collection': 'MODIS/061/MCD15A3H',
+        'band': 'Lai',
+        'scale_factor': 0.1,
+        'needs_masking': False,
+        'description': 'Leaf Area Index'
+    },
+    'fpar': {
+        'collection': 'MODIS/061/MCD15A3H',
+        'band': 'Fpar',
+        'scale_factor': 0.01,
+        'needs_masking': False,
+        'description': 'Fraction of Photosynthetically Active Radiation'
+    }
+}
+
+
+def mask_mod09ga_light(img):
+    """
+    Cloud masking for MOD09GA surface reflectance.
+    
+    Applies quality filtering to remove clouds, cloud shadows, and snow/ice
+    from MODIS MOD09GA surface reflectance imagery using the state_1km QA band.
+    
+    Parameters
+    ----------
+    img : ee.Image
+        MOD09GA image to mask
+    
+    Returns
+    -------
+    ee.Image
+        Masked and scaled image with sur_refl_b02 (NIR) and sur_refl_b06 (SWIR) bands
+    
+    Notes
+    -----
+    - Bit 0-1: Cloud state (0 = clear)
+    - Bit 2: Cloud shadow (0 = no shadow)
+    - Bit 12: Snow/ice (0 = no snow)
+    - Scale factor of 0.0001 applied to convert to reflectance values
+    """
+    qa = img.select('state_1km')
+    mask = (qa.bitwiseAnd(3).eq(0)           # clear
+            .And(qa.bitwiseAnd(1 << 2).eq(0))  # no shadow
+            .And(qa.bitwiseAnd(1 << 12).eq(0))) # no snow
+    return (img.updateMask(mask)
+            .select(['sur_refl_b02', 'sur_refl_b06'])
+            .multiply(0.0001))
+
+
+def make_gradient(index_name, y):
+    """
+    Generic gradient function for computing spatial gradients of various indices.
+    
+    Computes annual median composites and their spatial gradient magnitude for
+    NDVI, NDBI, LAI, or FPAR indices. Automatically applies appropriate scaling
+    factors and cloud masking based on index configuration.
+    
+    Parameters
+    ----------
+    index_name : str
+        Index to compute. Must be one of: 'ndvi', 'ndbi', 'lai', 'fpar'
+    y : int or ee.Number
+        Year to process (e.g., 2015)
+    
+    Returns
+    -------
+    ee.Image
+        Single-band image containing gradient magnitude, with band name 'grad'.
+        Unmasked areas are set to -9999.
+    
+    Examples
+    --------
+    >>> # Create gradient function for NDVI
+    >>> ndvi_2015 = make_gradient('ndvi', 2015)
+    >>> 
+    >>> # Map over multiple years
+    >>> years = ee.List.sequence(2001, 2021)
+    >>> ndvi_grads = years.map(lambda y: make_gradient('ndvi', y))
+    
+    Notes
+    -----
+    Scale factors applied:
+    - NDVI: 0.0001 (MOD13A1 stored as integers)
+    - NDBI: 0.0001 (applied to reflectance bands before index calculation)
+    - LAI: 0.1 (MCD15A3H stored as integers)
+    - FPAR: 0.01 (MCD15A3H stored as integers)
+    
+    NDBI requires cloud masking using the state_1km QA band from MOD09GA.
+    """
+    config = INDEX_CONFIGS[index_name]
+    collection = ee.ImageCollection(config['collection'])
+    
+    if config['needs_masking']:
+        # NDBI special case - requires cloud masking
+        annual = (collection
+                  .filter(ee.Filter.calendarRange(y, y, 'year'))
+                  .map(mask_mod09ga_light)
+                  .median())
+        index_img = annual.normalizedDifference(['sur_refl_b06', 'sur_refl_b02'])
+    else:
+        # NDVI, LAI, FPAR - direct band selection
+        annual = (collection
+                  .filter(ee.Filter.calendarRange(y, y, 'year'))
+                  .select(config['band'])
+                  .median())
+        if config['scale_factor'] != 1.0:
+            annual = annual.multiply(config['scale_factor'])
+        index_img = annual
+    
+    # Compute gradient magnitude
+    grad = index_img.gradient()
+    grad_mag = grad.select('x').hypot(grad.select('y')).unmask(-9999)
+    return grad_mag.rename(['grad'])
+
+
 # =====================================================================
 # Geometry Processing Functions  
 # =====================================================================
