@@ -2,16 +2,19 @@ import pandas as pd
 import numpy as np
 import glob
 import os
+from pathlib import Path
 
 # ===== CONFIGURATION: SELECT INDEX =====
-INDEX_NAME = 'ndbi'  # Must match the index processed
-# =======================================
+INDEX_NAME = 'ndvi'  # Must match the index processed
+START_YEAR = 2001
+END_YEAR = 2022  # Exclusive
+# Exclusive# =======================================
 
 print(f"Creating transect-level dataset for {INDEX_NAME.upper()}...")
 
 # Index-specific paths
-input_dir = f"../results/{INDEX_NAME}/raw"
-output_dir = f"../results/{INDEX_NAME}/transect_chunks"
+input_dir = Path(f"results/{INDEX_NAME}_raw") 
+output_dir = Path(f"results/{INDEX_NAME}_raw/transect_chunks")
 
 # Verify input exists
 if not os.path.exists(input_dir):
@@ -43,7 +46,7 @@ for idx, f in enumerate(files):
     long = (
         df
         .melt(id_vars=['WDPA_PID', 'transectID', 'pointID', 'max_extent', 'gHM', 'elevation', 'slope'],
-              value_vars=[str(y) for y in range(2001, 2022)],
+              value_vars=[str(y) for y in range(START_YEAR, END_YEAR)],
               var_name='year', value_name='value')
         .dropna(subset=['value'])
     )
@@ -120,7 +123,7 @@ wdpa_list = []
 transect_files = sorted(glob.glob(os.path.join(output_dir, f"{INDEX_NAME}_transect_chunk_*.parquet")))
 for chunk_num, transect_file in enumerate(transect_files):
     print(f"  Processing WDPA stats from chunk {chunk_num+1}/{len(transect_files)}...")
-    transect_chunk = pd.read_parquet(transect_file)
+    transect_chunk = pd.read_parquet(transect_file).reset_index()
     
     for (wdpa, year), group in transect_chunk.groupby(['WDPA_PID','year']):
         d02 = cohens_d(group['pt_0'], group['pt_2'])
@@ -149,11 +152,11 @@ for chunk_num, transect_file in enumerate(transect_files):
 
 print("Merging with attributes...")
 wdpa_df = pd.DataFrame(wdpa_list)
-attributes = pd.read_csv("../data/attributes_final.csv")
+attributes = pd.read_csv("data/attributes_final.csv")
 wdpa_df = pd.merge(wdpa_df, attributes, on='WDPA_PID', how='left')
 
 # Save with index-specific name
-output_file = f"../results/wdpa_df_{INDEX_NAME}.parquet"
+output_file = f"results/wdpa_df_{INDEX_NAME}.parquet"
 print(f"Saving {output_file}...")
 wdpa_df.to_parquet(output_file, engine='pyarrow', index=False)
 print(f"\nDone! WDPA-level dataset saved to {output_file}")
