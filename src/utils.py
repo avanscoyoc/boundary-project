@@ -156,64 +156,26 @@ INDEX_CONFIGS = {
         'collection': 'MODIS/061/MOD13A1',
         'band': 'NDVI',
         'scale_factor': 0.0001,
-        'needs_masking': False,
         'description': 'Normalized Difference Vegetation Index'
     },
     'ndbi': {
         'collection': 'MODIS/061/MOD09GA',
-        'needs_masking': True,
-        'scale_factor': 0.0001,  # Applied in mask function
+        'scale_factor': 0.0001,  # Applied directly to bands before index calculation
         'description': 'Normalized Difference Built-up Index'
     },
     'lai': {
         'collection': 'MODIS/061/MCD15A3H',
         'band': 'Lai',
         'scale_factor': 0.1,
-        'needs_masking': False,
         'description': 'Leaf Area Index'
     },
     'fpar': {
         'collection': 'MODIS/061/MCD15A3H',
         'band': 'Fpar',
         'scale_factor': 0.01,
-        'needs_masking': False,
         'description': 'Fraction of Photosynthetically Active Radiation'
     }
 }
-
-
-def mask_mod09ga_light(img):
-    """
-    Cloud masking for MOD09GA surface reflectance.
-    
-    Applies quality filtering to remove clouds, cloud shadows, and snow/ice
-    from MODIS MOD09GA surface reflectance imagery using the state_1km QA band.
-    
-    Parameters
-    ----------
-    img : ee.Image
-        MOD09GA image to mask
-    
-    Returns
-    -------
-    ee.Image
-        Masked and scaled image with sur_refl_b02 (NIR) and sur_refl_b06 (SWIR) bands
-    
-    Notes
-    -----
-    - Bit 0-1: Cloud state (0 = clear)
-    - Bit 2: Cloud shadow (0 = no shadow)
-    - Bit 12: Snow/ice (0 = no snow)
-    - Scale factor of 0.0001 applied to convert to reflectance values
-    """
-    qa = img.select('state_1km')
-    mask = (qa.bitwiseAnd(3).eq(0)           # clear
-            .And(qa.bitwiseAnd(1 << 2).eq(0))  # no shadow
-            .And(qa.bitwiseAnd(1 << 12).eq(0))) # no snow
-    return (img.updateMask(mask)
-            .select(['sur_refl_b02', 'sur_refl_b06'])
-            .multiply(0.0001))
-
 
 def make_gradient(index_name, y):
     """
@@ -258,12 +220,13 @@ def make_gradient(index_name, y):
     config = INDEX_CONFIGS[index_name]
     collection = ee.ImageCollection(config['collection'])
     
-    if config['needs_masking']:
-        # NDBI special case - requires cloud masking
+    if index_name == 'ndbi':
+        # Special handling for NDBI - compute from reflectance bands
         annual = (collection
                   .filter(ee.Filter.calendarRange(y, y, 'year'))
-                  .map(mask_mod09ga_light)
-                  .median())
+                  .select(['sur_refl_b02', 'sur_refl_b06'])
+                  .median()
+                  .multiply(config['scale_factor']))
         index_img = annual.normalizedDifference(['sur_refl_b06', 'sur_refl_b02'])
     else:
         # NDVI, LAI, FPAR - direct band selection

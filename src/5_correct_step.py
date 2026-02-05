@@ -1,17 +1,18 @@
 import os
 import pandas as pd
+import numpy as np
 from pathlib import Path
 
 # ===== CONFIGURATION: SELECT INDEX =====
-INDEX_NAME = 'ndbi'  # Must match the index processed in 4_gee_tasks.ipynb
+INDEX_NAME = 'ndvi'  # Must match the index processed in 4_gee_tasks.ipynb
+START_YEAR = 2001
+END_YEAR = 2022  # Exclusive
 # =======================================
 
 print(f"Processing {INDEX_NAME.upper()} results...")
 
 # Index-specific paths
-folder_path = Path(f"../results/{INDEX_NAME}")
-out_dir = Path(f"../results/{INDEX_NAME}/raw")
-out_dir.mkdir(parents=True, exist_ok=True)  # directory for chunked parquet
+folder_path = Path(f"results/{INDEX_NAME}_raw") 
 
 # Verify input folder exists
 if not folder_path.exists():
@@ -21,7 +22,7 @@ if not folder_path.exists():
     )
 
 id_vars = ['WDPA_PID', 'transectID', 'pointID', 'max_extent', 'gHM', 'elevation', 'slope']
-value_vars = [str(y) for y in range(2001, 2022)]
+value_vars = [str(y) for y in range(START_YEAR, END_YEAR)]
 usecols = id_vars + value_vars
 
 dtypes = {
@@ -43,6 +44,9 @@ df_list = [pd.read_csv(file, usecols=usecols, dtype=dtypes, low_memory=False) fo
 df = pd.concat(df_list, ignore_index=True)
 del df_list
 
+# Replace sentinel values with NaN
+df[value_vars] = df[value_vars].replace(-9999.0, np.nan)
+
 print(f"Loaded {len(df):,} rows")
 
 # 2. Sort the full DataFrame
@@ -59,9 +63,9 @@ start = 0
 for i, size in enumerate(split_sizes):
     pids = unique_pids[start:start+size]
     split_df = df[df['WDPA_PID'].isin(pids)]
-    out_file = out_dir / f"{INDEX_NAME}_sorted_chunk_{i}.parquet"
+    out_file = folder_path / f"{INDEX_NAME}_sorted_chunk_{i}.parquet"
     split_df.to_parquet(out_file, engine="pyarrow", index=False)
     print(f"  Saved split {i}: {len(split_df):,} rows")
     start += size
 
-print(f"\nDone! Sorted results saved to {out_dir}/")
+print(f"\nDone! Sorted results saved to {folder_path}/")
