@@ -1,85 +1,189 @@
-# boundary-project
+# Protected Area Edge Analysis
 
 ## Overview
-This project analyzes habitat continuity and landscape gradients across protected area boundaries using Earth Engine and geospatial methods. The workflow processes ~4,000 protected areas globally, generating perpendicular transects at boundaries to sample environmental variables including water presence (Global Surface Water), human modification, and NDVI gradients from MODIS imagery. The analysis produces ~8.6 million transect points with chunked processing to handle large-scale spatial data efficiently.
+This project analyzes habitat discontinuities and landscape gradients at protected area boundaries using Earth Engine and geospatial methods. The workflow processes ~4,000 protected areas globally, generating perpendicular transects at boundaries to sample environmental variables including vegetation indices (NDVI, LAI, FPAR), built-up index (NDBI), water presence, human modification, and topography from satellite imagery (2003-2025). The analysis produces ~8.6 million transect points with edge detection metrics to quantify boundary sharpness.
+
+## Quick Start
+
+### Workflow Overview
+```
+Phase 1: Data Preparation (Run Once)
+├── 01_collect_protected_areas.py     → Export to GEE → Manual download
+└── 02_generate_sampling_points.py    → Filter + transects → Manual upload to GEE
+
+Phase 2: Remote Sensing (Run Per Index)
+└── 03_sample_satellite_imagery.py    → Sample in GEE → Manual download
+
+Phase 3: Analysis (Run Per Index)
+├── 04_compute_edge_metrics.py        → Compute edge effects
+└── 05_analyze_results.py             → Generate statistics & figures
+```
+
+### First Time Setup
+```bash
+# 1. Configure your GEE project
+nano modules/config.py  # Edit GEE_PROJECT = 'your-project-id'
+
+# 2. Run Phase 1 (Data Preparation)
+python scripts/01_collect_protected_areas.py
+# → Download WDPA_polygons.geojson from Google Drive to data/raw/
+
+python scripts/02_generate_sampling_points.py
+# → Upload chunk_*.shp to GEE assets (see script output for paths)
+```
+
+### For Each Index (ndvi, lai, fpar, ndbi)
+```bash
+# 1. Set index in config
+nano modules/config.py  # Change INDEX_NAME = 'ndvi'
+
+# 2. Sample satellite imagery
+python scripts/03_sample_satellite_imagery.py
+# → Download CSVs from Google Drive to results/raw/{index}_raw/
+
+# 3. Process and analyze
+python scripts/04_compute_edge_metrics.py
+python scripts/05_analyze_results.py
+```
+
+For advanced analysis (mixed models, temporal trends), see `src/7_analysis.ipynb`.
 
 ## Project Structure
 ```
 boundary-project/
-├── .devcontainer/            # Docker container configuration
-├── src/
-│   ├── 1_get_wdpas.ipynb     # Download and filter WDPA polygons from Earth Engine
-│   ├── 2_filter_wdpas.ipynb  # Remove overlaps, duplicate names, and narrow polygons
-│   ├── 3_create_points.ipynb # Generate transect points and remove bad transects with chunked processing
-│   ├── 4_gee_tasks.ipynb     # Sample all points in Earth Engine (water, human modification, NDVI)
-│   └── utils.py              # Reusable functions for all notebooks
+├── scripts/                  # Main workflow (5 scripts)
+│   ├── 01_collect_protected_areas.py
+│   ├── 02_generate_sampling_points.py
+│   ├── 03_sample_satellite_imagery.py
+│   ├── 04_compute_edge_metrics.py
+│   └── 05_analyze_results.py
+├── modules/                  # Reusable domain logic
+│   ├── config.py             # All parameters and paths
+│   ├── remotesensing.py      # Google Earth Engine functions
+│   ├── preprocessing.py      # Geometry and transect generation
+│   ├── analysis.py           # Data processing and edge detection
+│   └── plotting.py           # Statistical models and visualization
 ├── data/
-│   ├── transect_chunks/      # Intermediate chunk files (generated in Step 3)
-│   ├── wdpa_filtered/        # Filtered WDPA shapefile (generated in Step 2)
-│   ├── attributes_final.csv  # Protected area metadata (generated in Step 3)
-│   ├── transects_final.csv   # Final transect points in EPSG:4326 (generated in Step 3)
-│   └── WDPA_polygons.geojson # Spatial WDPA polygon file (manually added in Step 1)
-└── results/                  # Earth Engine export outputs (manually added in Step 3)
+│   ├── raw/                  # WDPA_polygons.geojson
+│   ├── intermediate/         # wdpa_filtered/, transect_chunks/
+│   └── processed/            # attributes_final.csv
+└── results/
+    ├── raw/                  # ndvi_raw/, lai_raw/, fpar_raw/, ndbi_raw/
+    └── figures/              # Statistical outputs and plots
 ```
 
-## Setup Instructions
+## Setup
 
 ### Prerequisites
-- VS Code installed on your machine
-- Docker installed and running
-- Google Earth Engine account with project access
+- VS Code with Docker
+- Google Earth Engine account
 
 ### Initial Setup
-1. Clone the repository
-2. Open the project folder in VS Code
-3. When prompted, select **"Reopen in Container"** (or use Command Palette: `Dev Containers: Reopen in Container`)
-4. Wait for the Docker container to build and start (~2-3 minutes first time)
-5. Authenticate with Google Earth Engine (see section below)
+1. Clone repository and open in VS Code
+2. Select **"Reopen in Container"** when prompted
+3. Wait for container to build (~2-3 minutes)
+4. Update `GEE_PROJECT` in [modules/config.py](modules/config.py) with your GEE project ID
+5. Authenticate with Earth Engine:
+   ```python
+   import ee
+   ee.Authenticate()
+   ee.Initialize(project='your-project-id')
+   ```
 
-### Google Earth Engine Authentication
-On first run, authenticate with Earth Engine:
+## Detailed Workflow
+
+### Phase 1: Data Preparation (Run Once)
+
+#### Script 01: Collect Protected Areas
+```bash
+python scripts/01_collect_protected_areas.py
+```
+Filters WDPA polygons (≥200 km², non-marine), adds biome data, exports to Google Drive.
+
+**⚠️ MANUAL STEP**: Download `WDPA_polygons.geojson` from Google Drive → `data/raw/`
+
+#### Script 02: Generate Sampling Points
+```bash
+python scripts/02_generate_sampling_points.py
+```
+Cleans geometries, removes overlaps, generates perpendicular transects (5 points per transect: 2 inner, 1 boundary, 2 outer), chunks into 10 files (~8.6M points total).
+
+**⚠️ MANUAL STEP**: Upload chunk_000.shp through chunk_009.shp to GEE as assets `projects/{your-project}/assets/chunk_XXX`
+
+---
+
+### Phase 2: Remote Sensing (Run Per Index)
+
+#### Script 03: Sample Satellite Imagery
+```bash
+# Edit modules/config.py: INDEX_NAME = 'ndvi'  # or 'lai', 'fpar', 'ndbi'
+python scripts/03_sample_satellite_imagery.py
+```
+Samples MODIS imagery (2003-2025) at transect points, exports ~180 CSV files to Google Drive.
+
+**⚠️ MANUAL STEP**: Download all CSVs from Google Drive folder `{index}_raw` → `results/raw/{index}_raw/`
+
+---
+
+### Phase 3: Analysis (Run Per Index)
+
+#### Script 04: Compute Edge Metrics
+```bash
+python scripts/04_compute_edge_metrics.py
+```
+Combines CSVs, computes Cohen's d effect sizes for edge detection.
+- Output: `results/transect_df_{index}.parquet`, `results/wdpa_df_{index}.parquet`
+
+#### Script 05: Analyze Results
+```bash
+python scripts/05_analyze_results.py
+```
+Generates summary statistics, ANOVA, regression models, and figures.
+- Output: `results/figures/{index}_*.txt`, `results/figures/{index}_*.png`
+
+## Configuration
+
+Edit [modules/config.py](modules/config.py) for:
+
+**Required settings**:
+- `GEE_PROJECT`: Your Google Earth Engine project ID
+- `INDEX_NAME`: Current index ('ndvi', 'lai', 'fpar', 'ndbi')
+
+**Optional settings** (defaults work for most cases):
+- `START_YEAR`, `END_YEAR`: Analysis time period (default: 2003-2025)
+- `BOUNDARY_SPACING`: Distance between boundary points (default: 500m)
+- `TRANSECT_SPACING`: Distance between transects (default: 2500m)
+- `POINTS_PER_TRANSECT`: Points on each side of boundary (default: 2)
+
+**Indices available**:
+- NDVI: Normalized Difference Vegetation Index (MOD13A1)
+- LAI: Leaf Area Index (MCD15A3H)
+- FPAR: Fraction Photosynthetically Active Radiation (MCD15A3H)
+- NDBI: Normalized Difference Built-up Index (MOD09GA)
+
+## Troubleshooting
+
+**"Input file not found"**
+- Ensure previous scripts completed successfully
+- Check that manual download/upload steps were completed
+
+**"No CSV files found"**
+- Download GEE results to correct folder: `results/raw/{index}_raw/`
+- Verify all CSV files from Google Drive are present
+
+**"Invalid INDEX_NAME"**
+- Edit `modules/config.py`: set INDEX_NAME to 'ndvi', 'lai', 'fpar', or 'ndbi'
+
+**GEE authentication errors**
 ```python
 import ee
-ee.Authenticate()  # Follow the browser prompts to authorize
-ee.Initialize(project='your-project-id') #update this line for each script
+ee.Authenticate()  # Follow browser prompts
+ee.Initialize(project='your-project-id')
 ```
 
-## Running the Workflow
+## Legacy Workflow
 
-### Complete Pipeline
-Run notebooks sequentially in the `src/` directory:
-
-1. **`1_get_wdpas.ipynb`**: Download WDPA data from Earth Engine, filter by criteria, add biome information
-   - Output: `data/WDPA_polygons.geojson` (~6,358 polygons)
-
-2. **`2_filter_wdpas.ipynb`**: Clean geometries, remove overlaps and duplicates
-   - Output: `data/wdpa_filtered/` shapefile (~4,176 polygons)
-
-3. **`3_create_points.ipynb`**: Generate transect points with chunked processing
-   - Parameters: 500m boundary spacing, 2500m transect spacing, 2 inner/outer points
-   - Output: `data/transects_final.csv` (~8.6M points for 3,939 polygons), `data/attributes_final.csv` (metadata)
-
-4. **`4_gee_tasks.ipynb`**: Process transects in Earth Engine with task queue management
-   - Samples: Global Surface Water, Human Modification, MODIS NDVI gradients
-   - Output: Results exported to Google Drive (folder: `boundary-project_results_YYYYMMDD/`)
-
-### Key Parameters
-- **CRS**: ESRI:54009 (Mollweide) for geoprocessing, EPSG:4326 (WGS84) for Earth Engine
-- **Chunking**: 500 PAs per chunk (~1M points) to manage memory
-- **Buffer**: 5500m inner buffer for transect filtering
-
-## Dependencies
-All dependencies are automatically installed when building the Docker container:
-- `earthengine-api` - Google Earth Engine Python API
-- `geopandas` - Geospatial data processing
-- `pandas` - Data manipulation
-- `numpy` - Numerical operations
-- `shapely` - Geometric operations
-
-## Notes
-- Processing all ~4,000 protected areas takes several hours
-- Earth Engine exports are asynchronous; monitor task status in the Earth Engine Code Editor
-- Final transect data can be rejoined with attributes using `WDPA_PID` column
+The original workflow in `src/` remains available for reference.
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

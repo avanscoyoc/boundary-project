@@ -44,7 +44,7 @@ df_list = [pd.read_csv(file, usecols=usecols, dtype=dtypes, low_memory=False) fo
 df = pd.concat(df_list, ignore_index=True)
 del df_list
 
-# Replace sentinel values with NaN
+# Replace modis values with NaN
 df[value_vars] = df[value_vars].replace(-9999.0, np.nan)
 
 print(f"Loaded {len(df):,} rows")
