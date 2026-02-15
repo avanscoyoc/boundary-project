@@ -1,7 +1,7 @@
 # Protected Area Edge Analysis
 
 ## Overview
-This project analyzes habitat discontinuities and landscape gradients at protected area boundaries using Earth Engine and geospatial methods. The workflow processes ~4,000 protected areas globally, generating perpendicular transects at boundaries to sample environmental variables including vegetation indices (NDVI, LAI, FPAR), built-up index (NDBI), water presence, human modification, and topography from satellite imagery (2003-2025). The analysis produces ~8.6 million transect points with edge detection metrics to quantify boundary sharpness.
+This project analyzes habitat change and landscape gradients at protected area boundaries using Earth Engine and geospatial methods. The workflow processes ~4,000 protected areas globally, generating perpendicular transects at boundaries to sample environmental variables including vegetation indices (NDVI, LAI, FPAR), built-up index (NDBI), water presence, human modification, and topography from satellite imagery (2003-2025). The analysis produces ~8.6 million transect points with edge detection metrics to quantify boundary sharpness.
 
 ## Quick Start
 
