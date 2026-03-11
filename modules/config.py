@@ -40,10 +40,11 @@ RESULTS_FIGURES = RESULTS_DIR / "figures"
 INDEX_NAME = 'ndvi'  # Options: 'ndvi', 'lai', 'fpar', 'ndbi'
 
 # =====================================================================
-# Temporal Parameters
+# Dataset Parameters
 # =====================================================================
 
-# Year range for analysis
+# World Database on Protected Areas collection year - month
+WDPA_COLLECTION = "WCMC/WDPA/202106/polygons"
 START_YEAR = 2003
 END_YEAR = 2025
 YEARS = list(range(START_YEAR, END_YEAR + 1))
@@ -64,6 +65,21 @@ EXCLUDED_PIDS = [
     "555665485", "555556142", "187", "555703455", "555563456", "15894"
 ]
 
+# Threshold for filtering narrow PAs based on perimeter-to-area ratio
+QUANTILE_THRESHOLD = 0.75  
+
+
+# =====================================================================
+# Coordinate Reference Systems
+# =====================================================================
+
+# Processing CRS (equal-area projection for accurate distances)
+PROCESSING_CRS = 'ESRI:54009'  # Mollweide
+
+# Storage/GEE CRS (geographic coordinates)
+STORAGE_CRS = 'EPSG:4326'  # WGS84
+
+
 # =====================================================================
 # Transect Geometry Parameters
 # =====================================================================
@@ -75,12 +91,12 @@ BOUNDARY_SPACING = 500
 TRANSECT_SPACING = 2500
 
 # Number of points on each side of the boundary (not including boundary point)
-# Total points per transect = 2 * POINTS_PER_TRANSECT + 1
-POINTS_PER_TRANSECT = 2
+# Total points per transect = 2 * POINTS_PER_SIDE + 1
+POINTS_PER_SIDE = 2
 
 # Inner buffer distance for filtering bad transects (meters)
 # Points inside this buffer are considered problematic
-INNER_BUFFER = 5500
+BUFFER_DIST = TRANSECT_SPACING * POINTS_PER_SIDE + 500  # 500m buffer beyond last point
 
 # Maximum hole area to fill in polygons (square meters)
 # Holes smaller than this will be filled, larger ones preserved
@@ -117,15 +133,6 @@ GEE_ASSET_PREFIX = f'projects/{GEE_PROJECT}/assets/chunk_'
 # Number of chunk files (0-9 = 10 chunks)
 NUM_CHUNKS = 10
 
-# =====================================================================
-# Coordinate Reference Systems
-# =====================================================================
-
-# Processing CRS (equal-area projection for accurate distances)
-PROCESSING_CRS = 'ESRI:54009'  # Mollweide
-
-# Storage/GEE CRS (geographic coordinates)
-STORAGE_CRS = 'EPSG:4326'  # WGS84
 
 # =====================================================================
 # Remote Sensing Index Configurations
@@ -172,8 +179,8 @@ def validate_config():
     if START_YEAR > END_YEAR:
         raise ValueError(f"START_YEAR ({START_YEAR}) must be <= END_YEAR ({END_YEAR})")
     
-    if POINTS_PER_TRANSECT < 1:
-        raise ValueError(f"POINTS_PER_TRANSECT must be >= 1")
+    if POINTS_PER_SIDE < 1:
+        raise ValueError(f"POINTS_PER_SIDE must be >= 1")
     
     if CHUNK_SIZE < 1:
         raise ValueError(f"CHUNK_SIZE must be >= 1")

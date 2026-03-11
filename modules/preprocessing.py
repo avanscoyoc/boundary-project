@@ -106,9 +106,6 @@ def find_overlap_groups(gdf, overlap_threshold=90):
     Uses spatial indexing implicitly through iterrows. For very large datasets,
     consider using spatial index (sindex) for better performance.
     """
-
-    print(f"Finding overlap groups with >{overlap_threshold}% overlap...")
-    
     overlap_groups = []
     processed_indices = set()
     
@@ -179,6 +176,29 @@ def get_min_year_from_group(group_df):
     else:
         return group_df.iloc[0]
 
+
+def filter_and_save_removed(gdf, condition, output_path, step_name):
+    """
+    Filter GeoDataFrame by condition, save removed rows to file, return filtered set.
+    
+    Args:
+        gdf: GeoDataFrame to filter
+        condition: boolean Series (True = keep)
+        output_path: path to save removed geometries
+        step_name: descriptive name for logging
+    
+    Returns:
+        tuple: (filtered_gdf, n_removed)
+    """
+    filtered = gdf[condition].copy()
+    removed = gdf[~condition].copy()
+    n_removed = len(removed)
+    
+    if n_removed > 0:
+        removed.to_file(output_path)
+    
+    print(f"Removed {n_removed} {step_name} → saved to {output_path}")
+    return filtered, n_removed
 
 # =====================================================================
 # Transect Creation / Filtering Functions
@@ -521,6 +541,7 @@ def remove_pa_transects_in_chunks(wdpa_gdf, wdpa_buffer_dict, sample_dist, trans
         Statistics dictionary with keys:
         - total_pas : Total number of PAs processed
         - empty_buffer : Number of PAs with missing or empty buffers
+        - empty_buffer_pids : Set of WDPA_PIDs with missing/empty buffers
         - all_filtered : Number of PAs where all transects were filtered out
         - bad_inside_buffer : Total transects filtered (points in buffer)
         - bad_outside_pa : Total transects filtered (points outside PA)
@@ -549,6 +570,7 @@ def remove_pa_transects_in_chunks(wdpa_gdf, wdpa_buffer_dict, sample_dist, trans
     
     # Diagnostic counters
     empty_buffer = 0
+    empty_buffer_pids = set()
     all_filtered = 0
     bad_inside_buffer = 0
     bad_outside_pa = 0
@@ -564,6 +586,7 @@ def remove_pa_transects_in_chunks(wdpa_gdf, wdpa_buffer_dict, sample_dist, trans
         pid = park_row['WDPA_PID']
         if pid not in wdpa_buffer_dict or wdpa_buffer_dict[pid].is_empty:
             empty_buffer += 1
+            empty_buffer_pids.add(str(pid))
             continue
         
         # Filter bad transects
@@ -597,6 +620,7 @@ def remove_pa_transects_in_chunks(wdpa_gdf, wdpa_buffer_dict, sample_dist, trans
             
             # Keep only essential columns for GEE (drop x, y - stored in geometry)
             chunk_gdf = chunk_gdf[['WDPA_PID', 'transectID', 'pointID', 'geometry']]
+            chunk_gdf['WDPA_PID'] = chunk_gdf['WDPA_PID'].astype(str)
 
             chunk_gdf.to_file(chunk_file)
             
@@ -618,6 +642,7 @@ def remove_pa_transects_in_chunks(wdpa_gdf, wdpa_buffer_dict, sample_dist, trans
         ).to_crs(output_crs)
         
         chunk_gdf = chunk_gdf[['WDPA_PID', 'transectID', 'pointID', 'geometry']]
+        chunk_gdf['WDPA_PID'] = chunk_gdf['WDPA_PID'].astype(str)
 
         chunk_gdf.to_file(chunk_file)
         
@@ -628,6 +653,7 @@ def remove_pa_transects_in_chunks(wdpa_gdf, wdpa_buffer_dict, sample_dist, trans
     return {
         'total_pas': idx + 1,
         'empty_buffer': empty_buffer,
+        'empty_buffer_pids': empty_buffer_pids,
         'all_filtered': all_filtered,
         'bad_inside_buffer': bad_inside_buffer,
         'bad_outside_pa': bad_outside_pa,
@@ -638,14 +664,14 @@ def remove_pa_transects_in_chunks(wdpa_gdf, wdpa_buffer_dict, sample_dist, trans
     }
 
 
-def combine_chunks_to_files(chunk_pattern, transect_output, attributes_output, 
+def combine_chunks_to_files(chunk_pattern, transect_output, attributes_output,
                             transect_cols=['WDPA_PID', 'transectID', 'pointID', 'x', 'y']):
     """
     Combine chunk shapefiles into separate transect CSV and attribute CSV files.
     
     Reads shapefile chunks, extracts x,y from geometry, and creates two output
-    files: a minimal transect CSV for analysis and an attributes CSV with
-    protected area metadata that can be rejoined via WDPA_PID.
+    files: a transect CSV and an attributes CSV. Attributes are read from
+    wdpa_filtered.shp and filtered to WDPA_PID values present in transects.
     
     Parameters
     ----------
@@ -682,20 +708,19 @@ def combine_chunks_to_files(chunk_pattern, transect_output, attributes_output,
     """
     
     chunk_files = sorted(glob.glob(chunk_pattern))
+    if len(chunk_files) == 0:
+        raise FileNotFoundError(f"No chunk files found for pattern: {chunk_pattern}")
+
     print(f"Found {len(chunk_files)} chunk files")
     print(f"Combining into:\n  - {transect_output}\n  - {attributes_output}")
     
-    # Get all columns from first chunk to determine attribute columns
+    # Get all columns from first chunk
     first_gdf = gpd.read_file(chunk_files[0])
     first_chunk = pd.DataFrame(first_gdf.drop(columns='geometry'))
     first_chunk['x'] = first_gdf.geometry.x
     first_chunk['y'] = first_gdf.geometry.y
     
-    all_cols = first_chunk.columns.tolist()
-    attr_cols = [col for col in all_cols if col not in ['transectID', 'pointID', 'x', 'y']]
-    
     print(f"\nTransect columns: {transect_cols}")
-    print(f"Attribute columns: {attr_cols}")
     
     # Write transects file
     print("\nWriting transects file...")
@@ -714,25 +739,26 @@ def combine_chunks_to_files(chunk_pattern, transect_output, attributes_output,
     
     print(f"Transects saved: {os.path.getsize(transect_output) / 1024**2:.1f} MB")
     
-    # Extract unique attributes by WDPA_PID
-    print("\nExtracting unique attributes by WDPA_PID...")
-    all_attributes = []
-    for i, chunk_file in enumerate(chunk_files, start=1):
-        chunk_gdf = gpd.read_file(chunk_file)
-        chunk = pd.DataFrame(chunk_gdf.drop(columns='geometry'))
-        chunk['x'] = chunk_gdf.geometry.x
-        chunk['y'] = chunk_gdf.geometry.y
+    # Extract attributes from wdpa_filtered.shp and keep only PAs present in transects
+    print("\nExtracting attributes from wdpa_filtered.shp...")
+    transect_pids = pd.read_csv(transect_output, usecols=['WDPA_PID'],
+                                dtype={'WDPA_PID': str})['WDPA_PID'].drop_duplicates()
 
-        # Get unique rows per WDPA_PID with all attribute columns
-        unique_attrs = chunk[attr_cols].drop_duplicates(subset=['WDPA_PID'])
-        all_attributes.append(unique_attrs)
-        if i % 3 == 0 or i == len(chunk_files):
-            print(f"  Processed {i}/{len(chunk_files)} chunks")
-    
-    # Combine and deduplicate
-    attributes_df = pd.concat(all_attributes, ignore_index=True).drop_duplicates(subset=['WDPA_PID'])
+    chunk_dir = os.path.dirname(chunk_files[0])
+    wdpa_path = os.path.abspath(os.path.join(chunk_dir, '..', 'wdpa_filtered', 'wdpa_filtered.shp'))
+    if not os.path.exists(wdpa_path):
+        raise FileNotFoundError(f"wdpa_filtered.shp not found at: {wdpa_path}")
+
+    wdpa_attrs = pd.DataFrame(gpd.read_file(wdpa_path).drop(columns='geometry', errors='ignore'))
+    wdpa_attrs['WDPA_PID'] = wdpa_attrs['WDPA_PID'].astype(str)
+    keep_cols = [c for c in wdpa_attrs.columns if c not in ['transectID', 'pointID', 'x', 'y']]
+    attributes_df = wdpa_attrs[keep_cols]
+    attributes_df = attributes_df[attributes_df['WDPA_PID'].isin(set(transect_pids))]
+    attributes_df = attributes_df.drop_duplicates(subset=['WDPA_PID'])
+
     attributes_df.to_csv(attributes_output, index=False)
     
     print(f"\nAttributes saved: {os.path.getsize(attributes_output) / 1024**2:.1f} MB")
     print(f"Unique WDPA_PIDs: {len(attributes_df)}")
     print("\nCombining complete!")
+    print(f"Columns in attributes file: {attributes_df.columns.tolist()}")

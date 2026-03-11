@@ -35,8 +35,8 @@ ee.Authenticate()
 ee.Initialize(project=config.GEE_PROJECT)
 
 # Load WDPA dataset
-print("Loading WDPA 2025 dataset...")
-wdpa = ee.FeatureCollection("WCMC/WDPA/202501/polygons")
+print("Loading WDPA " + config.WDPA_COLLECTION.split("/")[-1] + " dataset...")
+wdpa = ee.FeatureCollection(config.WDPA_COLLECTION)
 
 # Add geometry type property
 print("Adding geometry type property...")
@@ -45,7 +45,7 @@ wdpa = wdpa.map(set_geometry_type)
 # Apply filters
 print("Applying filters...")
 print(f"  - Minimum area: {config.MIN_AREA_KM2} km²")
-print(f"  - Valid status: {', '.join(config.VALID_STATUS)}")
+print(f"  - Status: {', '.join(config.VALID_STATUS)}")
 print(f"  - Excluding {len(config.EXCLUDED_PIDS)} problematic PIDs")
 
 pa_filter = get_pa_filter(type="Polygon")
@@ -78,7 +78,7 @@ print("Monitor progress at: https://code.earthengine.google.com/tasks")
 print("\n" + "="*80)
 print("MANUAL STEP REQUIRED:")
 print("="*80)
-print("1. Wait for the export task to complete (check GEE Tasks)")
+print("1. Wait for the export task to complete (check GEE Tasks) ~30 minutes")
 print("2. Download 'WDPA_polygons.geojson' from Google Drive")
 print("3. Place it in: data/raw/WDPA_polygons.geojson")
 print("4. Then run: python scripts/02_generate_sampling_points.py")
