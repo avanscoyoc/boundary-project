@@ -4,15 +4,15 @@ import numpy as np
 from pathlib import Path
 
 # ===== CONFIGURATION: SELECT INDEX =====
-INDEX_NAME = 'ndvi'  # Must match the index processed in 4_gee_tasks.ipynb
-START_YEAR = 2001
-END_YEAR = 2022  # Exclusive
+INDEX_NAME = 'ndbi'  # Must match the index processed in 4_gee_tasks.ipynb
+START_YEAR = 2003
+END_YEAR = 2026  # Exclusive
 # =======================================
 
 print(f"Processing {INDEX_NAME.upper()} results...")
 
 # Index-specific paths
-folder_path = Path(f"results/{INDEX_NAME}_raw") 
+folder_path = Path(f"results/raw/{INDEX_NAME}_raw") 
 
 # Verify input folder exists
 if not folder_path.exists():

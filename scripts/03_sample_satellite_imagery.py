@@ -21,6 +21,13 @@ results/raw/{INDEX_NAME}_raw/
 Then run: python scripts/04_compute_edge_metrics.py
 """
 
+import sys
+from pathlib import Path
+
+# Add project root to Python path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
 import ee
 import time
 from modules import config
@@ -66,17 +73,17 @@ gradBandNames = [str(y) for y in range(config.START_YEAR, config.END_YEAR + 1)]
 def make_current_gradient(y):
     return make_gradient(config.INDEX_NAME, y)
 
-gradStack = ee.ImageCollection(years.map(make_current_gradient)).toBands()
-gradStack = gradStack.select(
-    gradStack.bandNames(),
-    ee.List(gradBandNames)
-)
+gradientBands = ee.ImageCollection.fromImages(
+    years.map(make_current_gradient)
+).toBands()
+gradientBands = gradientBands.rename(gradBandNames)
+
 
 # Combine static and gradient layers
-sampleImage = staticImage.addBands(gradStack)
-selectors = ['max_extent', 'gHM', 'elevation', 'slope'] + gradBandNames
+sampleImage = staticImage.addBands(gradientBands)
+selectors = ['WDPA_PID', 'transectID', 'pointID', 'max_extent', 'gHM', 'elevation', 'slope'] + gradBandNames
 
-print(f"Sample bands: {len(selectors)}")
+print(f"Total export columns: {len(selectors)}")
 
 # Sampling function
 def process_samples(asset_path, chunk_size=config.GEE_SUBCHUNK_SIZE, 
@@ -115,21 +122,19 @@ def process_samples(asset_path, chunk_size=config.GEE_SUBCHUNK_SIZE,
     # Start tasks in batches
     for batch_start in range(0, len(tasks), batch_size):
         batch = tasks[batch_start:batch_start + batch_size]
-        chunk_nums = [idx for idx, _ in batch]
+        chunk_nums = [idx for _, idx in batch]
         print(f"  Processing chunks {chunk_nums}...")
         
         for task, _ in batch:
             task.start()
         
         # Wait for batch to complete
-        time.sleep(10)
-        all_complete = False
-        while not all_complete:
-            time.sleep(30)
+        while True:
             statuses = [t.status()['state'] for t, _ in batch]
             if all(s in ['COMPLETED', 'FAILED', 'CANCELLED'] for s in statuses):
-                all_complete = True
                 print(f"  Completed chunks {chunk_nums}")
+                break
+            time.sleep(30)
     
     return len(tasks)
 

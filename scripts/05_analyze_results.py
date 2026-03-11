@@ -26,12 +26,18 @@ OUTPUT:
 For advanced analysis, see src/7_analysis.ipynb
 """
 
+import sys
+from pathlib import Path
+
+# Add project root to Python path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import stats
-from pathlib import Path
 from modules import config
 from modules.plotting import (
     classify_trend,

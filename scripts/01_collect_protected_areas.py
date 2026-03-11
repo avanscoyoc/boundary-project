@@ -14,6 +14,13 @@ Download WDPA_polygons.geojson from Google Drive to data/raw/
 Then run: python scripts/02_generate_sampling_points.py
 """
 
+import sys
+from pathlib import Path
+
+# Add project root to Python path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
 import ee
 from modules import config
 from modules.remotesensing import get_pa_filter, set_geometry_type, get_biome
@@ -28,8 +35,8 @@ ee.Authenticate()
 ee.Initialize(project=config.GEE_PROJECT)
 
 # Load WDPA dataset
-print("Loading WDPA dataset...")
-wdpa = ee.FeatureCollection("WCMC/WDPA/current/polygons")
+print("Loading WDPA 2025 dataset...")
+wdpa = ee.FeatureCollection("WCMC/WDPA/202501/polygons")
 
 # Add geometry type property
 print("Adding geometry type property...")

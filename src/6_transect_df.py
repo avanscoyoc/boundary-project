@@ -5,16 +5,16 @@ import os
 from pathlib import Path
 
 # ===== CONFIGURATION: SELECT INDEX =====
-INDEX_NAME = 'ndvi'  # Must match the index processed
-START_YEAR = 2001
-END_YEAR = 2022  # Exclusive
+INDEX_NAME = 'ndbi'  # Must match the index processed
+START_YEAR = 2003
+END_YEAR = 2026  # Exclusive
 # Exclusive# =======================================
 
 print(f"Creating transect-level dataset for {INDEX_NAME.upper()}...")
 
 # Index-specific paths
-input_dir = Path(f"results/{INDEX_NAME}_raw") 
-output_dir = Path(f"results/{INDEX_NAME}_raw/transect_chunks")
+input_dir = Path(f"results/raw/{INDEX_NAME}_raw") 
+output_dir = Path(f"results/raw/{INDEX_NAME}_raw/transect_chunks")
 
 # Verify input exists
 if not os.path.exists(input_dir):
@@ -152,7 +152,7 @@ for chunk_num, transect_file in enumerate(transect_files):
 
 print("Merging with attributes...")
 wdpa_df = pd.DataFrame(wdpa_list)
-attributes = pd.read_csv("data/attributes_final.csv")
+attributes = pd.read_csv("data/processed/attributes_final.csv")
 wdpa_df = pd.merge(wdpa_df, attributes, on='WDPA_PID', how='left')
 
 # Save with index-specific name

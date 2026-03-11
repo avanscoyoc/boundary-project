@@ -46,8 +46,6 @@ python scripts/04_compute_edge_metrics.py
 python scripts/05_analyze_results.py
 ```
 
-For advanced analysis (mixed models, temporal trends), see `src/7_analysis.ipynb`.
-
 ## Project Structure
 ```
 boundary-project/

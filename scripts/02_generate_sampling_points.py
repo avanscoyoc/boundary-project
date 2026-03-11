@@ -27,9 +27,15 @@ Upload chunk_000.shp through chunk_009.shp to Google Earth Engine as assets.
 Then run: python scripts/03_sample_satellite_imagery.py
 """
 
+import sys
+from pathlib import Path
+
+# Add project root to Python path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
 import geopandas as gpd
 import pandas as pd
-from pathlib import Path
 from modules import config
 from modules.preprocessing import (
     fill_holes, find_overlap_groups, get_min_year_from_group,
@@ -89,17 +95,22 @@ for group in overlap_groups:
 wdpa = wdpa.loc[keep_indices].copy()
 print(f"Removed overlaps, kept {len(wdpa):,} polygons")
 
-# Step 3: Remove duplicate names (dissolve by ORIG_NAME)
+# Step 3: Remove duplicate names (two-step process: select oldest, then dissolve)
 print("\nStep 3: Dissolving duplicate names...")
 initial_count = len(wdpa)
-wdpa = wdpa.dissolve(by='ORIG_NAME', aggfunc='first').reset_index()
+# First: group by ORIG_NAME and select oldest from each group
+deduped_names = wdpa.groupby('ORIG_NAME').apply(
+    lambda x: get_min_year_from_group(x)
+).reset_index(drop=True)
+# Then: dissolve by ORIG_NAME
+wdpa = deduped_names.dissolve(by='ORIG_NAME', as_index=False)
 print(f"Dissolved {initial_count - len(wdpa)} duplicates, {len(wdpa):,} polygons remaining")
 
-# Step 4: Filter narrow polygons (upper 25% perimeter-to-area ratio)
+# Step 4: Filter narrow polygons (remove upper 25% perimeter-to-area ratio)
 print("\nStep 4: Filtering narrow polygons...")
 wdpa['pa_ratio'] = wdpa.geometry.length / wdpa.geometry.area
 threshold = wdpa['pa_ratio'].quantile(0.75)
-wdpa = wdpa[wdpa['pa_ratio'] <= threshold].copy()
+wdpa = wdpa[wdpa['pa_ratio'] < threshold].copy()
 wdpa = wdpa.drop(columns=['pa_ratio'])
 print(f"Filtered narrow polygons, {len(wdpa):,} polygons remaining")
 
