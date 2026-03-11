@@ -8,6 +8,7 @@ This module contains functions for:
 - Managing GEE task submissions
 """
 
+import time
 import ee
 from modules.config import (
     MIN_AREA_KM2, VALID_STATUS, EXCLUDED_PIDS,

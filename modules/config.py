@@ -47,7 +47,6 @@ INDEX_NAME = 'ndvi'  # Options: 'ndvi', 'lai', 'fpar', 'ndbi'
 WDPA_COLLECTION = "WCMC/WDPA/202106/polygons"
 START_YEAR = 2003
 END_YEAR = 2025
-YEARS = list(range(START_YEAR, END_YEAR + 1))
 
 # =====================================================================
 # Protected Area Filtering Parameters

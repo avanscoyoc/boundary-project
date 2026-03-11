@@ -22,6 +22,7 @@ Then run: python scripts/04_compute_edge_metrics.py
 """
 
 import sys
+import time
 from pathlib import Path
 
 # Add project root to Python path
@@ -29,7 +30,6 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 import ee
-import time
 from modules import config
 from modules.remotesensing import make_gradient
 
@@ -48,11 +48,10 @@ ee.Authenticate()
 ee.Initialize(project=config.GEE_PROJECT)
 
 # Configure export folder
-folder_name = f"{config.INDEX_NAME}_raw"
+folder_name = f"{config.INDEX_NAME}_raw_TEST"
 print(f"Export folder: {folder_name}")
 
-# Load static layers
-print("\nLoading static environmental layers...")
+# Static layers (unchanged)
 gsw = ee.Image('JRC/GSW1_4/GlobalSurfaceWater')
 hm = ee.ImageCollection('CSP/HM/GlobalHumanModification').mean()
 elevation = ee.Image('USGS/SRTMGL1_003').select('elevation')
@@ -65,101 +64,97 @@ staticImage = ee.Image.cat([
     slope
 ])
 
-# Build gradient image
-print(f"\nBuilding {config.INDEX_NAME.upper()} gradient image...")
-years = ee.List.sequence(config.START_YEAR, config.END_YEAR)
-gradBandNames = [str(y) for y in range(config.START_YEAR, config.END_YEAR + 1)]
+# Year configuration
+years = ee.List.sequence(2003, 2025)
+gradBandNames = [str(y) for y in range(2003, 2026)]
+selectors = ['WDPA_PID', 'transectID', 'pointID', 'max_extent', 'gHM', 'elevation', 'slope'] + gradBandNames
 
+# Build gradient function for selected index
 def make_current_gradient(y):
     return make_gradient(config.INDEX_NAME, y)
 
+
+# Build image with gradient bands (your existing logic)
 gradientBands = ee.ImageCollection.fromImages(
     years.map(make_current_gradient)
 ).toBands()
 gradientBands = gradientBands.rename(gradBandNames)
+image = staticImage.addBands(gradientBands)
 
 
-# Combine static and gradient layers
-sampleImage = staticImage.addBands(gradientBands)
-selectors = ['WDPA_PID', 'transectID', 'pointID', 'max_extent', 'gHM', 'elevation', 'slope'] + gradBandNames
-
-print(f"Total export columns: {len(selectors)}")
-
-# Sampling function
-def process_samples(asset_path, chunk_size=config.GEE_SUBCHUNK_SIZE, 
-                   batch_size=config.GEE_BATCH_SIZE):
-    """Process samples from a GEE asset with batching."""
+def process_samples(asset_path, chunk_size=50_000, batch_size=10, chunks_to_run=None):
+    """
+    Process samples from Earth Engine asset and export to Google Drive.
+    
+    Parameters
+    ----------
+    asset_path : str
+        Path to Earth Engine FeatureCollection asset
+    chunk_size : int
+        Number of samples per chunk
+    batch_size : int
+        Number of chunks to process simultaneously
+    chunks_to_run : list, optional
+        Specific chunk indices to process (for rerunning failures)
+    """
     samples = ee.FeatureCollection(asset_path)
     size = samples.size().getInfo()
     nChunks = int((size + chunk_size - 1) // chunk_size)
-    
-    # Extract asset number from path
-    asset_num = asset_path.split('_')[-1]
-    
-    print(f"  Total points: {size:,}")
-    print(f"  Sub-chunks: {nChunks} (batch size: {batch_size})")
-    
     tasks = []
-    for i in range(nChunks):
+    
+    # If chunks_to_run is None, run all chunks
+    if chunks_to_run is None:
+        chunks_to_run = list(range(nChunks))
+    
+    # Extract asset number from path (e.g., "chunk_003" -> "003")
+    asset_num = asset_path.split("_")[-1]
+    
+    # Create tasks only for specified chunks
+    for i in chunks_to_run:
         fcChunk = ee.FeatureCollection(samples.toList(chunk_size, i * chunk_size))
-        
-        sampledChunk = sampleImage.sampleRegions(
+        sampled = image.sampleRegions(
             collection=fcChunk,
             properties=['WDPA_PID', 'transectID', 'pointID'],
             scale=500,
             tileScale=4
         )
-        
         task = ee.batch.Export.table.toDrive(
-            collection=sampledChunk,
+            collection=sampled,
             description=f'{config.INDEX_NAME}_raw_grad_{asset_num}_chunk_{i}',
-            folder=folder_name,
             fileFormat='CSV',
-            selectors=selectors
+            selectors=selectors,
+            folder=folder_name
         )
-        tasks.append((task, i))
-    
-    # Start tasks in batches
-    for batch_start in range(0, len(tasks), batch_size):
-        batch = tasks[batch_start:batch_start + batch_size]
-        chunk_nums = [idx for _, idx in batch]
+        tasks.append((i, task))
+
+    # Process in batches
+    for j in range(0, len(tasks), batch_size):
+        batch = tasks[j:j + batch_size]
+        for idx, t in batch:
+            t.start()
+        
+        chunk_nums = [idx for idx, _ in batch]
         print(f"  Processing chunks {chunk_nums}...")
         
-        for task, _ in batch:
-            task.start()
-        
-        # Wait for batch to complete
         while True:
-            statuses = [t.status()['state'] for t, _ in batch]
+            statuses = [t.status()['state'] for _, t in batch]
             if all(s in ['COMPLETED', 'FAILED', 'CANCELLED'] for s in statuses):
                 print(f"  Completed chunks {chunk_nums}")
                 break
             time.sleep(30)
-    
-    return len(tasks)
 
-# Process all chunk assets
-print(f"\n{'='*80}")
-print(f"Processing {config.NUM_CHUNKS} asset chunks...")
-print(f"{'='*80}")
+# Process all assets sequentially #305 minutes
+total_assets = 10
+for idx in range(total_assets):
+    asset = f'projects/dse-staff/assets/chunk_{idx:03d}'
+    print(f"\nProcessing asset {idx + 1} of {total_assets}: {asset}")
+    process_samples(asset)
+    print(f"Asset {idx + 1} of {total_assets} complete")
 
-total_exports = 0
-for idx in range(config.NUM_CHUNKS):
-    asset = f"{config.GEE_ASSET_PREFIX}{idx:03d}"
-    print(f"\nProcessing asset {idx+1} of {config.NUM_CHUNKS}: {asset}")
-    
-    try:
-        n_exports = process_samples(asset)
-        total_exports += n_exports
-        print(f"  Created {n_exports} export tasks")
-    except Exception as e:
-        print(f"  Error processing asset {asset}: {e}")
 
 print("\n" + "="*80)
-print("SAMPLING COMPLETE")
+print(f"SAMPLING COMPLETE for {config.INDEX_NAME.upper()}")
 print("="*80)
-print(f"Total export tasks: {total_exports}")
-print(f"Google Drive folder: {folder_name}")
 
 print("\n" + "="*80)
 print("MANUAL STEP REQUIRED:")
