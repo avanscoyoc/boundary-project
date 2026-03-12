@@ -64,13 +64,12 @@ print(f"Description: {config.INDEX_CONFIGS[config.INDEX_NAME]['description']}")
 # Output: results/figures/{INDEX_NAME}_*.txt / *.png
 wdpa_path = config.RESULTS_DIR / f'wdpa_df_{config.INDEX_NAME}.parquet'
 figures_dir = config.RESULTS_FIGURES
+figures_dir.mkdir(parents=True, exist_ok=True)
 
 if not wdpa_path.exists():
     print(f"\nERROR: WDPA dataset not found: {wdpa_path}")
     print("Please run script 04_compute_edge_metrics.py first")
     exit(1)
-
-figures_dir.mkdir(parents=True, exist_ok=True)
 
 # Load data
 print("\n" + "="*80)
@@ -84,7 +83,9 @@ print(f"  Protected areas: {wdpa_df['WDPA_PID'].nunique():,}")
 
 # Recategorize BIOME_NAME into 7 major groups
 from modules.analysis import recategorize_biome
+print(f"Biome Names: {wdpa_df['BIOME_NAME'].unique()}")
 wdpa_df['BIOME_NAME'] = wdpa_df['BIOME_NAME'].apply(recategorize_biome)
+print(f"Biome Names: {wdpa_df['BIOME_NAME'].unique()}")
 
 # Classify temporal trend per WDPA_PID using linear regression over years on edge_extent
 print("\nClassifying temporal trends per protected area...")

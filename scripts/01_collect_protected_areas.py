@@ -35,11 +35,10 @@ ee.Authenticate()
 ee.Initialize(project=config.GEE_PROJECT)
 
 # Load WDPA dataset
-print("Loading WDPA " + config.WDPA_COLLECTION.split("/")[-1] + " dataset...")
+print("Loading WDPA Release (" + config.WDPA_COLLECTION.split("/")[-2] + ") dataset...")
 wdpa = ee.FeatureCollection(config.WDPA_COLLECTION)
 
 # Add geometry type property
-print("Adding geometry type property...")
 wdpa = wdpa.map(set_geometry_type)
 
 # Apply filters
@@ -52,7 +51,7 @@ pa_filter = get_pa_filter(type="Polygon")
 wdpa_filtered = wdpa.filter(pa_filter)
 
 # Add biome information
-print("Adding biome information from RESOLVE Ecoregions...")
+print("Adding biome information from RESOLVE Ecoregions 2017...")
 wdpa_with_biome = wdpa_filtered.map(get_biome)
 
 # Count filtered polygons
@@ -61,13 +60,11 @@ print(f"\nFiltered to {count:,} protected area polygons")
 
 # Export to Google Drive
 print("\nExporting to Google Drive...")
-print("  Folder: WDPA_Export")
-print("  File: WDPA_polygons")
+print("  File: WDPA_polygons.geojson")
 
 task = ee.batch.Export.table.toDrive(
     collection=wdpa_with_biome,
     description='WDPA_polygons',
-    folder='WDPA_Export',
     fileFormat='GeoJSON'
 )
 
@@ -75,10 +72,12 @@ task.start()
 print(f"\nExport task started: {task.id}")
 print("Monitor progress at: https://code.earthengine.google.com/tasks")
 
+config.DATA_RAW.mkdir(parents=True, exist_ok=True)
+
 print("\n" + "="*80)
 print("MANUAL STEP REQUIRED:")
 print("="*80)
-print("1. Wait for the export task to complete (check GEE Tasks) ~30 minutes")
+print("1. Wait for the export task to complete (check GEE Tasks) ~20 minutes")
 print("2. Download 'WDPA_polygons.geojson' from Google Drive")
 print("3. Place it in: data/raw/WDPA_polygons.geojson")
 print("4. Then run: python scripts/02_generate_sampling_points.py")

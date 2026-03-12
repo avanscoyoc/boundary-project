@@ -34,12 +34,15 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+import warnings
+warnings.filterwarnings('ignore') #suppress warnings for altered column names
+
 import geopandas as gpd
 import pandas as pd
 from modules import config
 from modules.preprocessing import (
     fill_holes, find_overlap_groups, get_min_year_from_group, 
-    filter_and_save_removed, remove_pa_transects_in_chunks, 
+    filter_and_save_removed, generate_pa_transects_in_chunks, 
     combine_chunks_to_files
 )
 import ee
@@ -70,17 +73,15 @@ if not input_path.exists():
 # Load data
 print(f"\nLoading WDPA data from {input_path}...")
 wdpa = gpd.read_file(input_path).to_crs(config.PROCESSING_CRS)
-print(f"Loaded {len(wdpa):,} polygons and reprojected to {config.PROCESSING_CRS} for processing.")
+print(f"Loaded {len(wdpa):,} polygons and reprojected to {wdpa.crs} for processing.")
 
 # Create folder for removed geometries from filtering steps
 removed_dir = config.DATA_INTERMEDIATE / "removed"
 removed_dir.mkdir(parents=True, exist_ok=True)
 
-
 # Step 1: Fill small holes
 print(f"\nStep 1: Filling holes < {config.MAX_HOLE_AREA / 1_000_000:.2f} km²...")
 filled = fill_holes(wdpa, max_hole_area=config.MAX_HOLE_AREA)
-
 
 # Step 2: Remove overlapping geometries
 print(f"\nStep 2: Removing overlaps > {config.OVERLAP_THRESHOLD}%... ~15 minutes")
@@ -96,7 +97,6 @@ deduped_overlaps, n_removed = filter_and_save_removed(
     removed_dir / "removed_overlapped_pas.shp",
     "overlapping geometries"
 )
-
 
 # Step 3: Remove duplicate names
 print("\nStep 3: Dissolving duplicate names...")
@@ -147,17 +147,17 @@ print("PART 2: Create Transects")
 print("="*80)
 
 wdpa_filtered = gpd.read_file(config.DATA_INTERMEDIATE / "wdpa_filtered" / "wdpa_filtered.shp")
-print(f"Number of filtered protected areas: {len(wdpa_filtered):,}")
 
 # Create all interior buffers at once (takes ~2min)
 print("\nCreating inner buffers for all protected areas...")
 wdpa_buffers = wdpa_filtered[['WDPA_PID', 'geometry']].copy()
 wdpa_buffers['geometry'] = wdpa_buffers.geometry.buffer(-config.BUFFER_DIST)
 wdpa_buffer_dict = dict(zip(wdpa_buffers['WDPA_PID'], wdpa_buffers['geometry']))
-del wdpa_buffers  # Free memory - only need the dictionary
+del wdpa_buffers  # Free memory, only need the dictionary
 
-# Generate transects with streaming chunk output
+# Generate transects and output point files in chunks
 transect_output_dir = config.DATA_INTERMEDIATE / "transect_chunks"
+transect_output_dir.mkdir(parents=True, exist_ok=True)
 print(f"\nGenerating transects...")
 print(f"  Boundary point spacing: {config.BOUNDARY_SPACING}m")
 print(f"  Transect point spacing: {config.TRANSECT_SPACING}m")
@@ -165,7 +165,7 @@ print(f"  Points per transect: {2 * config.POINTS_PER_SIDE + 1}")
 print(f"  Chunk size: {config.CHUNK_SIZE} PAs per chunk")
 print(f"  Output CRS: {config.STORAGE_CRS} (for GEE compatibility)")
 
-stats = remove_pa_transects_in_chunks(
+stats = generate_pa_transects_in_chunks(
     wdpa_gdf=wdpa_filtered,
     wdpa_buffer_dict=wdpa_buffer_dict,
     sample_dist=config.BOUNDARY_SPACING,
@@ -188,22 +188,24 @@ _, n_empty_removed = filter_and_save_removed(
 print("\n" + "="*80)
 print("TRANSECT STATISTICS")
 print("="*80)
-print(f"Total PAs processed: {stats['total_pas']:,}")
-print(f"PAs with valid transects: {stats['pas_processed']:,}")
+print(f"Remaining PAs after filtering: {stats['pas_processed']:,}")
 print(f"Total transects: {stats['total_transects']:,}")
 print(f"Total points: {stats['total_points']:,}")
-print(f"Chunk files created: {len(stats['chunk_files'])}")
+print(f"Average # transects per PA: {stats['total_transects'] / stats['pas_processed']:.1f}")
+print(f"Number of files created: {len(stats['chunk_files'])}")
+print("="*80)
 print(f"\nFiltering diagnostics:")
-print(f"  Empty buffers: {stats['empty_buffer']}")
-print(f"  All transects filtered: {stats['all_filtered']}")
-print(f"  Transects removed (in buffer): {stats['bad_inside_buffer']}")
-print(f"  Transects removed (outside PA): {stats['bad_outside_pa']}")
+print(f"  PAs with empty buffers: {stats['empty_buffer']}")
+print(f"  Total transects removed in buffer (bad angle): {stats['bad_inside_buffer']}")
+print(f"  Total transects removed outside PA (crossed through): {stats['bad_outside_pa']}")
+print(f"  PAs with all transects removed: {stats['all_filtered']}")
 
 # OPTIONAL: Combine chunks into CSV files
 print("\n" + "="*80)
 print("Combining chunks into CSV files...")
 print("="*80)
 
+config.DATA_PROCESSED.mkdir(parents=True, exist_ok=True)
 transect_csv = str(config.DATA_PROCESSED / "transects_final.csv")
 attributes_csv = str(config.DATA_PROCESSED / "attributes_final.csv")
 
@@ -213,15 +215,15 @@ combine_chunks_to_files(
     attributes_output=attributes_csv
 )
 
-print("COMPLETE: Transect generation finished!")
+print("COMPLETE: All sampling points created")
 
 print("\n" + "="*80)
 print("MANUAL STEP REQUIRED:")
 print("="*80)
-print("Upload the following chunk files to Google Earth Engine:")
+print("Upload the following point files to Google Earth Engine:")
 print(f"  Location: {transect_output_dir}/")
 print(f"  Files: chunk_000.shp through chunk_{len(stats['chunk_files'])-1:03d}.shp")
-print(f"\nUpload as assets with names:")
+print(f"\nUpload as 'Assets' with names:")
 for i in range(len(stats['chunk_files'])):
     asset_path = f"{config.GEE_ASSET_PREFIX}{i:03d}"
     print(f"  {asset_path}")

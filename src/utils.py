@@ -717,7 +717,7 @@ def remove_bad_transects(transect_df, park_geom, buffer_geom, crs):
     return filtered_df, len(bad_inside_buffer), len(bad_outside_pa)
 
 
-def remove_pa_transects_in_chunks(wdpa_gdf, wdpa_buffer_dict, sample_dist, transect_unit, 
+def generate_pa_transects_in_chunks(wdpa_gdf, wdpa_buffer_dict, sample_dist, transect_unit, 
                           transect_pts, output_dir, chunk_size=500, output_crs='EPSG:4326'):
     """
     Generate and filter transects for protected areas with streaming chunk output.

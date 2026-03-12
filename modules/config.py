@@ -44,7 +44,7 @@ INDEX_NAME = 'ndvi'  # Options: 'ndvi', 'lai', 'fpar', 'ndbi'
 # =====================================================================
 
 # World Database on Protected Areas collection year - month
-WDPA_COLLECTION = "WCMC/WDPA/202501/polygons"
+WDPA_COLLECTION = "WCMC/WDPA/202508/polygons"
 START_YEAR = 2003
 END_YEAR = 2025
 
@@ -67,7 +67,6 @@ EXCLUDED_PIDS = [
 # Threshold for filtering narrow PAs based on perimeter-to-area ratio
 QUANTILE_THRESHOLD = 0.75  
 
-
 # =====================================================================
 # Coordinate Reference Systems
 # =====================================================================
@@ -77,7 +76,6 @@ PROCESSING_CRS = 'ESRI:54009'  # Mollweide
 
 # Storage/GEE CRS (geographic coordinates)
 STORAGE_CRS = 'EPSG:4326'  # WGS84
-
 
 # =====================================================================
 # Transect Geometry Parameters
@@ -131,7 +129,6 @@ GEE_ASSET_PREFIX = f'projects/{GEE_PROJECT}/assets/chunk_'
 
 # Number of chunk files (0-9 = 10 chunks)
 NUM_CHUNKS = 10
-
 
 # =====================================================================
 # Remote Sensing Index Configurations
