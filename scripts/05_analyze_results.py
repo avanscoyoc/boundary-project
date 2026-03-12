@@ -14,7 +14,7 @@ Workflow:
 
 BEFORE RUNNING:
 Ensure processed dataset exists:
-  results/wdpa_df_{INDEX_NAME}2.parquet
+  results/wdpa_df_{INDEX_NAME}.parquet
   (produced by script 04_compute_edge_metrics.py)
 
 OUTPUT:
@@ -60,9 +60,9 @@ print(f"\nCurrent index: {config.INDEX_NAME.upper()}")
 print(f"Description: {config.INDEX_CONFIGS[config.INDEX_NAME]['description']}")
 
 # Paths
-# Input:  results/wdpa_df_{INDEX_NAME}2.parquet  (from script 04)
+# Input:  results/wdpa_df_{INDEX_NAME}.parquet  (from script 04)
 # Output: results/figures/{INDEX_NAME}_*.txt / *.png
-wdpa_path = config.RESULTS_DIR / f'wdpa_df_{config.INDEX_NAME}2.parquet'
+wdpa_path = config.RESULTS_DIR / f'wdpa_df_{config.INDEX_NAME}.parquet'
 figures_dir = config.RESULTS_FIGURES
 
 if not wdpa_path.exists():

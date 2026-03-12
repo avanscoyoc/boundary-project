@@ -47,7 +47,7 @@ ee.Authenticate()
 ee.Initialize(project=config.GEE_PROJECT)
 
 # Configure export folder
-folder_name = f"{config.INDEX_NAME}_raw_TEST"
+folder_name = f"{config.INDEX_NAME}_raw"
 print(f"Export folder: {folder_name}")
 
 # Static layers 

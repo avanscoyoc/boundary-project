@@ -50,7 +50,7 @@ raw_dir = config.RESULTS_RAW / f"{config.INDEX_NAME}_raw"
 output_dir = config.RESULTS_DIR
 attributes_path = config.DATA_PROCESSED / "attributes_final.csv"
 transect_output = output_dir / f'transect_df_{config.INDEX_NAME}.parquet' 
-wdpa_output = output_dir / f'wdpa_df_{config.INDEX_NAME}2.parquet'
+wdpa_output = output_dir / f'wdpa_df_{config.INDEX_NAME}.parquet'
 
 # Verify input files exist
 csv_files = list(raw_dir.glob('*.csv'))
