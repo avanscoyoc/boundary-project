@@ -12,7 +12,7 @@ import time
 import ee
 from modules.config import (
     MIN_AREA_KM2, VALID_STATUS, EXCLUDED_PIDS,
-    INDEX_CONFIGS, START_YEAR, END_YEAR
+    INDEX_CONFIGS, INDEX_NAME, START_YEAR, END_YEAR
 )
 
 
@@ -217,3 +217,137 @@ def make_gradient(index_name, y):
     grad = index_img.gradient()
     grad_mag = grad.select('x').hypot(grad.select('y')).unmask(-9999)
     return grad_mag.rename(['grad'])
+
+
+def make_current_gradient(y):
+    """
+    Wrapper around make_gradient using the index configured in config.INDEX_NAME.
+
+    Designed for use with ee.List.map() to build a multi-year gradient image stack.
+
+    Parameters
+    ----------
+    y : ee.Number
+        Year to process, as passed by ee.List.map().
+
+    Returns
+    -------
+    ee.Image
+        Single-band gradient magnitude image for the configured index and year.
+    """
+    return make_gradient(INDEX_NAME, y)
+
+
+def batch_sample_assets(asset_path, image, selectors, folder_name, index_name,
+                        chunk_size=50_000, batch_size=10, chunks_to_run=None):
+    """
+    Sample an image at transect points from a GEE asset and export results to Google Drive.
+
+    Splits the asset FeatureCollection into sub-chunks, samples the provided image at
+    each point using reduceRegions with ee.Reducer.first(), and submits batched export
+    tasks to Google Drive. Waits for each batch to complete before submitting the next.
+
+    If a task fails (typically due to GEE memory limits), it is automatically retried
+    by splitting the failed chunk into two halves (chunk_size // 2). The two retry tasks
+    are named with 'a' / 'b' suffixes (e.g., chunk_2a, chunk_2b) and are polled to
+    completion before proceeding. No manual intervention is required.
+
+    Parameters
+    ----------
+    asset_path : str
+        Path to the Earth Engine FeatureCollection asset
+        (e.g., 'projects/dse-staff/assets/chunk_000').
+    image : ee.Image
+        Multi-band image to sample (static layers + annual gradient bands).
+    selectors : list of str
+        Property and band names to include in the exported CSV.
+    folder_name : str
+        Google Drive folder name for export output.
+    index_name : str
+        Index name used in export task descriptions (e.g., 'ndvi', 'lai').
+    chunk_size : int, optional
+        Number of features per sub-chunk (default: 50,000).
+    batch_size : int, optional
+        Number of export tasks to submit and monitor simultaneously (default: 10).
+    chunks_to_run : list of int, optional
+        Specific sub-chunk indices to process. If None, all chunks are processed.
+    """
+    samples = ee.FeatureCollection(asset_path)
+    size = samples.size().getInfo()
+    nChunks = int((size + chunk_size - 1) // chunk_size)
+    tasks = []
+
+    if chunks_to_run is None:
+        chunks_to_run = list(range(nChunks))
+
+    asset_num = asset_path.split("_")[-1]
+
+    for i in chunks_to_run:
+        fcChunk = ee.FeatureCollection(samples.toList(chunk_size, i * chunk_size))
+        sampled = image.reduceRegions(
+            collection=fcChunk,
+            reducer=ee.Reducer.first(),
+            scale=500
+        )
+        task = ee.batch.Export.table.toDrive(
+            collection=sampled,
+            description=f'{index_name}_raw_grad_{asset_num}_chunk_{i}',
+            fileFormat='CSV',
+            selectors=selectors,
+            folder=folder_name
+        )
+        tasks.append((i, task))
+
+    for j in range(0, len(tasks), batch_size):
+        batch = tasks[j:j + batch_size]
+        for idx, t in batch:
+            t.start()
+
+        chunk_nums = [idx for idx, _ in batch]
+        print(f"  Processing chunks {chunk_nums}...")
+
+        while True:
+            statuses = [t.status()['state'] for _, t in batch]
+            if all(s in ['COMPLETED', 'FAILED', 'CANCELLED'] for s in statuses):
+                print(f"  Completed chunks {chunk_nums}")
+                break
+            time.sleep(30)
+
+        # Retry any failed chunks at half chunk_size
+        failed = [(idx, t) for idx, t in batch if t.status()['state'] == 'FAILED']
+        if failed:
+            half = chunk_size // 2
+            failed_nums = [idx for idx, _ in failed]
+            print(f"  {len(failed)} chunk(s) failed: {failed_nums}. Retrying at half size ({half:,} points)...")
+            retry_tasks = []
+            for i, _ in failed:
+                for sub, offset in enumerate([i * chunk_size, i * chunk_size + half]):
+                    fcSub = ee.FeatureCollection(samples.toList(half, offset))
+                    sampled = image.reduceRegions(
+                        collection=fcSub,
+                        reducer=ee.Reducer.first(),
+                        scale=500
+                    )
+                    suffix = f'0{sub + 1}'
+                    task = ee.batch.Export.table.toDrive(
+                        collection=sampled,
+                        description=f'{index_name}_raw_grad_{asset_num}_chunk_{i}_{suffix}',
+                        fileFormat='CSV',
+                        selectors=selectors,
+                        folder=folder_name
+                    )
+                    retry_tasks.append(task)
+                    task.start()
+
+            print(f"  Polling {len(retry_tasks)} retry tasks...")
+            while True:
+                statuses = [t.status()['state'] for t in retry_tasks]
+                if all(s in ['COMPLETED', 'FAILED', 'CANCELLED'] for s in statuses):
+                    still_failed = [t.config['description'] for t in retry_tasks
+                                    if t.status()['state'] == 'FAILED']
+                    if still_failed:
+                        print(f"  WARNING: retry tasks still failed: {still_failed}")
+                    else:
+                        print(f"  Retry tasks completed successfully")
+                    break
+                time.sleep(30)
