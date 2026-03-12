@@ -152,7 +152,7 @@ def check_task_status(submitted_tasks):
     return active_tasks, len(active_tasks)
 
 
-def make_gradient(index_name, y):
+def get_gradient_magnitude(index_name, y):
     """
     Generic gradient function for computing spatial gradients of various indices.
     
@@ -176,11 +176,11 @@ def make_gradient(index_name, y):
     Examples
     --------
     >>> # Create gradient function for NDVI
-    >>> ndvi_2015 = make_gradient('ndvi', 2015)
+    >>> ndvi_2015 = get_gradient_magnitude('ndvi', 2015)
     >>> 
     >>> # Map over multiple years
     >>> years = ee.List.sequence(2001, 2021)
-    >>> ndvi_grads = years.map(lambda y: make_gradient('ndvi', y))
+    >>> ndvi_grads = years.map(lambda y: get_gradient_magnitude('ndvi', y))
     
     Notes
     -----
@@ -219,9 +219,9 @@ def make_gradient(index_name, y):
     return grad_mag.rename(['grad'])
 
 
-def make_current_gradient(y):
+def get_annual_gradient_magnitude(y):
     """
-    Wrapper around make_gradient using the index configured in config.INDEX_NAME.
+    Wrapper around get_gradient_magnitude using the index configured in config.INDEX_NAME.
 
     Designed for use with ee.List.map() to build a multi-year gradient image stack.
 
@@ -235,7 +235,7 @@ def make_current_gradient(y):
     ee.Image
         Single-band gradient magnitude image for the configured index and year.
     """
-    return make_gradient(INDEX_NAME, y)
+    return get_gradient_magnitude(INDEX_NAME, y)
 
 
 def batch_sample_assets(asset_path, image, selectors, folder_name, index_name,

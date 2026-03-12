@@ -30,7 +30,7 @@ sys.path.insert(0, str(project_root))
 
 import ee
 from modules import config
-from modules.remotesensing import make_current_gradient, batch_sample_assets
+from modules.remotesensing import get_annual_gradient_magnitude, batch_sample_assets
 
 print("="*80)
 print("SCRIPT 03: Sample Satellite Imagery")
@@ -70,13 +70,13 @@ selectors = ['WDPA_PID', 'transectID', 'pointID', 'max_extent', 'gHM', 'elevatio
 
 # Annual gradient band layers
 gradientBands = ee.ImageCollection.fromImages(
-    years.map(make_current_gradient)
+    years.map(get_annual_gradient_magnitude)
 ).toBands()
 gradientBands = gradientBands.rename(gradBandNames)
 image = staticImage.addBands(gradientBands)
 
 # Process all assets sequentially #305 minutes
-print("1. Wait for all export tasks to complete")
+print("1. Wait for all export tasks to complete (~5 hours)")
 print("Monitor at: https://code.earthengine.google.com/tasks")
 total_assets = 10
 for idx in range(total_assets):
@@ -91,5 +91,7 @@ print("MANUAL STEP REQUIRED:")
 print("="*80)
 print(f"1. Download all CSV files from Google Drive folder: {folder_name}")
 print(f"2. Place them in: {config.RESULTS_RAW / f'{config.INDEX_NAME}_raw'}/")
-print("3. Then run: python scripts/04_compute_edge_metrics.py")
+print("3. If you wish to calculate a different index (e.g., ndvi, ndbi, lai, fpar)")
+print("   change the 'INDEX_NAME' in modules/config.py and rerun this script.")
+print("4. Then run: python scripts/04_compute_edge_metrics.py")
 print("="*80)

@@ -177,7 +177,7 @@ INDEX_CONFIGS = {
     }
 }
 
-def make_gradient(index_name, y):
+def get_gradient_magnitude(index_name, y):
     """
     Generic gradient function for computing spatial gradients of various indices.
     
@@ -201,11 +201,11 @@ def make_gradient(index_name, y):
     Examples
     --------
     >>> # Create gradient function for NDVI
-    >>> ndvi_2015 = make_gradient('ndvi', 2015)
+    >>> ndvi_2015 = get_gradient_magnitude('ndvi', 2015)
     >>> 
     >>> # Map over multiple years
     >>> years = ee.List.sequence(2001, 2021)
-    >>> ndvi_grads = years.map(lambda y: make_gradient('ndvi', y))
+    >>> ndvi_grads = years.map(lambda y: get_gradient_magnitude('ndvi', y))
     
     Notes
     -----
