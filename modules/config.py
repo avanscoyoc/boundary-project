@@ -37,14 +37,14 @@ RESULTS_FIGURES = RESULTS_DIR / "figures"
 # Index Selection - EDIT THIS TO CHANGE WHICH INDEX TO PROCESS
 # =====================================================================
 
-INDEX_NAME = 'lai'  # Options: 'ndvi', 'lai', 'fpar', 'ndbi'
+INDEX_NAME = 'ndvi'  # Options: 'ndvi', 'lai', 'fpar', 'ndbi'
 
 # =====================================================================
 # Dataset Parameters
 # =====================================================================
 
 # World Database on Protected Areas collection year - month
-WDPA_COLLECTION = "WCMC/WDPA/202106/polygons"
+WDPA_COLLECTION = "WCMC/WDPA/202501/polygons"
 START_YEAR = 2003
 END_YEAR = 2025
 
