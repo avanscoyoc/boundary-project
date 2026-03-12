@@ -127,6 +127,7 @@ trend_counts = wdpa_df.groupby('WDPA_PID')['trend'].first().value_counts()
 for trend, count in trend_counts.items():
     output_lines.append(f"  {trend}: {count:,}")
 
+# Find what percent of PAs have low to no edges
 wdpa_summary = wdpa_df.groupby('WDPA_PID').agg(
     edge_extent=('edge_extent', 'mean'),
     edge_intensity=('edge_intensity', 'mean')

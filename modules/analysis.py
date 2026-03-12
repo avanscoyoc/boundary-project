@@ -335,24 +335,26 @@ def recategorize_biome(biome):
     """
     if biome == "Mangroves":
         return "Mangrove"
-    elif biome == "N/A":
+    elif biome in ["N/A", "Unknown"]:
         return "Rock & Ice"
+    elif biome in ["Tundra"]:
+        return "Tundra"
     elif biome in ["Deserts & Xeric Shrublands"]:
         return "Desert"
     elif biome in ["Tropical & Subtropical Coniferous Forests",
                    "Tropical & Subtropical Moist Broadleaf Forests",
                    "Tropical & Subtropical Dry Broadleaf Forests"]:
-        return "Tropical-Forests"
+        return "Tropical Forest"
     elif biome in ["Mediterranean Forests, Woodlands & Scrub",
                    "Temperate Conifer Forests",
                    "Temperate Broadleaf & Mixed Forests"]:
-        return "Temperate-Forests"
+        return "Temperate Forest"
     elif biome in ["Boreal Forests/Taiga"]:
-        return "Boreal-Forests"
+        return "Boreal Forest"
     elif biome in ["Tropical & Subtropical Grasslands, Savannas & Shrublands",
                    "Temperate Grasslands, Savannas & Shrublands",
                    "Montane Grasslands & Shrublands",
                    "Flooded Grasslands & Savannas"]:
-        return "Grassland-Shrubland"
+        return "Grassland & Shrubland"
     else:
         return biome
