@@ -2,28 +2,31 @@
 Script 05: Analyze Results
 
 Performs statistical analysis and creates visualizations for edge effects in
-protected areas.
+protected areas. Mirrors the analysis in src/7_analysis.ipynb.
 
 Workflow:
-1. Load transect and WDPA datasets
-2. Compute summary statistics and distributions
-3. Fit statistical models (ANOVA, regression)
-4. Create publication-quality figures
-5. Export results to text files and plots
+1. Load WDPA-level dataset
+2. Recategorize biomes and classify temporal trends
+3. Compute summary statistics
+4. Run ANOVA for categorical predictors
+5. Fit mixed-effects models for edge extent and edge intensity
+6. Create publication figures (S1, S2, 3, 4a, 4b)
 
 BEFORE RUNNING:
-Ensure processed datasets exist:
-- results/transect_df_{INDEX_NAME}.parquet
-- results/wdpa_df_{INDEX_NAME}.parquet
+Ensure processed dataset exists:
+  results/wdpa_df_{INDEX_NAME}2.parquet
+  (produced by script 04_compute_edge_metrics.py)
 
 OUTPUT:
-- results/figures/{INDEX_NAME}_summary_statistics.txt
-- results/figures/{INDEX_NAME}_anova_results.txt
-- results/figures/{INDEX_NAME}_edge_extent_model.txt
-- results/figures/{INDEX_NAME}_edge_intensity_model.txt
-- results/figures/{INDEX_NAME}_*.png (various plots)
-
-For advanced analysis, see src/7_analysis.ipynb
+  results/figures/{INDEX_NAME}_summary_statistics.txt
+  results/figures/{INDEX_NAME}_anova_results.txt
+  results/figures/{INDEX_NAME}_edge_extent_model.txt
+  results/figures/{INDEX_NAME}_edge_intensity_model.txt
+  results/figures/{INDEX_NAME}_figureS1_distributions.png
+  results/figures/{INDEX_NAME}_figureS2_correlation.png
+  results/figures/{INDEX_NAME}_figure3_trends_by_biome.png
+  results/figures/{INDEX_NAME}_figure4a_edge_extent_model.png
+  results/figures/{INDEX_NAME}_figure4b_edge_intensity_model.png
 """
 
 import sys
@@ -38,6 +41,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import stats
+from statsmodels.regression.mixed_linear_model import MixedLM
+from statsmodels.formula.api import ols
+from statsmodels.stats.anova import anova_lm
 from modules import config
 from modules.plotting import (
     classify_trend,
@@ -50,224 +56,210 @@ print("="*80)
 print("SCRIPT 05: Analyze Results")
 print("="*80)
 
-# Validate configuration
 print(f"\nCurrent index: {config.INDEX_NAME.upper()}")
 print(f"Description: {config.INDEX_CONFIGS[config.INDEX_NAME]['description']}")
 
 # Paths
-output_dir = config.RESULTS_DIR
-figures_dir = config.FIGURES_DIR
-transect_path = output_dir / f'transect_df_{config.INDEX_NAME}.parquet'
-wdpa_path = output_dir / f'wdpa_df_{config.INDEX_NAME}.parquet'
-
-# Verify input files exist
-if not transect_path.exists():
-    print(f"\nERROR: Transect dataset not found: {transect_path}")
-    print("Please run script 04_compute_edge_metrics.py first")
-    exit(1)
+# Input:  results/wdpa_df_{INDEX_NAME}2.parquet  (from script 04)
+# Output: results/figures/{INDEX_NAME}_*.txt / *.png
+wdpa_path = config.RESULTS_DIR / f'wdpa_df_{config.INDEX_NAME}2.parquet'
+figures_dir = config.RESULTS_FIGURES
 
 if not wdpa_path.exists():
     print(f"\nERROR: WDPA dataset not found: {wdpa_path}")
     print("Please run script 04_compute_edge_metrics.py first")
     exit(1)
 
+figures_dir.mkdir(parents=True, exist_ok=True)
+
 # Load data
 print("\n" + "="*80)
-print("Loading Datasets")
+print("Loading Dataset")
 print("="*80)
 
-print(f"Loading transect data: {transect_path}")
-transect_df = pd.read_parquet(transect_path)
-print(f"  Transects: {len(transect_df):,}")
-
-print(f"Loading WDPA data: {wdpa_path}")
+print(f"Loading: {wdpa_path}")
 wdpa_df = pd.read_parquet(wdpa_path)
-print(f"  Protected areas: {len(wdpa_df):,}")
+print(f"  Rows: {len(wdpa_df):,}")
+print(f"  Protected areas: {wdpa_df['WDPA_PID'].nunique():,}")
 
-# Basic data quality checks
-print("\nData quality:")
-print(f"  Missing transect values: {transect_df.isnull().sum().sum()}")
-print(f"  Missing WDPA values: {wdpa_df.isnull().sum().sum()}")
+# Recategorize BIOME_NAME into 7 major groups
+from modules.analysis import recategorize_biome
+wdpa_df['BIOME_NAME'] = wdpa_df['BIOME_NAME'].apply(recategorize_biome)
+
+# Classify temporal trend per WDPA_PID using linear regression over years on edge_extent
+print("\nClassifying temporal trends per protected area...")
+trend_df = wdpa_df.groupby('WDPA_PID').apply(classify_trend).reset_index()
+trend_df.columns = ['WDPA_PID', 'trend']
+wdpa_df = wdpa_df.merge(trend_df, on='WDPA_PID', how='left')
+print(f"Trend distribution:\n{wdpa_df.groupby('WDPA_PID')['trend'].first().value_counts().to_string()}")
 
 # Step 1: Summary Statistics
 print("\n" + "="*80)
-print("STEP 1: Computing Summary Statistics")
+print("STEP 1: Summary Statistics")
 print("="*80)
 
 summary_output = figures_dir / f'{config.INDEX_NAME}_summary_statistics.txt'
-save_summary_statistics(wdpa_df, summary_output)
-print(f"Saved summary statistics to: {summary_output}")
 
-# Show key metrics
-if 'mean_cohens_d' in wdpa_df.columns:
-    print("\nKey edge effect metrics:")
-    print(f"  Mean Cohen's d: {wdpa_df['mean_cohens_d'].mean():.3f}")
-    print(f"  Median Cohen's d: {wdpa_df['mean_cohens_d'].median():.3f}")
-    print(f"  Std Cohen's d: {wdpa_df['mean_cohens_d'].std():.3f}")
+output_lines = []
+output_lines.append("=" * 60)
+output_lines.append("SUMMARY STATISTICS")
+output_lines.append("=" * 60)
 
-# Classify trends
-if 'mean_cohens_d' in wdpa_df.columns:
-    wdpa_df['trend'] = wdpa_df['mean_cohens_d'].apply(classify_trend)
-    trend_counts = wdpa_df['trend'].value_counts()
-    print("\nEdge effect trends:")
-    for trend, count in trend_counts.items():
-        pct = count / len(wdpa_df) * 100
-        print(f"  {trend}: {count} ({pct:.1f}%)")
+n_wdpa = wdpa_df['WDPA_PID'].nunique()
+output_lines.append(f"Total number of unique WDPA_PID: {n_wdpa:,}")
 
-# Step 2: Statistical Tests
+total_transects = wdpa_df.groupby('WDPA_PID')['n_trnst'].first().sum()
+output_lines.append(f"Total number of transects: {total_transects:,}")
+
+n_iso3 = wdpa_df['ISO3'].nunique()
+output_lines.append(f"Total number of unique ISO3: {n_iso3:,}")
+
+n_biome = wdpa_df['BIOME_NAME'].nunique()
+output_lines.append(f"Total number of unique biomes: {n_biome:,}")
+
+output_lines.append("\nNumber of WDPA_PID per biome:")
+biome_counts = wdpa_df.groupby('BIOME_NAME')['WDPA_PID'].nunique().sort_values(ascending=False)
+for biome, count in biome_counts.items():
+    output_lines.append(f"  {biome}: {count:,}")
+
+output_lines.append("\nTrend distribution:")
+trend_counts = wdpa_df.groupby('WDPA_PID')['trend'].first().value_counts()
+for trend, count in trend_counts.items():
+    output_lines.append(f"  {trend}: {count:,}")
+
+wdpa_summary = wdpa_df.groupby('WDPA_PID').agg(
+    edge_extent=('edge_extent', 'mean'),
+    edge_intensity=('edge_intensity', 'mean')
+).reset_index()
+low_extent = (wdpa_summary['edge_extent'] < 0.1).sum()
+output_lines.append(f"\nWDPA_PID with edge_extent < 10%: {low_extent:,} ({low_extent/len(wdpa_summary)*100:.1f}%)")
+low_intensity = (wdpa_summary['edge_intensity'] < 0).sum()
+output_lines.append(f"WDPA_PID with edge_intensity < 0: {low_intensity:,} ({low_intensity/len(wdpa_summary)*100:.1f}%)")
+output_lines.append("=" * 60)
+
+print('\n'.join(output_lines))
+with open(summary_output, 'w') as f:
+    f.write('\n'.join(output_lines))
+print(f"Saved: {summary_output}")
+
+# Step 2: ANOVA for categorical predictors
 print("\n" + "="*80)
-print("STEP 2: Statistical Analysis")
+print("STEP 2: ANOVA")
 print("="*80)
 
-# ANOVA by biome
-if 'biome_name' in wdpa_df.columns and 'mean_cohens_d' in wdpa_df.columns:
-    print("\nANOVA: Edge effects by biome...")
-    biome_groups = [group['mean_cohens_d'].dropna() 
-                    for name, group in wdpa_df.groupby('biome_name')]
-    f_stat, p_value = stats.f_oneway(*biome_groups)
-    
-    anova_output = figures_dir / f'{config.INDEX_NAME}_anova_results.txt'
-    with open(anova_output, 'w') as f:
-        f.write(f"ANOVA: Edge Effects ({config.INDEX_NAME.upper()}) by Biome\n")
-        f.write("="*60 + "\n\n")
-        f.write(f"F-statistic: {f_stat:.4f}\n")
-        f.write(f"p-value: {p_value:.4e}\n\n")
-        
-        if p_value < 0.05:
-            f.write("Result: Significant difference between biomes (p < 0.05)\n\n")
-        else:
-            f.write("Result: No significant difference between biomes (p >= 0.05)\n\n")
-        
-        f.write("Mean Cohen's d by biome:\n")
-        for name, group in wdpa_df.groupby('biome_name'):
-            mean_d = group['mean_cohens_d'].mean()
-            f.write(f"  {name}: {mean_d:.3f}\n")
-    
-    print(f"  F={f_stat:.2f}, p={p_value:.2e}")
-    print(f"  Saved to: {anova_output}")
+anova_df = wdpa_df[['edge_extent', 'IUCN_CAT', 'STATUS_YR', 'BIOME_NAME', 'AREA_DISSO']].dropna()
+anova_output = figures_dir / f'{config.INDEX_NAME}_anova_results.txt'
 
-# Simple regression models
-if 'area_km2' in wdpa_df.columns and 'mean_cohens_d' in wdpa_df.columns:
-    print("\nRegression: Edge extent (area) model...")
-    
-    # Log-transform area
-    wdpa_df['log_area'] = np.log10(wdpa_df['area_km2'])
-    
-    # Simple linear regression
-    from scipy.stats import linregress
-    mask = wdpa_df[['log_area', 'mean_cohens_d']].notna().all(axis=1)
-    slope, intercept, r_value, p_value, se = linregress(
-        wdpa_df.loc[mask, 'log_area'],
-        wdpa_df.loc[mask, 'mean_cohens_d']
-    )
-    
-    extent_output = figures_dir / f'{config.INDEX_NAME}_edge_extent_model.txt'
-    with open(extent_output, 'w') as f:
-        f.write(f"Linear Regression: Edge Extent ({config.INDEX_NAME.upper()})\n")
-        f.write("="*60 + "\n\n")
-        f.write("Model: mean_cohens_d ~ log10(area_km2)\n\n")
-        f.write(f"Slope: {slope:.4f}\n")
-        f.write(f"Intercept: {intercept:.4f}\n")
-        f.write(f"R²: {r_value**2:.4f}\n")
-        f.write(f"p-value: {p_value:.4e}\n")
-    
-    print(f"  R²={r_value**2:.3f}, p={p_value:.2e}")
-    print(f"  Saved to: {extent_output}")
+with open(anova_output, 'w') as f:
+    for factor, formula in [
+        ('IUCN_CAT',  'edge_extent ~ C(IUCN_CAT)'),
+        ('STATUS_YR', 'edge_extent ~ STATUS_YR'),
+        ('BIOME_NAME','edge_extent ~ C(BIOME_NAME)'),
+        ('AREA_DISSO','edge_extent ~ AREA_DISSO'),
+    ]:
+        model = ols(formula, data=anova_df).fit()
+        result = anova_lm(model, typ=2)
+        print(f"\nANOVA for {factor}:\n{result}")
+        f.write(f"ANOVA for {factor}:\n{result}\n\n")
 
-# Step 3: Create Visualizations
+print(f"Saved: {anova_output}")
+
+# Step 3: Mixed-effects models
 print("\n" + "="*80)
-print("STEP 3: Creating Visualizations")
+print("STEP 3: Mixed-Effects Models")
 print("="*80)
 
-# Distribution plots
-if 'mean_cohens_d' in wdpa_df.columns:
-    print("\nCreating distribution plots...")
-    create_distribution_plots(
-        wdpa_df, 
-        'mean_cohens_d',
-        f"{config.INDEX_NAME.upper()} Edge Effects",
-        figures_dir / f'{config.INDEX_NAME}_distribution.png'
-    )
-    print(f"  Saved: {config.INDEX_NAME}_distribution.png")
+predictor_cols = ['AREA_DISSO', 'gHM_mean', 'elevation_mean', 'slope_mean', 'water_extent_pct']
 
-# Correlation plot
-numeric_cols = wdpa_df.select_dtypes(include=[np.number]).columns
-if len(numeric_cols) > 1:
-    print("\nCreating correlation heatmap...")
-    # Select key columns for correlation
-    corr_cols = [c for c in ['mean_cohens_d', 'area_km2', 'num_transects', 
-                              'STATUS_YR', 'REP_AREA'] if c in numeric_cols]
-    if len(corr_cols) > 1:
-        create_correlation_plot(
-            wdpa_df[corr_cols],
-            figures_dir / f'{config.INDEX_NAME}_correlation.png'
-        )
-        print(f"  Saved: {config.INDEX_NAME}_correlation.png")
+for response, label, fig_label, out_stem in [
+    ('edge_intensity', 'EDGE INTENSITY', 'Figure 4b', f'{config.INDEX_NAME}_edge_intensity_model'),
+    ('edge_extent',    'EDGE EXTENT',    'Figure 4a', f'{config.INDEX_NAME}_edge_extent_model'),
+]:
+    print(f"\nFitting mixed model: {response}...")
+    model_df = wdpa_df[[response] + predictor_cols + ['BIOME_NAME', 'year', 'WDPA_PID']].dropna()
 
-# Biome comparison plot
-if 'biome_name' in wdpa_df.columns and 'mean_cohens_d' in wdpa_df.columns:
-    print("\nCreating biome comparison plot...")
-    
-    fig, ax = plt.subplots(figsize=(10, 6))
-    
-    # Box plot by biome
-    biome_data = wdpa_df.groupby('biome_name')['mean_cohens_d'].apply(list)
-    positions = range(len(biome_data))
-    
-    bp = ax.boxplot(biome_data.values, positions=positions, patch_artist=True)
-    
-    # Style
-    for patch in bp['boxes']:
-        patch.set_facecolor('lightblue')
-    
-    ax.set_xticks(positions)
-    ax.set_xticklabels(biome_data.index, rotation=45, ha='right')
-    ax.set_ylabel("Cohen's d")
-    ax.set_title(f"{config.INDEX_NAME.upper()} Edge Effects by Biome")
-    ax.axhline(0, color='red', linestyle='--', alpha=0.3, label='No effect')
-    ax.grid(True, alpha=0.3)
-    ax.legend()
-    
+    for col in predictor_cols:
+        model_df[f'{col}_z'] = (model_df[col] - model_df[col].mean()) / model_df[col].std()
+
+    formula = f'{response} ~ ' + ' + '.join(f'{c}_z' for c in predictor_cols)
+    md = MixedLM.from_formula(formula, data=model_df, groups=model_df['BIOME_NAME'], re_formula='1')
+    mdf = md.fit()
+    print(mdf.summary())
+
+    with open(figures_dir / f'{out_stem}.txt', 'w') as f:
+        f.write("=" * 60 + "\n")
+        f.write(f"MIXED MODEL: {label}\n")
+        f.write("=" * 60 + "\n\n")
+        f.write(str(mdf.summary()))
+    print(f"Saved: {figures_dir / f'{out_stem}.txt'}")
+
+    coef_df = pd.DataFrame({
+        'Variable': mdf.params.index[1:],
+        'Coefficient': mdf.params.values[1:],
+        'CI_lower': mdf.conf_int().iloc[1:, 0],
+        'CI_upper': mdf.conf_int().iloc[1:, 1]
+    })
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.errorbar(coef_df['Coefficient'], range(len(coef_df)),
+                xerr=[coef_df['Coefficient'] - coef_df['CI_lower'],
+                      coef_df['CI_upper'] - coef_df['Coefficient']],
+                fmt='o', capsize=5)
+    ax.axvline(0, color='red', linestyle='--', linewidth=1)
+    ax.set_yticks(range(len(coef_df)))
+    ax.set_yticklabels(coef_df['Variable'])
+    ax.set_xlabel('Coefficient (95% CI)')
+    ax.set_title(f'{fig_label}: {response.replace("_", " ").title()} ~ Covariates')
     plt.tight_layout()
-    plt.savefig(figures_dir / f'{config.INDEX_NAME}_biome_comparison.png', dpi=300)
+    fig_out = figures_dir / f'{out_stem}.png'
+    plt.savefig(fig_out, dpi=300, bbox_inches='tight')
     plt.close()
-    
-    print(f"  Saved: {config.INDEX_NAME}_biome_comparison.png")
+    print(f"Saved: {fig_out}")
 
-# Area vs edge effect plot
-if 'area_km2' in wdpa_df.columns and 'mean_cohens_d' in wdpa_df.columns:
-    print("\nCreating area vs edge effect plot...")
-    
-    fig, ax = plt.subplots(figsize=(10, 6))
-    
-    # Scatter plot with log-scale x-axis
-    ax.scatter(wdpa_df['area_km2'], wdpa_df['mean_cohens_d'], 
-              alpha=0.5, s=20)
-    
-    ax.set_xscale('log')
-    ax.set_xlabel("Protected Area Size (km²)")
-    ax.set_ylabel("Cohen's d")
-    ax.set_title(f"{config.INDEX_NAME.upper()} Edge Effects vs PA Size")
-    ax.axhline(0, color='red', linestyle='--', alpha=0.3, label='No effect')
-    ax.grid(True, alpha=0.3)
-    ax.legend()
-    
-    plt.tight_layout()
-    plt.savefig(figures_dir / f'{config.INDEX_NAME}_area_vs_edge.png', dpi=300)
-    plt.close()
-    
-    print(f"  Saved: {config.INDEX_NAME}_area_vs_edge.png")
+# Step 4: Figures
+print("\n" + "="*80)
+print("STEP 4: Figures")
+print("="*80)
+
+# Figure S1: Distributions
+print("\nFigure S1: Distributions...")
+create_distribution_plots(wdpa_df, figures_dir / f'{config.INDEX_NAME}_figureS1_distributions.png', config.INDEX_NAME)
+
+# Figure S2: Correlation
+print("Figure S2: Correlation...")
+create_correlation_plot(wdpa_df, figures_dir / f'{config.INDEX_NAME}_figureS2_correlation.png', config.INDEX_NAME)
+
+# Figure 3: Trend stacked bar by biome
+print("Figure 3: Trends by biome...")
+trend_by_biome = wdpa_df.groupby(['BIOME_NAME', 'WDPA_PID'])['trend'].first().reset_index()
+trend_counts_fig = trend_by_biome.groupby(['BIOME_NAME', 'trend']).size().unstack(fill_value=0)
+col_order = ['sig_decrease', 'decrease', 'no_change', 'increase', 'sig_increase']
+trend_counts_fig = trend_counts_fig[[c for c in col_order if c in trend_counts_fig.columns]]
+trend_pcts = trend_counts_fig.div(trend_counts_fig.sum(axis=1), axis=0) * 100
+biome_totals = trend_counts_fig.sum(axis=1)
+
+fig, ax = plt.subplots(figsize=(10, 8))
+trend_pcts.plot(kind='barh', stacked=True, ax=ax,
+                color=['#d73027', '#fc8d59', '#afab9e', '#91bfdb', '#4575b4'])
+ax.set_yticklabels([f"{b} (n={biome_totals[b]})" for b in trend_pcts.index])
+for i, biome in enumerate(trend_pcts.index):
+    cumulative = 0
+    for col in trend_pcts.columns:
+        val = trend_pcts.loc[biome, col]
+        if val > 5:
+            ax.text(cumulative + val/2, i, f'{val:.1f}%', ha='center', va='center', fontsize=8)
+        cumulative += val
+ax.set_xlabel('Percentage of Protected Areas')
+ax.set_ylabel('Biome')
+ax.legend(title='Trend', bbox_to_anchor=(1.05, 1), loc='upper left')
+ax.set_title('Edge Extent Trends by Biome')
+plt.tight_layout()
+fig3_out = figures_dir / f'{config.INDEX_NAME}_figure3_trends_by_biome.png'
+plt.savefig(fig3_out, dpi=300, bbox_inches='tight')
+plt.close()
+print(f"Saved: {fig3_out}")
 
 print("\n" + "="*80)
 print("ANALYSIS COMPLETE")
 print("="*80)
 print(f"Results saved to: {figures_dir}")
-print("\nGenerated files:")
-for txt_file in sorted(figures_dir.glob(f'{config.INDEX_NAME}_*.txt')):
-    print(f"  - {txt_file.name}")
-for png_file in sorted(figures_dir.glob(f'{config.INDEX_NAME}_*.png')):
-    print(f"  - {png_file.name}")
-
-print("\nFor advanced analysis (time series, spatial patterns, etc.):")
-print("  See: src/7_analysis.ipynb")
 print("="*80)

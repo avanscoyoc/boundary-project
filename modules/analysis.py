@@ -45,7 +45,7 @@ def sort_and_combine_csvs(input_dir, index_name, start_year, end_year, output_ch
     """
     Read, concatenate, sort, and split GEE CSV results into parquet chunks.
     
-    Processes all CSV files from GEE exports, replaces sentinel values with NaN,
+    Processes all CSV files from GEE exports, replaces -9999 values with NaN,
     sorts by WDPA_PID/transectID/pointID, and splits into chunks while keeping
     each WDPA_PID together.
     
@@ -96,11 +96,11 @@ def sort_and_combine_csvs(input_dir, index_name, start_year, end_year, output_ch
     all_files = sorted([input_dir / f for f in os.listdir(input_dir) if f.endswith(".csv")])
     print(f"Found {len(all_files)} CSV files")
     
-    df_list = [pd.read_parquet(file, usecols=usecols, dtype=dtypes, low_memory=False) for file in all_files]
+    df_list = [pd.read_csv(file, usecols=usecols, dtype=dtypes, low_memory=False) for file in all_files]
     df = pd.concat(df_list, ignore_index=True)
     del df_list
     
-    # Replace sentinel values with NaN
+    # Replace -9999 values with NaN
     df[value_vars] = df[value_vars].replace(-9999.0, np.nan)
     print(f"Loaded {len(df):,} rows")
     
@@ -199,12 +199,12 @@ def create_transect_dataset(input_dir, index_name, start_year, end_year, output_
             columns='pointID', values='value', aggfunc='first'
         )
         pts = pts.rename(columns={2: 'pt_2', 1: 'pt_1', 0: 'pt_0', -1: 'pt_m1', -2: 'pt_m2'})
-        pts = pts.dropna(subset=['pt_2', 'pt_1', 'pt_0', 'pt_m1', 'pt_m2'])
-        
-        # Compute covariates
+        pts = pts.dropna(subset=['pt_2', 'pt_1', 'pt_0', 'pt_m1', 'pt_m2']) # Drop any rows with missing points
+        #^might be why have fewer PAs by this point
+
+        # Compute covariates by joining back to long format
         long_valid = long.set_index(['WDPA_PID', 'year', 'transectID'])
         long_valid = long_valid[long_valid.index.isin(pts.index)].reset_index()
-        
         max_extent_df = long_valid.groupby(['WDPA_PID','year','transectID'])['max_extent'].max()
         gHM_outer = long_valid[long_valid['pointID'].isin([1,2])].groupby(
             ['WDPA_PID','year','transectID'])['gHM'].mean()
@@ -212,13 +212,13 @@ def create_transect_dataset(input_dir, index_name, start_year, end_year, output_
             ['WDPA_PID','year','transectID'])[['elevation','slope']]
         
         covars = pd.DataFrame({
-            'trnst_max_extent': max_extent_df,
-            'gHM_mean_outer': gHM_outer,
-            'elevation_pt0': pt0_data['elevation'],
-            'slope_pt0': pt0_data['slope']
+            'trnst_max_extent': max_extent_df, # max water extent across transect points
+            'gHM_mean_outer': gHM_outer, # mean human modification on outer points
+            'elevation_pt0': pt0_data['elevation'], # elevation at boundary point
+            'slope_pt0': pt0_data['slope'] # slope at boundary point
         })
         
-        # Join and compute edge
+        # Join covariates to pts data (wide) and compute edge
         chunk_df = pts.join(covars)
         chunk_df['edge'] = (
             (chunk_df['pt_0'] > chunk_df[['pt_2','pt_1']].min(axis=1)) &
