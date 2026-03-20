@@ -35,9 +35,20 @@ def cohens_d(x, y):
     -----
     Uses pooled standard deviation with (n-1) degrees of freedom.
     """
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    x = x[~np.isnan(x)]
+    y = y[~np.isnan(y)]
+
     nx, ny = len(x), len(y)
+    if nx < 2 or ny < 2:
+        return np.nan
+
     dof = nx + ny - 2
     pooled_std = np.sqrt(((nx-1)*np.var(x, ddof=1) + (ny-1)*np.var(y, ddof=1)) / dof)
+    if pooled_std == 0 or np.isnan(pooled_std):
+        return np.nan
+
     return (np.mean(x) - np.mean(y)) / pooled_std
 
 
@@ -287,7 +298,8 @@ def create_wdpa_dataset(transect_dir, attributes_path, index_name, output_path):
             d01 = cohens_d(group['pt_0'], group['pt_1'])
             d0m1 = cohens_d(group['pt_0'], group['pt_m1'])
             d0m2 = cohens_d(group['pt_0'], group['pt_m2'])
-            edge_intensity = min(d02, d01, d0m1, d0m2)
+            d_vals = np.array([d02, d01, d0m1, d0m2], dtype=float)
+            edge_intensity = np.nan if np.any(np.isnan(d_vals)) else np.min(d_vals)
             edge_extent = (group['edge']==1).sum() / len(group)
             
             wdpa_list.append({
