@@ -240,17 +240,23 @@ def create_distribution_plots(df, output_path, index_name):
     
     # Edge extent
     axes[0].hist(df['edge_extent'], bins=50, edgecolor='black', alpha=0.7)
+    med_extent = df['edge_extent'].median()
+    axes[0].axvline(med_extent, color='red', ls=':', lw=1.5, label=f'Median = {med_extent:.2f}')
+    axes[0].legend()
     axes[0].set_xlabel('Edge Extent')
     axes[0].set_ylabel('Frequency')
-    axes[0].set_title(f'{index_name.upper()}: Edge Extent Distribution')
+    axes[0].set_title(f'{index_name.upper()}: Edge Extent Distribution in 2025')
     axes[0].grid(True, alpha=0.3)
     
     # Edge intensity  
     intensity_clean = df[np.isfinite(df['edge_intensity'])]
     axes[1].hist(intensity_clean['edge_intensity'], bins=50, edgecolor='black', alpha=0.7)
+    med_intensity = intensity_clean['edge_intensity'].median()
+    axes[1].axvline(med_intensity, color='red', ls=':', lw=1.5, label=f'Median = {med_intensity:.2f}')
+    axes[1].legend()
     axes[1].set_xlabel('Edge Intensity (Cohen\'s d)')
     axes[1].set_ylabel('Frequency')
-    axes[1].set_title(f'{index_name.upper()}: Edge Intensity Distribution')
+    axes[1].set_title(f'{index_name.upper()}: Edge Intensity Distribution in 2025')
     axes[1].grid(True, alpha=0.3)
     
     plt.tight_layout()

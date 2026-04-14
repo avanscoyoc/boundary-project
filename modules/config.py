@@ -37,7 +37,7 @@ RESULTS_FIGURES = RESULTS_DIR / "figures"
 # Index Selection - EDIT THIS TO CHANGE WHICH INDEX TO PROCESS
 # =====================================================================
 
-INDEX_NAME = 'lai'  # Options: 'ndvi', 'lai', 'fpar', 'ndbi'
+INDEX_NAME = 'ndvi'  # Options: 'ndvi', 'lai', 'fpar', 'ndbi'
 
 # =====================================================================
 # Dataset Parameters
