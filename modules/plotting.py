@@ -19,43 +19,25 @@ from pathlib import Path
 def classify_trend(group, metric='edge_extent', alpha=0.05):
     """
     Classify temporal trend for a protected area using linear regression.
-    
-    Parameters
-    ----------
-    group : DataFrame
-        Time series data for single WDPA_PID with 'year' and metric columns
-    metric : str, optional
-        Column name to analyze. Default 'edge_extent'.
-    alpha : float, optional
-        Significance threshold for p-value. Default 0.05.
-    
-    Returns
-    -------
-    str
-        Trend classification: 'sig_increase', 'sig_decrease', 'increase', 
-        'decrease', or 'no_change'
-    
-    Notes
-    -----
-    Significant trends (p < alpha) are prefixed with 'sig_'.
-    Non-significant trends indicate direction based on slope sign.
+
+    Returns a Series with 'trend' (classification string), 'slope', and 'p_value'.
     """
     X = group['year'].values
     y = group[metric].values
+    suffix = metric.split('_')[1]
     slope, intercept, r_value, p_value, std_err = stats.linregress(X, y)
-    
+
     if p_value < alpha:
-        if slope > 0:
-            return 'sig_increase'
-        else:
-            return 'sig_decrease'
+        trend = 'sig_increase' if slope > 0 else 'sig_decrease'
     else:
         if slope > 0:
-            return 'increase'
+            trend = 'increase'
         elif slope < 0:
-            return 'decrease'
+            trend = 'decrease'
         else:
-            return 'no_change'
+            trend = 'no_change'
+
+    return pd.Series({f'trend_{suffix}': trend, f'slope_{suffix}': slope, f'p_value_{suffix}': p_value})
 
 
 def save_summary_statistics(df, output_path, index_name):
@@ -203,7 +185,7 @@ def create_correlation_plot(df, output_path, index_name):
               alpha=0.3, s=10, edgecolors='none')
     ax.set_xlabel('Edge Extent')
     ax.set_ylabel('Edge Intensity (Cohen\'s d)')
-    ax.set_title(f'{index_name.upper()}: Edge Extent vs Intensity')
+    ax.set_title(f'{index_name.upper()}: Edge Extent vs Intensity in 2025')
     ax.grid(True, alpha=0.3)
     
     # Add correlation coefficient

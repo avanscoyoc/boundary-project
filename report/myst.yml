@@ -1,0 +1,9 @@
+version: 1
+project:
+  title: Edge Effects in Protected Areas — Results Summary
+  exports:
+    - format: pdf
+      template: ./custom_template
+      output: results_summary.pdf
+      articles:
+        - report.ipynb

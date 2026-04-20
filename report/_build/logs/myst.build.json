@@ -1,0 +1,43 @@
+{
+  "input": {
+    "files": [],
+    "opts": {
+      "execute": false,
+      "executeParallel": 11,
+      "pdf": true,
+      "tex": false,
+      "typst": false,
+      "docx": false,
+      "md": false,
+      "xml": false,
+      "meca": false,
+      "cff": false,
+      "site": false,
+      "html": false,
+      "all": false,
+      "doiBib": false,
+      "watch": false,
+      "force": false,
+      "checkLinks": false,
+      "strict": false,
+      "ci": false,
+      "maxSizeWebp": 1572864,
+      "keepHost": false
+    }
+  },
+  "exports": [
+    {
+      "format": "pdf",
+      "template": "/workspace/report/custom_template",
+      "output": "/workspace/report/results_summary.pdf",
+      "articles": [
+        {
+          "file": "/workspace/report/report.ipynb",
+          "level": 0
+        }
+      ],
+      "$file": "/workspace/report/myst.yml",
+      "$project": "/workspace/report"
+    }
+  ]
+}
