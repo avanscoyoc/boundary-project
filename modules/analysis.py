@@ -346,10 +346,11 @@ def recategorize_biome(biome):
     str
         Recategorized biome name
     """
+    import pandas as pd
+    if pd.isna(biome) or biome in ("N/A", "Unknown", "None", ""):
+        return None
     if biome == "Mangroves":
         return "Mangrove"
-    elif biome in ["N/A", "Unknown"]:
-        return "Rock & Ice"
     elif biome in ["Tundra"]:
         return "Tundra"
     elif biome in ["Deserts & Xeric Shrublands"]:
