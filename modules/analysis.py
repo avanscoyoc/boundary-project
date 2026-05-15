@@ -294,13 +294,14 @@ def create_wdpa_dataset(transect_dir, attributes_path, index_name, output_path):
         transect_chunk = pd.read_parquet(transect_file).reset_index()
         
         for (wdpa, year), group in transect_chunk.groupby(['WDPA_PID','year']):
-            d02 = cohens_d(group['pt_0'], group['pt_2'])
-            d01 = cohens_d(group['pt_0'], group['pt_1'])
-            d0m1 = cohens_d(group['pt_0'], group['pt_m1'])
-            d0m2 = cohens_d(group['pt_0'], group['pt_m2'])
+            edge_extent = (group['edge']==1).sum() / len(group)
+            edge_group = group[group['edge']==1] #calculates cohen's d ONLY for transects with edges
+            d02 = cohens_d(edge_group['pt_0'], edge_group['pt_2'])
+            d01 = cohens_d(edge_group['pt_0'], edge_group['pt_1'])
+            d0m1 = cohens_d(edge_group['pt_0'], edge_group['pt_m1'])
+            d0m2 = cohens_d(edge_group['pt_0'], edge_group['pt_m2'])
             d_vals = np.array([d02, d01, d0m1, d0m2], dtype=float)
             edge_intensity = np.nan if np.any(np.isnan(d_vals)) else np.min(d_vals)
-            edge_extent = (group['edge']==1).sum() / len(group)
             
             wdpa_list.append({
                 'WDPA_PID': wdpa,
