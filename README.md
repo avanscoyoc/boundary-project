@@ -21,16 +21,36 @@ Phase 3: Analysis (Run Per Index)
 
 ### First Time Setup
 ```bash
-# 1. Configure your GEE project
-nano modules/config.py  # Edit GEE_PROJECT = 'your-project-id'
+# 1. Clone the repository
+git clone https://github.com/your-org/boundary-project.git
+cd boundary-project
 
-# 2. Run Phase 1 (Data Preparation)
+# 2. Open in VS Code and reopen in container
+code .
+# → VS Code will prompt "Reopen in Container" — click it
+# → Wait ~5 minutes for the container to build and install all dependencies
+
+# 3. Set your GEE project ID (required before running any script)
+nano modules/config.py  # Change GEE_PROJECT = 'YOUR-GEE-PROJECT' to your project ID
+
+# 4. Authenticate with Earth Engine (one-time, run in terminal inside the container)
+python3 -c "import ee; ee.Authenticate()"
+# → Follow the browser link, sign in with your Google account,
+#   copy the token back into the terminal when prompted
+
+# 5. Run Phase 1 (Data Preparation)
 python scripts/01_collect_protected_areas.py
 # → Download WDPA_polygons.geojson from Google Drive to data/raw/
 
 python scripts/02_generate_sampling_points.py
 # → Upload chunk_*.shp to GEE assets (see script output for paths)
 ```
+
+> **Reproducing the exact published analysis:** A frozen copy of `WDPA_polygons.geojson`
+> (WDPA August 2025 release) is archived on Zenodo: [https://doi.org/YOUR-ZENODO-DOI](https://doi.org/YOUR-ZENODO-DOI).
+> Download it and place it at `data/raw/WDPA_polygons.geojson`, then skip script 01 and
+> start from script 02. Running script 01 will fetch the latest WDPA release which may
+> include new or updated protected areas and produce different results.
 
 ### For Each Index (ndvi, lai, fpar, ndbi)
 ```bash
@@ -73,20 +93,26 @@ boundary-project/
 ## Setup
 
 ### Prerequisites
-- VS Code with Docker
-- Google Earth Engine account
+- [VS Code](https://code.visualstudio.com/) with the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) running
+- A [Google Earth Engine account](https://earthengine.google.com/signup/) with API access enabled
 
 ### Initial Setup
-1. Clone repository and open in VS Code
-2. Select **"Reopen in Container"** when prompted
-3. Wait for container to build (~2-3 minutes)
-4. Update `GEE_PROJECT` in [modules/config.py](modules/config.py) with your GEE project ID
-5. Authenticate with Earth Engine:
-   ```python
-   import ee
-   ee.Authenticate()
-   ee.Initialize(project='your-project-id')
+1. Clone the repository and open in VS Code:
+   ```bash
+   git clone https://github.com/your-org/boundary-project.git
+   code boundary-project
    ```
+2. When prompted, click **"Reopen in Container"** — VS Code will build the Docker container and install all pinned dependencies from `requirements.txt` (~5 minutes).
+3. Open `modules/config.py` and set your GEE project ID:
+   ```python
+   GEE_PROJECT = 'your-project-id'  # at the top of the file
+   ```
+4. Authenticate with Earth Engine in the VS Code terminal:
+   ```bash
+   python3 -c "import ee; ee.Authenticate()"
+   ```
+   Follow the browser link, sign in with your Google account, and paste the token back into the terminal. Credentials are stored inside the container and persist for the session.
 
 ## Detailed Workflow
 
@@ -99,6 +125,12 @@ python scripts/01_collect_protected_areas.py
 Filters WDPA polygons (≥200 km², non-marine), adds biome data, exports to Google Drive.
 
 **⚠️ MANUAL STEP**: Download `WDPA_polygons.geojson` from Google Drive → `data/raw/`
+
+> **Note on reproducibility:** The WDPA collection used is date-stamped (`WCMC/WDPA/202508/polygons`).
+> Future WDPA releases will contain updated protected area boundaries and may alter results.
+> A frozen snapshot from the August 2025 release is archived on Zenodo
+> ([https://doi.org/YOUR-ZENODO-DOI](https://doi.org/YOUR-ZENODO-DOI)). Download it to
+> `data/raw/WDPA_polygons.geojson` and skip this script to replicate the exact published analysis.
 
 #### Script 02: Generate Sampling Points
 ```bash
@@ -173,11 +205,14 @@ Edit [modules/config.py](modules/config.py) for:
 - Edit `modules/config.py`: set INDEX_NAME to 'ndvi', 'lai', 'fpar', or 'ndbi'
 
 **GEE authentication errors**
-```python
-import ee
-ee.Authenticate()  # Follow browser prompts
-ee.Initialize(project='your-project-id')
+```bash
+python3 -c "import ee; ee.Authenticate()"
 ```
+Follow the browser link, sign in, and paste the token into the terminal. Then re-run the script.
+
+**"GEE_PROJECT has not been set"**
+- Open `modules/config.py` and change `GEE_PROJECT = 'YOUR-GEE-PROJECT'` to your actual project ID
+- Your project ID is visible at [console.cloud.google.com](https://console.cloud.google.com/)
 
 ## Legacy Workflow
 

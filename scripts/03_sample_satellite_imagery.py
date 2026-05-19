@@ -78,9 +78,9 @@ image = staticImage.addBands(gradientBands)
 # Process all assets sequentially #305 minutes
 print("1. Wait for all export tasks to complete (~5 hours)")
 print("Monitor at: https://code.earthengine.google.com/tasks")
-total_assets = 11
+total_assets = config.NUM_CHUNKS
 for idx in range(total_assets):
-    asset = f'projects/dse-staff/assets/chunk_{idx:03d}'
+    asset = f'{config.GEE_ASSET_PREFIX}{idx:03d}'
     print(f"\nProcessing asset {idx + 1} of {total_assets}: {asset}")
     batch_sample_assets(asset, image, selectors, folder_name, config.INDEX_NAME)
     print(f"Asset {idx + 1} of {total_assets} complete")

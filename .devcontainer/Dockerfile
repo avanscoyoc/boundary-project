@@ -28,25 +28,5 @@ RUN apt-get update && \
     xz-utils && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-RUN pip3 install --no-cache-dir \
-    jupyterlab \
-    jupytext \
-    ipykernel \
-    notebook \
-    mystmd \
-    pandas \
-    numpy \
-    earthengine-api \
-    geemap \
-    rasterio \
-    folium \
-    ipyleaflet \
-    geopandas \
-    matplotlib \
-    imageio \
-    tifffile \
-    imagecodecs \
-    seaborn \
-    statsmodels \
-    pyarrow \
-    dask[dataframe]
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir -r requirements.txt

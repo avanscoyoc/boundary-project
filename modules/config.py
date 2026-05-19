@@ -34,6 +34,14 @@ RESULTS_RAW = RESULTS_DIR / "raw"
 RESULTS_FIGURES = RESULTS_DIR / "figures"
 
 # =====================================================================
+# Google Earth Engine Project - REQUIRED: SET THIS BEFORE RUNNING
+# =====================================================================
+
+# Replace with your GEE project ID (e.g. 'my-gee-project')
+# Find it at: https://console.cloud.google.com/
+GEE_PROJECT = 'YOUR-GEE-PROJECT'
+
+# =====================================================================
 # Index Selection - EDIT THIS TO CHANGE WHICH INDEX TO PROCESS
 # =====================================================================
 
@@ -121,9 +129,6 @@ GEE_BATCH_SIZE = 10
 # Google Earth Engine Settings
 # =====================================================================
 
-# GEE project ID - UPDATE THIS to your GEE project ID
-GEE_PROJECT = 'dse-staff'
-
 # GEE asset paths for transect chunks
 GEE_ASSET_PREFIX = f'projects/{GEE_PROJECT}/assets/chunk_'
 
@@ -166,6 +171,12 @@ INDEX_CONFIGS = {
 
 def validate_config():
     """Validate configuration settings."""
+    if GEE_PROJECT == 'YOUR-GEE-PROJECT':
+        raise ValueError(
+            "GEE_PROJECT has not been set. "
+            "Edit modules/config.py and replace 'YOUR-GEE-PROJECT' with your GEE project ID."
+        )
+
     if INDEX_NAME not in INDEX_CONFIGS:
         raise ValueError(
             f"Invalid INDEX_NAME: {INDEX_NAME}. "
