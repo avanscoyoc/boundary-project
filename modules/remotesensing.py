@@ -82,8 +82,8 @@ def get_biome(pa_feature):
     """
     Assign biome name to a protected area feature from RESOLVE Ecoregions.
     
-    Uses the centroid of the protected area to determine which ecoregion it falls
-    within, then extracts the biome name from that ecoregion.
+    Finds all intersecting ecoregions and assigns the biome of the ecoregion
+    with the largest intersection area with the protected area polygon.
     
     Parameters
     ----------
@@ -100,17 +100,22 @@ def get_biome(pa_feature):
     Uses RESOLVE/ECOREGIONS/2017 dataset. If no intersecting ecoregion is found,
     sets BIOME_NAME to 'Unknown'.
     """
-    # Get ECOREGIONS dynamically
     ECOREGIONS = ee.FeatureCollection("RESOLVE/ECOREGIONS/2017")
-    
-    # Get centroid of protected area
-    centroid = pa_feature.geometry().centroid()
-    # Find which ecoregion contains this centroid
-    intersecting_ecoregion = ECOREGIONS.filterBounds(centroid).first()
-    # Get biome name from that ecoregion
+    pa_geom = pa_feature.geometry()
+
+    # Get all ecoregions that intersect the PA
+    intersecting = ECOREGIONS.filterBounds(pa_geom)
+
+    # Compute actual intersection area for each candidate ecoregion
+    def add_intersection_area(eco):
+        area = eco.geometry().intersection(pa_geom, ee.ErrorMargin(1)).area()
+        return eco.set('intersection_area', area)
+
+    dominant = intersecting.map(add_intersection_area).sort('intersection_area', False).first()
+
     biome_name = ee.Algorithms.If(
-        intersecting_ecoregion,
-        intersecting_ecoregion.get('BIOME_NAME'),
+        dominant,
+        dominant.get('BIOME_NAME'),
         ee.String('Unknown')
     )
     return pa_feature.set('BIOME_NAME', biome_name)
