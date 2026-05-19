@@ -53,7 +53,7 @@ print(f"Export folder: {folder_name}")
 # Static layers 
 gsw = ee.Image('JRC/GSW1_4/GlobalSurfaceWater')
 hm = ee.ImageCollection('CSP/HM/GlobalHumanModification').mean()
-elevation = ee.Image('USGS/SRTMGL1_003').select('elevation')
+elevation = ee.ImageCollection('COPERNICUS/DEM/GLO30').select('DEM').mosaic().rename('elevation')
 slope = ee.Terrain.slope(elevation)
 
 staticImage = ee.Image.cat([
