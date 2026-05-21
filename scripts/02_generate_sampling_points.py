@@ -155,6 +155,7 @@ wdpa_buffers['geometry'] = wdpa_buffers.geometry.buffer(-config.BUFFER_DIST)
 wdpa_buffer_dict = dict(zip(wdpa_buffers['WDPA_PID'], wdpa_buffers['geometry']))
 del wdpa_buffers  # Free memory, only need the dictionary
 
+
 # Generate transects and output point files in chunks
 transect_output_dir = config.DATA_INTERMEDIATE / "transect_chunks"
 transect_output_dir.mkdir(parents=True, exist_ok=True)

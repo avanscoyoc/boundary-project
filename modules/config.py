@@ -39,7 +39,7 @@ RESULTS_FIGURES = RESULTS_DIR / "figures"
 
 # Replace with your GEE project ID (e.g. 'my-gee-project')
 # Find it at: https://console.cloud.google.com/
-GEE_PROJECT = 'YOUR-GEE-PROJECT'
+GEE_PROJECT = 'dse-staff'  # --- EDIT THIS ---
 
 # =====================================================================
 # Index Selection - EDIT THIS TO CHANGE WHICH INDEX TO PROCESS
