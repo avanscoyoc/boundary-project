@@ -79,7 +79,8 @@ image = staticImage.addBands(gradientBands)
 print("1. Wait for all export tasks to complete (~5 hours)")
 print("Monitor at: https://code.earthengine.google.com/tasks")
 total_assets = config.NUM_CHUNKS
-for idx in range(total_assets):
+print(f"Total chunks to process: {total_assets}")
+for idx in [10]:  # TEMP: run only chunk_010
     asset = f'{config.GEE_ASSET_PREFIX}{idx:03d}'
     print(f"\nProcessing asset {idx + 1} of {total_assets}: {asset}")
     batch_sample_assets(asset, image, selectors, folder_name, config.INDEX_NAME)
@@ -91,7 +92,7 @@ print("MANUAL STEP REQUIRED:")
 print("="*80)
 print(f"1. Download all CSV files from Google Drive folder: {folder_name}")
 print(f"2. Place them in: {config.RESULTS_RAW / f'{config.INDEX_NAME}_raw'}/")
-print("3. If you wish to calculate a different index (e.g., ndvi, ndbi, lai, fpar)")
+print("3. If you wish to calculate a different index (i.e., ndvi, ndbi, lai, fpar)")
 print("   change the 'INDEX_NAME' in modules/config.py and rerun this script.")
 print("4. Then run: python scripts/04_compute_edge_metrics.py")
 print("="*80)

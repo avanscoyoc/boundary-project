@@ -22,7 +22,7 @@ Output: data/intermediate/transect_chunks/chunk_*.shp
         data/processed/attributes_final.csv
 
 MANUAL STEP REQUIRED AFTER RUNNING:
-Upload chunk_000.shp through chunk_009.shp to Google Earth Engine as assets.
+Upload all chunk_*.shp files to Google Earth Engine as assets.
 
 Then run: python scripts/03_sample_satellite_imagery.py
 """

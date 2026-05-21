@@ -132,8 +132,8 @@ GEE_BATCH_SIZE = 10
 # GEE asset paths for transect chunks
 GEE_ASSET_PREFIX = f'projects/{GEE_PROJECT}/assets/chunk_'
 
-# Number of chunk files (0-9 = 10 chunks)
-NUM_CHUNKS = 10
+# Number of chunk files — derived dynamically from transect_chunks directory
+NUM_CHUNKS = len(sorted((DATA_INTERMEDIATE / 'transect_chunks').glob('chunk_*.shp')))
 
 # =====================================================================
 # Remote Sensing Index Configurations
