@@ -1,6 +1,6 @@
 __pycache__
 .DS_Store
-/data/
-/results/
-/old_data/
-/archive/
+data
+results
+old_data
+archive
