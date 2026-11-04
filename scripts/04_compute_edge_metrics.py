@@ -2,23 +2,23 @@
 Script 04: Compute Edge Metrics
 
 Processes raw satellite imagery data to compute edge detection metrics for each
-protected area transect.
+protected area transect, then aggregates them to protected area-year metrics
+with per-PA temporal trends.
 
 Workflow:
 1. Sort and combine raw CSV chunks by WDPA_PID
-2. Create transect-level dataset with Cohen's D edge effect measurements
-3. Create protected area-level dataset with aggregated metrics
-4. Save results as parquet files for efficient analysis
+2. Create transect-level dataset with edge detection
+3. Create protected area-level dataset with aggregated metrics (Cohen's d)
+4. Classify per-PA trends in edge extent and intensity; save final CSV
 
 BEFORE RUNNING:
 1. Download CSV files from Google Drive (see script 03 output)
 2. Ensure they are in: results/raw/{INDEX_NAME}_raw/
 
 OUTPUT:
-- results/transect_df_{INDEX_NAME}.parquet
+- results/raw/{INDEX_NAME}_raw/transect_chunks/{INDEX_NAME}_transect_chunk_*.parquet
 - results/wdpa_df_{INDEX_NAME}.parquet
-
-Then run: python scripts/05_analyze_results.py
+- results/wdpa_df_{INDEX_NAME}_trends.csv  (final PA-year dataset with trends)
 """
 
 import sys
@@ -34,7 +34,8 @@ from modules import config
 from modules.analysis import (
     sort_and_combine_csvs,
     create_transect_dataset,
-    create_wdpa_dataset
+    create_wdpa_dataset,
+    create_trends_dataset
 )
 
 print("="*80)
@@ -51,6 +52,7 @@ output_dir = config.RESULTS_DIR
 attributes_path = config.DATA_PROCESSED / "attributes_final.csv"
 transect_output = output_dir / f'transect_df_{config.INDEX_NAME}.parquet' 
 wdpa_output = output_dir / f'wdpa_df_{config.INDEX_NAME}.parquet'
+trends_output = output_dir / f'wdpa_df_{config.INDEX_NAME}_trends.csv'
 
 # Verify input files exist
 csv_files = list(raw_dir.glob('*.csv'))
@@ -99,12 +101,21 @@ create_wdpa_dataset(transect_dir, attributes_path, config.INDEX_NAME, wdpa_outpu
 wdpa_size = wdpa_output.stat().st_size / (1024**2)
 print(f"WDPA file: {wdpa_size:.1f} MB")
 
+# Step 4: Classify per-PA temporal trends
+print("\n" + "="*80)
+print("STEP 4: Classifying Temporal Trends")
+print("="*80)
+
+print("Recategorizing biomes and fitting per-PA trends (edge_extent, edge_intensity)...")
+wdpa_df = create_trends_dataset(wdpa_output, trends_output)
+print(f"Rows: {len(wdpa_df):,}  |  PAs: {wdpa_df['WDPA_PID'].nunique():,}")
+
 print("\n" + "="*80)
 print("PROCESSING COMPLETE")
 print("="*80)
 print(f"Transect chunks: {transect_dir}/")
 print(f"WDPA dataset: {wdpa_output}")
+print(f"Trends dataset: {trends_output}")
 print("Note: If you wish to calculate a different index (e.g., ndvi, ndbi, lai, fpar)")
 print("   change the 'INDEX_NAME' in modules/config.py and rerun this script.")
-print("\nNext step: python scripts/05_analyze_results.py")
 print("="*80)

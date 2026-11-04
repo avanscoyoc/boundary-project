@@ -6,6 +6,7 @@ This module contains functions for:
 - Pivoting data from long to wide format  
 - Computing edge detection metrics
 - Aggregating to WDPA-year level with Cohen's d effect sizes
+- Classifying per-PA temporal trends in edge metrics
 """
 
 import os
@@ -13,6 +14,7 @@ import glob
 import pandas as pd
 import numpy as np
 from pathlib import Path
+from scipy import stats
 
 
 def cohens_d(x, y):
@@ -372,3 +374,71 @@ def recategorize_biome(biome):
         return "Grassland & Shrubland"
     else:
         return biome
+
+
+def classify_trend(group, metric='edge_extent', alpha=0.05):
+    """
+    Classify temporal trend for a protected area using linear regression.
+
+    Returns a Series with 'trend_{suffix}' (classification string),
+    'slope_{suffix}', and 'p_value_{suffix}', where suffix is 'extent'
+    or 'intensity'.
+    """
+    X = group['year'].values
+    y = group[metric].values
+    suffix = metric.split('_')[1]
+    slope, intercept, r_value, p_value, std_err = stats.linregress(X, y)
+
+    if p_value < alpha:
+        trend = 'sig_increase' if slope > 0 else 'sig_decrease'
+    else:
+        if slope > 0:
+            trend = 'increase'
+        elif slope < 0:
+            trend = 'decrease'
+        else:
+            trend = 'no_change'
+
+    return pd.Series({f'trend_{suffix}': trend, f'slope_{suffix}': slope, f'p_value_{suffix}': p_value})
+
+
+def create_trends_dataset(wdpa_path, output_path, metrics=('edge_extent', 'edge_intensity')):
+    """
+    Add per-PA temporal trends to the WDPA-year dataset and save it as CSV.
+
+    Recategorizes BIOME_NAME (recategorize_biome), fits an OLS trend of each
+    metric on year for every PA (classify_trend), and merges the trend_,
+    slope_, and p_value_ columns onto each PA-year row.
+
+    Parameters
+    ----------
+    wdpa_path : str or Path
+        WDPA-year parquet written by create_wdpa_dataset.
+    output_path : str or Path
+        Output CSV path (e.g., results/wdpa_df_{index}_trends.csv).
+    metrics : tuple of str, optional
+        Metric columns to compute trends for.
+
+    Returns
+    -------
+    DataFrame
+        WDPA-year dataset with trend columns.
+    """
+    wdpa_df = pd.read_parquet(wdpa_path)
+    wdpa_df['BIOME_NAME'] = wdpa_df['BIOME_NAME'].apply(recategorize_biome)
+
+    for metric in metrics:
+        trends = (
+            wdpa_df.groupby('WDPA_PID')
+            .apply(classify_trend, metric=metric, include_groups=False)
+            .reset_index()
+        )
+        wdpa_df = wdpa_df.merge(trends, on='WDPA_PID', how='left')
+
+    # edge_intensity_max: max Cohen's d across all four comparisons (NaN if any component is NaN) to compare
+    #wdpa_df['edge_intensity_max'] = wdpa_df[['D02', 'D01', 'D0m1', 'D0m2']].max(axis=1, skipna=False)
+
+    wdpa_df.to_csv(output_path, index=False)
+    print(f"Trends dataset saved to {output_path}")
+
+    return wdpa_df

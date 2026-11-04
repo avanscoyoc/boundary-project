@@ -15,8 +15,7 @@ Phase 2: Remote Sensing (Run Per Index)
 └── 03_sample_satellite_imagery.py    → Sample in GEE → Manual download
 
 Phase 3: Analysis (Run Per Index)
-├── 04_compute_edge_metrics.py        → Compute edge effects
-└── 05_analyze_results.py             → Generate statistics & figures
+└── 04_compute_edge_metrics.py        → Edge metrics + per-PA trends → final CSV
 ```
 
 ### First Time Setup
@@ -61,33 +60,32 @@ nano modules/config.py  # Change INDEX_NAME = 'ndvi'
 python scripts/03_sample_satellite_imagery.py
 # → Download CSVs from Google Drive to results/raw/{index}_raw/
 
-# 3. Process and analyze
+# 3. Compute edge metrics and trends
 python scripts/04_compute_edge_metrics.py
-python scripts/05_analyze_results.py
+# → results/wdpa_df_{index}_trends.csv (final PA-year dataset with trends)
 ```
 
 ## Project Structure
 ```
 boundary-project/
-├── scripts/                  # Main workflow (5 scripts)
+├── scripts/                  # Main workflow (4 scripts)
 │   ├── 01_collect_protected_areas.py
 │   ├── 02_generate_sampling_points.py
 │   ├── 03_sample_satellite_imagery.py
-│   ├── 04_compute_edge_metrics.py
-│   └── 05_analyze_results.py
+│   └── 04_compute_edge_metrics.py
 ├── modules/                  # Reusable domain logic
 │   ├── config.py             # All parameters and paths
 │   ├── remotesensing.py      # Google Earth Engine functions
 │   ├── preprocessing.py      # Geometry and transect generation
-│   ├── analysis.py           # Data processing and edge detection
-│   └── plotting.py           # Statistical models and visualization
+│   └── analysis.py           # Edge detection, PA metrics, trend classification
 ├── data/
 │   ├── raw/                  # WDPA_polygons.geojson
 │   ├── intermediate/         # wdpa_filtered/, transect_chunks/
 │   └── processed/            # attributes_final.csv
 └── results/
-    ├── raw/                  # ndvi_raw/, lai_raw/, fpar_raw/, ndbi_raw/
-    └── figures/              # Statistical outputs and plots
+    ├── raw/                  # ndvi_raw/, lai_raw/, fpar_raw/, ndbi_raw/ (GEE CSVs + transect_chunks/)
+    ├── wdpa_df_{index}.parquet
+    └── wdpa_df_{index}_trends.csv   # Final PA-year dataset with trends
 ```
 
 ## Setup
@@ -161,15 +159,8 @@ Samples MODIS imagery (2003-2025) at transect points, exports ~180 CSV files to 
 ```bash
 python scripts/04_compute_edge_metrics.py
 ```
-Combines CSVs, computes Cohen's d effect sizes for edge detection.
-- Output: `results/transect_df_{index}.parquet`, `results/wdpa_df_{index}.parquet`
-
-#### Script 05: Analyze Results
-```bash
-python scripts/05_analyze_results.py
-```
-Generates summary statistics, ANOVA, regression models, and figures.
-- Output: `results/figures/{index}_*.txt`, `results/figures/{index}_*.png`
+Combines CSVs, flags edge transects, aggregates to PA-year edge extent and edge intensity (Cohen's d), then fits an OLS trend of each metric on year for every PA.
+- Output: `results/raw/{index}_raw/transect_chunks/{index}_transect_chunk_*.parquet`, `results/wdpa_df_{index}.parquet`, `results/wdpa_df_{index}_trends.csv` (final dataset)
 
 ## Configuration
 

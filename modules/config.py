@@ -9,7 +9,7 @@ This module centralizes all configurable parameters including:
 - Google Earth Engine settings
 
 To run the workflow for different indices, edit INDEX_NAME below and re-run
-scripts 03-05.
+scripts 03-04.
 """
 
 import os
@@ -31,7 +31,6 @@ DATA_PROCESSED = DATA_DIR / "processed"
 # Results directories
 RESULTS_DIR = PROJECT_ROOT / "results"
 RESULTS_RAW = RESULTS_DIR / "raw"
-RESULTS_FIGURES = RESULTS_DIR / "figures"
 
 # =====================================================================
 # Google Earth Engine Project - REQUIRED: SET THIS BEFORE RUNNING
