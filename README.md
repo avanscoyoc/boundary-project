@@ -210,4 +210,8 @@ Follow the browser link, sign in, and paste the token into the terminal. Then re
 The original workflow in `src/` remains available for reference.
 
 ## License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+The code in this project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+**Data:** Protected area boundaries and attributes come from the World Database on Protected Areas (WDPA) and are not covered by the MIT License. They are subject to the [Protected Planet Terms and Conditions](https://www.protectedplanet.net/en/legal): the data may not be redistributed, sub-licensed (including within derivative works), or put to commercial use (including derivative works) without prior written permission from UNEP-WCMC. Obtain the data from [Protected Planet](https://www.protectedplanet.net) or Earth Engine (`WCMC/WDPA/202508/polygons`), and cite it as:
+
+> UNEP-WCMC and IUCN (2025), Protected Planet: The World Database on Protected Areas (WDPA) [On-line], August 2025, Cambridge, UK: UNEP-WCMC and IUCN. Available at: www.protectedplanet.net.
