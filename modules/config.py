@@ -38,7 +38,7 @@ RESULTS_RAW = RESULTS_DIR / "raw"
 
 # Replace with your GEE project ID (e.g. 'my-gee-project')
 # Find it at: https://console.cloud.google.com/
-GEE_PROJECT = 'dse-staff'  # --- EDIT THIS ---
+GEE_PROJECT = 'YOUR-GEE-PROJECT'  # --- EDIT THIS ---
 
 # =====================================================================
 # Index Selection - EDIT THIS TO CHANGE WHICH INDEX TO PROCESS
@@ -131,8 +131,14 @@ GEE_BATCH_SIZE = 10
 # GEE asset paths for transect chunks
 GEE_ASSET_PREFIX = f'projects/{GEE_PROJECT}/assets/chunk_'
 
-# Number of chunk files — derived dynamically from transect_chunks directory
-NUM_CHUNKS = len(sorted((DATA_INTERMEDIATE / 'transect_chunks').glob('chunk_*.shp')))
+def get_num_chunks():
+    """
+    Count the chunk_*.shp files written by script 02.
+
+    Counted when called (not on import), so the result reflects the files
+    on disk at that moment rather than when config was first imported.
+    """
+    return len(list((DATA_INTERMEDIATE / 'transect_chunks').glob('chunk_*.shp')))
 
 # =====================================================================
 # Remote Sensing Index Configurations

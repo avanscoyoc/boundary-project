@@ -45,9 +45,6 @@ from modules.preprocessing import (
     filter_and_save_removed, generate_pa_transects_in_chunks, 
     combine_chunks_to_files
 )
-import ee
-ee.Authenticate()
-ee.Initialize(project=config.GEE_PROJECT)
 
 print("="*80)
 print("SCRIPT 02: Generate Sampling Points")

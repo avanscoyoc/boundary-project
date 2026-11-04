@@ -559,7 +559,15 @@ def generate_pa_transects_in_chunks(wdpa_gdf, wdpa_buffer_dict, sample_dist, tra
     
     os.makedirs(output_dir, exist_ok=True)
     source_crs = wdpa_gdf.crs
-    
+
+    # Clean old chunks (all shapefile components) so a previous run that produced
+    # more chunks can't leave stale files behind for script 03 or combine_chunks_to_files
+    old_files = glob.glob(os.path.join(output_dir, "chunk_[0-9][0-9][0-9].*"))
+    for old_file in old_files:
+        os.remove(old_file)
+    if old_files:
+        print(f"Removed {len(old_files)} old chunk files from {output_dir}")
+
     print(f"Processing {len(wdpa_gdf)} protected areas with streaming filter...")
     chunk_files = []
     chunk_num = 0

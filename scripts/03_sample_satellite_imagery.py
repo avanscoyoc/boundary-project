@@ -78,11 +78,11 @@ image = staticImage.addBands(gradientBands)
 # Process all assets sequentially #305 minutes
 print("1. Wait for all export tasks to complete (~5 hours)")
 print("Monitor at: https://code.earthengine.google.com/tasks")
-total_assets = config.NUM_CHUNKS
+total_assets = config.get_num_chunks()
 if total_assets == 0:
     raise FileNotFoundError(
         f"No chunk_*.shp files found in {config.DATA_INTERMEDIATE / 'transect_chunks'}. "
-        "NUM_CHUNKS is derived from these files; run script 02 first."
+        "The number of chunks to sample is counted from these files; run script 02 first."
     )
 print(f"Total chunks to process: {total_assets}")
 for idx in range(total_assets):

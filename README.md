@@ -1,7 +1,7 @@
 # Protected Area Edge Analysis
 
 ## Overview
-This project analyzes change in landscape gradients at protected area boundaries using Earth Engine and geospatial methods. The workflow processes ~4,000 protected areas globally, generating perpendicular transects at boundaries to sample environmental variables including vegetation indices (NDVI, LAI, FPAR), built-up index (NDBI), water presence, human modification, and topography from satellite imagery (2003-2025). The analysis produces ~8.6 million transect points with edge detection metrics to quantify annual change in boundary sharpness from 2003 - 2025.
+This project analyzes change in landscape gradients at protected area boundaries using Earth Engine and geospatial methods. The workflow processes ~4,000 protected areas globally, generating perpendicular transects at boundaries to sample environmental variables including vegetation indices (NDVI, LAI, FPAR), built-up index (NDBI), water presence, human modification, and topography from satellite imagery (2003-2025). The analysis produces ~8.9 million transect points with edge detection metrics to quantify annual change in boundary sharpness from 2003 - 2025.
 
 ## Quick Start
 
@@ -45,11 +45,10 @@ python scripts/02_generate_sampling_points.py
 # → Upload chunk_*.shp to GEE assets (see script output for paths)
 ```
 
-> **Reproducing the exact published analysis:** A frozen copy of `WDPA_polygons.geojson`
-> (WDPA August 2025 release) is archived on Zenodo: [https://doi.org/YOUR-ZENODO-DOI](https://doi.org/YOUR-ZENODO-DOI).
-> Download it and place it at `data/raw/WDPA_polygons.geojson`, then skip script 01 and
-> start from script 02. Running script 01 will fetch the latest WDPA release which may
-> include new or updated protected areas and produce different results.
+> **Reproducing the exact published analysis:** Script 01 reads a date-stamped WDPA release
+> (`WCMC/WDPA/202508/polygons`, August 2025). Earth Engine keeps historical monthly releases,
+> so re-running script 01 reproduces the input used here. `WDPA_polygons.geojson` is not
+> included in this repository because the WDPA terms do not allow redistribution (see [License](#license)).
 
 ### For Each Index (ndvi, lai, fpar, ndbi)
 ```bash
@@ -124,19 +123,18 @@ Filters WDPA polygons (≥200 km², non-marine), adds biome data, exports to Goo
 
 **⚠️ MANUAL STEP**: Download `WDPA_polygons.geojson` from Google Drive → `data/raw/`
 
-> **Note on reproducibility:** The WDPA collection used is date-stamped (`WCMC/WDPA/202508/polygons`).
-> Future WDPA releases will contain updated protected area boundaries and may alter results.
-> A frozen snapshot from the August 2025 release is archived on Zenodo
-> ([https://doi.org/YOUR-ZENODO-DOI](https://doi.org/YOUR-ZENODO-DOI)). Download it to
-> `data/raw/WDPA_polygons.geojson` and skip this script to replicate the exact published analysis.
+> **Note on reproducibility:** The WDPA collection is date-stamped (`WDPA_COLLECTION = "WCMC/WDPA/202508/polygons"`
+> in `modules/config.py`). Earth Engine keeps historical monthly releases back to July 2017, so re-running this
+> script reproduces the published input. Newer releases (e.g., `WCMC/WDPA/current/polygons`) contain updated
+> protected area boundaries and may alter results.
 
 #### Script 02: Generate Sampling Points
 ```bash
 python scripts/02_generate_sampling_points.py
 ```
-Cleans geometries, removes overlaps, generates perpendicular transects (5 points per transect: 2 inner, 1 boundary, 2 outer), chunks into 10 files (~8.6M points total).
+Cleans geometries, removes overlaps, generates perpendicular transects (5 points per transect: 2 inner, 1 boundary, 2 outer), writes chunks of `CHUNK_SIZE` (400) PAs each (currently 11 files, chunk_000–chunk_010; ~8.9M points total). Old chunk files are deleted before each run.
 
-**⚠️ MANUAL STEP**: Upload chunk_000.shp through chunk_009.shp to GEE as assets `projects/{your-project}/assets/chunk_XXX`
+**⚠️ MANUAL STEP**: Upload every chunk_*.shp file (chunk_000.shp onward) to GEE as assets `projects/{your-project}/assets/chunk_XXX`. Script 03 samples one asset per local chunk file.
 
 ---
 
