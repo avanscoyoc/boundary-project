@@ -1,48 +1,36 @@
 # Protected Area Edge Analysis
 
 ## Overview
-This project analyzes change in landscape gradients at protected area boundaries using Earth Engine and geospatial methods. The workflow processes ~4,000 protected areas globally, generating perpendicular transects at boundaries to sample environmental variables including vegetation indices (NDVI, LAI, FPAR), built-up index (NDBI), water presence, human modification, and topography from satellite imagery (2003-2025). The analysis produces ~8.9 million transect points with edge detection metrics to quantify annual change in boundary sharpness from 2003 - 2025.
+This project analyzes change in vegetation contrast at protected area (PA) boundaries using Google Earth Engine and geospatial methods. The workflow selects ~4,000 terrestrial PAs from the WDPA, generates transects perpendicular to each boundary, samples the gradient magnitude of annual median NDVI (MODIS MOD13A1, 2003–2025) plus water, human modification, and topography at every point, and computes yearly edge metrics and their trends for each PA.
 
 ## Quick Start
 
 ### Workflow Overview
 ```
-Phase 1: Data Preparation (Run Once)
-├── 01_collect_protected_areas.py     → Export to GEE → Manual download
-└── 02_generate_sampling_points.py    → Filter + transects → Manual upload to GEE
-
-Phase 2: Remote Sensing (Run Per Index)
-└── 03_sample_satellite_imagery.py    → Sample in GEE → Manual download
-
-Phase 3: Analysis (Run Per Index)
-└── 04_compute_edge_metrics.py        → Edge metrics + per-PA trends → final CSV
+01_collect_protected_areas.py   → filter WDPA in Earth Engine → download GeoJSON from Drive
+02_generate_sampling_points.py  → choose PAs + build transects → upload zips to Earth Engine
+03_sample_satellite_imagery.py  → sample NDVI gradients in Earth Engine → download CSVs from Drive
+04_compute_edge_metrics.py      → transect-years, PA-year metrics, trends → final CSV
 ```
 
-### First Time Setup
+### Run the pipeline
 ```bash
-# 1. Clone the repository
-git clone https://github.com/your-org/boundary-project.git
-cd boundary-project
-
-# 2. Open in VS Code and reopen in container
-code .
-# → VS Code will prompt "Reopen in Container" — click it
-# → Wait ~5 minutes for the container to build and install all dependencies
-
-# 3. Set your GEE project ID (required before running any script)
-nano modules/config.py  # Change GEE_PROJECT = 'YOUR-GEE-PROJECT' to your project ID
-
-# 4. Authenticate with Earth Engine (one-time, run in terminal inside the container)
-python3 -c "import ee; ee.Authenticate()"
-# → Follow the browser link, sign in with your Google account,
-#   copy the token back into the terminal when prompted
-
-# 5. Run Phase 1 (Data Preparation)
+# 1. Protected areas (Earth Engine, ~2 h) — or skip and reuse an existing download
 python scripts/01_collect_protected_areas.py
-# → Download WDPA_polygons.geojson from Google Drive to data/raw/
+# → Download WDPA_polygons.geojson from Google Drive to data/01_wdpa/
 
+# 2. Choose PAs and build transects (local)
 python scripts/02_generate_sampling_points.py
-# → Upload chunk_*.shp to GEE assets (see script output for paths)
+# → Upload each data/02_transects/upload/transect_points_v2_NNN.zip as an Earth Engine table asset
+
+# 3. Sample NDVI gradients (Earth Engine, ~5 h) — test one part first
+python scripts/03_sample_satellite_imagery.py --test
+python scripts/03_sample_satellite_imagery.py
+# → Download all CSVs from Drive folder ndvi_gradient_v2 to data/03_gee/
+
+# 4. Edge metrics and trends (local)
+python scripts/04_compute_edge_metrics.py
+# → results/pa_edge_metrics_ndvi.csv
 ```
 
 > **Reproducing the exact published analysis:** Script 01 reads a date-stamped WDPA release
@@ -50,42 +38,49 @@ python scripts/02_generate_sampling_points.py
 > so re-running script 01 reproduces the input used here. `WDPA_polygons.geojson` is not
 > included in this repository because the WDPA terms do not allow redistribution (see [License](#license)).
 
-### For Each Index (ndvi, lai, fpar, ndbi)
-```bash
-# 1. Set index in config
-nano modules/config.py  # Change INDEX_NAME = 'ndvi'
-
-# 2. Sample satellite imagery
-python scripts/03_sample_satellite_imagery.py
-# → Download CSVs from Google Drive to results/raw/{index}_raw/
-
-# 3. Compute edge metrics and trends
-python scripts/04_compute_edge_metrics.py
-# → results/wdpa_df_{index}_trends.csv (final PA-year dataset with trends)
-```
-
 ## Project Structure
 ```
 boundary-project/
-├── scripts/                  # Main workflow (4 scripts)
+├── scripts/                     # Main workflow (4 scripts)
 │   ├── 01_collect_protected_areas.py
 │   ├── 02_generate_sampling_points.py
 │   ├── 03_sample_satellite_imagery.py
 │   └── 04_compute_edge_metrics.py
-├── modules/                  # Reusable domain logic
-│   ├── config.py             # All parameters and paths
-│   ├── remotesensing.py      # Google Earth Engine functions
-│   ├── preprocessing.py      # Geometry and transect generation
-│   └── analysis.py           # Edge detection, PA metrics, trend classification
-├── data/
-│   ├── raw/                  # WDPA_polygons.geojson
-│   ├── intermediate/         # wdpa_filtered/, transect_chunks/
-│   └── processed/            # attributes_final.csv
+├── modules/                     # Reusable domain logic
+│   ├── config.py                # All parameters and paths
+│   ├── remotesensing.py         # Google Earth Engine functions
+│   ├── preprocessing.py         # PA selection and transect generation
+│   ├── analysis.py              # Edge detection, PA-year metrics, trends
+│   └── counts.py                # Writes results/pipeline_counts.json
+├── tests/                       # Unit tests (python -m pytest tests/)
+├── data/                        # Each folder is filled by the script with the same number
+│   ├── 01_wdpa/                 # WDPA_polygons.geojson               (download after script 01)
+│   ├── 02_pas/                  # pas_selected.gpkg, pas_removed.gpkg
+│   ├── 02_transects/            # transect_points.parquet
+│   │   └── upload/              # transect_points_v2_NNN.zip          (upload to Earth Engine)
+│   ├── 03_gee/                  # ndvi_gradient_v2_NNN_part_N.csv     (download after script 03)
+│   └── 04_transect_years/       # ndvi_NNN.parquet, one row per transect-year
 └── results/
-    ├── raw/                  # ndvi_raw/, lai_raw/, fpar_raw/, ndbi_raw/ (GEE CSVs + transect_chunks/)
-    ├── wdpa_df_{index}.parquet
-    └── wdpa_df_{index}_trends.csv   # Final PA-year dataset with trends
+    ├── pa_edge_metrics_ndvi.csv # FINAL: one row per PA-year
+    └── pipeline_counts.json     # PA and transect counts at every step (for the methods)
 ```
+
+## Outputs
+
+**`results/pa_edge_metrics_ndvi.csv`** — one row per PA-year:
+- PA attributes from the WDPA (name, country, IUCN category, establishment year, biome, …), plus `MERGED_PID`, `AREA_KM2`, `SHAPE_RATIO`
+- Transect coverage per PA (script 02): `N_TRNST_GEN` (transects generated, one per 500 m of boundary), `N_TRNST` (kept after the whole-line check), `PCT_KEPT` (% kept), and `MAX_GAP_PCT` (longest run of dropped transects as % of the boundary; 0 = full coverage)
+- Four versions of every metric, by suffix: none (all transects), `_nowater` (no transects with water), `_nootherpa` (no transects whose outer points fall in another PA), `_noflags` (neither)
+  - `n_trnst*`: complete transects that year
+  - `edge_extent*`: share of transects that are edges (`pt_0 > min(pt_1, pt_2)` and `pt_0 > min(pt_m1, pt_m2)`)
+  - `D02*`, `D01*`, `D0m1*`, `D0m2*`: Cohen's d of the boundary point vs each other position, on edge transects
+  - `edge_intensity*`: mean of the four Cohen's d values
+  - `trend_*`, `slope_*`, `p_value_*`: per-PA OLS trend on year (≥ 5 years of data)
+- Covariates: `gHM_mean`, `elevation_mean`, `slope_mean`, `water_extent_pct`, `in_other_pa_pct`
+
+**`data/04_transect_years/ndvi_NNN.parquet`** — one row per complete transect-year: the five gradient values (`pt_m2` … `pt_2`), `edge`, and the per-transect flags `water_extent` and `in_other_pa`.
+
+**`results/pipeline_counts.json`** — counts at every PA filter and transect check (script 02) and per-year transect completeness (script 04).
 
 ## Setup
 
@@ -113,72 +108,70 @@ boundary-project/
 
 ## Detailed Workflow
 
-### Phase 1: Data Preparation (Run Once)
-
-#### Script 01: Collect Protected Areas
+### Script 01: Collect Protected Areas (Earth Engine)
 ```bash
 python scripts/01_collect_protected_areas.py
 ```
-Filters WDPA polygons (≥200 km², non-marine), adds biome data, exports to Google Drive.
+Filters WDPA polygons (single-part polygons, ≥ 200 km², terrestrial, designated/established/inscribed; no marine PAs or UNESCO-MAB Biosphere Reserves; 11 PIDs excluded by hand), assigns the RESOLVE biome with the largest overlap, and exports to Google Drive.
 
-**⚠️ MANUAL STEP**: Download `WDPA_polygons.geojson` from Google Drive → `data/raw/`
+**⚠️ MANUAL STEP**: Download `WDPA_polygons.geojson` from Google Drive → `data/01_wdpa/`
 
 > **Note on reproducibility:** The WDPA collection is date-stamped (`WDPA_COLLECTION = "WCMC/WDPA/202508/polygons"`
 > in `modules/config.py`). Earth Engine keeps historical monthly releases back to July 2017, so re-running this
 > script reproduces the published input. Newer releases (e.g., `WCMC/WDPA/current/polygons`) contain updated
 > protected area boundaries and may alter results.
 
-#### Script 02: Generate Sampling Points
+### Script 02: Choose PAs and Generate Transects (local)
 ```bash
 python scripts/02_generate_sampling_points.py
 ```
-Cleans geometries, removes overlaps, generates perpendicular transects (5 points per transect: 2 inner, 1 boundary, 2 outer), writes chunks of `CHUNK_SIZE` (400) PAs each (currently 11 files, chunk_000–chunk_010; ~8.9M points total). Old chunk files are deleted before each run.
+Part 1 — choose PAs (equal-area Mollweide):
+1. Fill holes smaller than 2.25 km²
+2. Duplicates (overlap > 90% of both PAs): keep the oldest. Nested PAs (overlap > 90% of the smaller only): keep the larger
+3. Same `ORIG_NAME` + `ISO3` and touching or overlapping: dissolve into one PA, keeping the oldest establishment year (`MERGED_PID` lists the merged PAs)
+4. Compute geodesic area, perimeter, and shape ratio (perimeter / √area), for information only; there is no shape filter
 
-**⚠️ MANUAL STEP**: Upload every chunk_*.shp file (chunk_000.shp onward) to GEE as assets `projects/{your-project}/assets/chunk_XXX`. Script 03 samples one asset per local chunk file.
+Part 2 — transects (each PA in its own azimuthal equidistant projection, so distances are true meters):
+1. Remove PAs with no interior at least 5.5 km from the edge
+2. Boundary points every 500 m; transects of 5 points 2.5 km apart (2 inner, 1 boundary, 2 outer)
+3. Keep a transect only if its inner half lies within the PA and its outer half lies outside it
+4. Remove PAs whose longest unsampled stretch of boundary is more than 25% of the boundary (`MAX_GAP_PCT_LIMIT`)
+5. Flag transects whose outer points fall inside another PA (`in_other_pa`)
+6. Write upload zips of 400 whole PAs each, and every point to `transect_points.parquet`
 
----
+Removed PAs, with the step, reason, and the PA that replaced them, are in `data/02_pas/pas_removed.gpkg`.
 
-### Phase 2: Remote Sensing (Run Per Index)
+**⚠️ MANUAL STEP**: Upload each `data/02_transects/upload/transect_points_v2_NNN.zip` as its own Earth Engine table asset `transect_points_v2_NNN` (script 02 prints the full list). One asset per file: a single large upload can fail.
 
-#### Script 03: Sample Satellite Imagery
+### Script 03: Sample Satellite Imagery (Earth Engine)
 ```bash
-# Edit modules/config.py: INDEX_NAME = 'ndvi'  # or 'lai', 'fpar', 'ndbi'
-python scripts/03_sample_satellite_imagery.py
+python scripts/03_sample_satellite_imagery.py --test   # one part of asset 000
+python scripts/03_sample_satellite_imagery.py          # everything (~5 h)
 ```
-Samples MODIS imagery (2003-2025) at transect points, exports ~180 CSV files to Google Drive.
+Computes the gradient magnitude of each annual median NDVI composite (MOD13A1, 2003–2025) on the native MODIS grid and samples it, with water (JRC GSW max extent), human modification (gHM), elevation and slope (Copernicus GLO-30), at every point. Each asset is exported in parts of 50,000 points.
 
-**⚠️ MANUAL STEP**: Download all CSVs from Google Drive folder `{index}_raw` → `results/raw/{index}_raw/`
+**⚠️ MANUAL STEP**: Download **all** CSVs from Google Drive folder `ndvi_gradient_v2` → `data/03_gee/`
 
----
-
-### Phase 3: Analysis (Run Per Index)
-
-#### Script 04: Compute Edge Metrics
+### Script 04: Compute Edge Metrics (local)
 ```bash
 python scripts/04_compute_edge_metrics.py
 ```
-Combines CSVs, flags edge transects, aggregates to PA-year edge extent and edge intensity (Cohen's d), then fits an OLS trend of each metric on year for every PA.
-- Output: `results/raw/{index}_raw/transect_chunks/{index}_transect_chunk_*.parquet`, `results/wdpa_df_{index}.parquet`, `results/wdpa_df_{index}_trends.csv` (final dataset)
+Processes one asset at a time: checks that every exported point arrived exactly once, builds one row per complete transect-year, computes PA-year metrics for the four transect subsets, merges PA attributes, and adds per-PA trends. See [Outputs](#outputs).
 
 ## Configuration
 
 Edit [modules/config.py](modules/config.py) for:
 
-**Required settings**:
+**Required settings** (scripts 01 and 03):
 - `GEE_PROJECT`: Your Google Earth Engine project ID
-- `INDEX_NAME`: Current index ('ndvi', 'lai', 'fpar', 'ndbi')
 
-**Optional settings** (defaults work for most cases):
-- `START_YEAR`, `END_YEAR`: Analysis time period (default: 2003-2025)
-- `BOUNDARY_SPACING`: Distance between boundary points (default: 500m)
-- `TRANSECT_SPACING`: Distance between transects (default: 2500m)
-- `POINTS_PER_TRANSECT`: Points on each side of boundary (default: 2)
-
-**Indices available**:
-- NDVI: Normalized Difference Vegetation Index (MOD13A1)
-- LAI: Leaf Area Index (MCD15A3H)
-- FPAR: Fraction Photosynthetically Active Radiation (MCD15A3H)
-- NDBI: Normalized Difference Built-up Index (MOD09GA)
+**Optional settings** (defaults reproduce the analysis):
+- `START_YEAR`, `END_YEAR`: Analysis period (default: 2003–2025)
+- `BOUNDARY_SPACING`: Distance between boundary points (default: 500 m)
+- `TRANSECT_SPACING`: Distance between points along a transect (default: 2,500 m)
+- `POINTS_PER_SIDE`: Points on each side of the boundary (default: 2)
+- `CHUNK_SIZE`: PAs per upload file (default: 400)
+- `RUN_TAG`: Tag in Earth Engine asset and Drive folder names (default: `v2`); change it for a new full re-run so old and new outputs never mix
 
 ## Troubleshooting
 
@@ -186,12 +179,12 @@ Edit [modules/config.py](modules/config.py) for:
 - Ensure previous scripts completed successfully
 - Check that manual download/upload steps were completed
 
-**"No CSV files found"**
-- Download GEE results to correct folder: `results/raw/{index}_raw/`
-- Verify all CSV files from Google Drive are present
+**"No CSV files found"** or **"expected points missing"** (script 04)
+- Download every CSV from the Drive folder `ndvi_gradient_v2` into `data/03_gee/`
+- Script 04 compares the CSVs with `transect_points.parquet` and reports missing or duplicate points
 
-**"Invalid INDEX_NAME"**
-- Edit `modules/config.py`: set INDEX_NAME to 'ndvi', 'lai', 'fpar', or 'ndbi'
+**"duplicate points in the CSVs"** (script 04)
+- A CSV part was downloaded twice (e.g. the `--test` part and the full run); keep one copy
 
 **GEE authentication errors**
 ```bash

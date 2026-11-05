@@ -1,121 +1,157 @@
 """
 Script 04: Compute Edge Metrics
 
-Processes raw satellite imagery data to compute edge detection metrics for each
-protected area transect, then aggregates them to protected area-year metrics
-with per-PA temporal trends.
+Turns the Earth Engine exports into transect-year data and PA-year edge metrics
+with per-PA trends.
 
-Workflow:
-1. Sort and combine raw CSV chunks by WDPA_PID
-2. Create transect-level dataset with edge detection
-3. Create protected area-level dataset with aggregated metrics (Cohen's d)
-4. Classify per-PA trends in edge extent and intensity; save final CSV
+Workflow (one asset at a time; every PA lies within a single asset):
+1. Read the asset's CSV parts and check every exported point arrived exactly once
+2. Build one row per complete transect-year (all 5 points have a value):
+   edge flag, water_extent and in_other_pa flags, covariates
+3. Compute PA-year metrics for four versions: all transects, without water,
+   without other-PA, without either flag
+4. Merge PA attributes (from pas_selected.gpkg), recategorize biomes, and add
+   per-PA OLS trends for every extent and intensity metric
+
+Edge: pt_0 > min(pt_1, pt_2) and pt_0 > min(pt_m1, pt_m2).
+Edge intensity: mean of the four Cohen's d values (pt_0 vs each position),
+computed on edge transects only.
 
 BEFORE RUNNING:
-1. Download CSV files from Google Drive (see script 03 output)
-2. Ensure they are in: results/raw/{INDEX_NAME}_raw/
+Download all CSVs from the Google Drive folder (see script 03 output) into data/03_gee/
 
 OUTPUT:
-- results/raw/{INDEX_NAME}_raw/transect_chunks/{INDEX_NAME}_transect_chunk_*.parquet
-- results/wdpa_df_{INDEX_NAME}.parquet
-- results/wdpa_df_{INDEX_NAME}_trends.csv  (final PA-year dataset with trends)
+- data/04_transect_years/ndvi_NNN.parquet  (one per asset)
+- results/pa_edge_metrics_ndvi.csv           (FINAL: one row per PA-year)
+- results/pipeline_counts.json               (section '04_ndvi')
 """
 
 import sys
+import gc
+import time
 from pathlib import Path
 
 # Add project root to Python path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-import os
 import pandas as pd
+import pyogrio
 from modules import config
+from modules.counts import update_counts
 from modules.analysis import (
-    sort_and_combine_csvs,
-    create_transect_dataset,
-    create_wdpa_dataset,
-    create_trends_dataset
+    find_asset_csvs, read_asset_csvs, build_transect_years, pa_year_metrics,
+    recategorize_biome, add_trends,
 )
 
-print("="*80)
+t_start = time.time()
+print("=" * 80)
 print("SCRIPT 04: Compute Edge Metrics")
-print("="*80)
+print("=" * 80)
 
-# Validate configuration
-print(f"\nCurrent index: {config.INDEX_NAME.upper()}")
-print(f"Description: {config.INDEX_CONFIGS[config.INDEX_NAME]['description']}")
+years = list(range(config.START_YEAR, config.END_YEAR + 1))
 
-# Paths
-raw_dir = config.RESULTS_RAW / f"{config.INDEX_NAME}_raw"
-output_dir = config.RESULTS_DIR
-attributes_path = config.DATA_PROCESSED / "attributes_final.csv"
-transect_output = output_dir / f'transect_df_{config.INDEX_NAME}.parquet' 
-wdpa_output = output_dir / f'wdpa_df_{config.INDEX_NAME}.parquet'
-trends_output = output_dir / f'wdpa_df_{config.INDEX_NAME}_trends.csv'
+# Inputs
+for path in [config.TRANSECT_POINTS, config.PAS_SELECTED]:
+    if not path.exists():
+        raise FileNotFoundError(f"{path} not found; run script 02 first.")
+asset_csvs, unrecognized = find_asset_csvs(config.GEE_CSV_DIR)
+if not asset_csvs:
+    raise FileNotFoundError(
+        f"No CSV files found in {config.GEE_CSV_DIR}. Download them from Google Drive "
+        f"folder '{config.GEE_DRIVE_FOLDER}' first (see script 03 output)."
+    )
+if unrecognized:
+    print(f"WARNING: skipping {len(unrecognized)} CSVs with unexpected names: {unrecognized[:5]}")
 
-# Verify input files exist
-csv_files = list(raw_dir.glob('*.csv'))
-if not csv_files:
-    print(f"\nERROR: No CSV files found in {raw_dir}")
-    print("Please download files from Google Drive first (see script 03 output)")
-    exit(1)
+# Expected points (script 02). Upload files hold CHUNK_SIZE whole PAs in order,
+# so a PA's asset number is its position in the file // CHUNK_SIZE.
+print(f"\nReading {config.TRANSECT_POINTS}...")
+points = pd.read_parquet(config.TRANSECT_POINTS, columns=['WDPA_PID', 'transectID', 'pointID', 'in_other_pa'])
+pa_order = pd.unique(points['WDPA_PID'])
+asset_of_pa = pd.Series([f'{i // config.CHUNK_SIZE:03d}' for i in range(len(pa_order))], index=pa_order)
+points['asset'] = points['WDPA_PID'].map(asset_of_pa)
+n_generated = int((points['pointID'] == 0).sum())
+print(f"Expected: {len(points):,} points, {n_generated:,} transects, {len(pa_order):,} PAs, "
+      f"{points['asset'].nunique()} assets")
 
-print(f"\nFound {len(csv_files)} CSV files in {raw_dir}")
+missing_assets = sorted(set(points['asset']) - set(asset_csvs))
+if missing_assets:
+    raise FileNotFoundError(f"No CSVs found for assets {missing_assets} in {config.GEE_CSV_DIR}")
 
-# Check for attributes file
-if not attributes_path.exists():
-    print(f"\nERROR: Attributes file not found: {attributes_path}")
-    print("This file should contain WDPA metadata (biome, IUCN category, etc.)")
-    exit(1)
+# Process one asset at a time
+config.TRANSECT_YEARS_DIR.mkdir(parents=True, exist_ok=True)
+for old in config.TRANSECT_YEARS_DIR.glob(f'{config.INDEX_NAME}_*.parquet'):
+    old.unlink()
 
-print(f"Attributes file: {attributes_path}")
+metrics = []
+completeness = {'points_expected': len(points), 'points_received': 0, 'points_missing': 0,
+                'points_unexpected': 0}
+per_year = {y: 0 for y in years}
+transect_counts = {'generated': n_generated, 'received': 0, 'missing_points': 0}
+key = ['WDPA_PID', 'transectID', 'pointID']
 
-# Step 1: Sort and combine CSV chunks
-print("\n" + "="*80)
-print("STEP 1: Sorting and Combining CSV Files")
-print("="*80)
+for asset, files in asset_csvs.items():
+    df = read_asset_csvs(files, years)
+    expected = points.loc[points['asset'] == asset, key]
+    check = expected.merge(df[key], on=key, how='outer', indicator=True)['_merge'].value_counts()
+    completeness['points_received'] += len(df)
+    completeness['points_missing'] += int(check.get('left_only', 0))
+    completeness['points_unexpected'] += int(check.get('right_only', 0))
 
-print(f"Reading {len(csv_files)} CSV files...")
-sorted_files = sort_and_combine_csvs(raw_dir, config.INDEX_NAME, config.START_YEAR, config.END_YEAR)
-print(f"Sorted data written to {len(sorted_files)} parquet files")
+    flags = points.loc[(points['asset'] == asset) & (points['pointID'] == 0),
+                       ['WDPA_PID', 'transectID', 'in_other_pa']]
+    ty, c = build_transect_years(df, years, flags)
+    transect_counts['received'] += c['transects_received']
+    transect_counts['missing_points'] += c['transects_missing_points']
+    for y, n in c['complete_per_year'].items():
+        per_year[int(y)] += int(n)
 
-# Step 2: Create transect-level dataset
-print("\n" + "="*80)
-print("STEP 2: Computing Transect-Level Metrics")
-print("="*80)
+    ty.to_parquet(config.TRANSECT_YEARS_DIR / f'{config.INDEX_NAME}_{asset}.parquet', index=False)
+    metrics.append(pa_year_metrics(ty))
+    print(f"  asset {asset}: {len(files)} CSVs, {len(df):,} points, "
+          f"{int(check.get('left_only', 0)):,} missing, {len(ty):,} transect-years")
+    del df, ty, expected, check, flags
+    gc.collect()
 
-print("Pivoting to transect level and computing edge detection...")
-transect_files = create_transect_dataset(raw_dir, config.INDEX_NAME, config.START_YEAR, config.END_YEAR)
-print(f"Transect chunks created: {len(transect_files)}")
+if completeness['points_missing'] or completeness['points_unexpected']:
+    print(f"WARNING: {completeness['points_missing']:,} expected points missing and "
+          f"{completeness['points_unexpected']:,} unexpected points in the CSVs. "
+          f"Check that every CSV part was downloaded.")
 
-# Step 3: Create WDPA-level dataset
-print("\n" + "="*80)
-print("STEP 3: Aggregating to Protected Area Level")
-print("="*80)
+# PA-year table with attributes and trends
+print("\nMerging attributes and computing trends...")
+pa = pd.concat(metrics, ignore_index=True)
+attributes = pyogrio.read_dataframe(config.PAS_SELECTED, read_geometry=False)
+attributes['WDPA_PID'] = attributes['WDPA_PID'].astype(str)
+pa = pa.merge(attributes, on='WDPA_PID', how='left')
+pa['BIOME_NAME'] = pa['BIOME_NAME'].apply(recategorize_biome)
+pa = add_trends(pa.sort_values(['WDPA_PID', 'year']).reset_index(drop=True))
 
-transect_dir = raw_dir / "transect_chunks"
-print("Loading attributes and merging with transect metrics...")
-create_wdpa_dataset(transect_dir, attributes_path, config.INDEX_NAME, wdpa_output)
+config.RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+pa.to_csv(config.PA_METRICS, index=False)
 
-wdpa_size = wdpa_output.stat().st_size / (1024**2)
-print(f"WDPA file: {wdpa_size:.1f} MB")
+flag_counts = points.loc[points['pointID'] == 0, 'in_other_pa'].value_counts().to_dict()
+update_counts(config.PIPELINE_COUNTS, '04_ndvi', {
+    'assets': len(asset_csvs),
+    'csv_files': sum(len(f) for f in asset_csvs.values()),
+    'completeness': completeness,
+    'transects': {
+        **transect_counts,
+        'flagged_in_other_pa': int(flag_counts.get(1, 0)),
+    },
+    'per_year': {str(y): {'complete': per_year[y],
+                          'dropped_missing_data': n_generated - per_year[y]} for y in years},
+    'pa_years': len(pa),
+    'pas': int(pa['WDPA_PID'].nunique()),
+})
 
-# Step 4: Classify per-PA temporal trends
-print("\n" + "="*80)
-print("STEP 4: Classifying Temporal Trends")
-print("="*80)
-
-print("Recategorizing biomes and fitting per-PA trends (edge_extent, edge_intensity)...")
-wdpa_df = create_trends_dataset(wdpa_output, trends_output)
-print(f"Rows: {len(wdpa_df):,}  |  PAs: {wdpa_df['WDPA_PID'].nunique():,}")
-
-print("\n" + "="*80)
+print("\n" + "=" * 80)
 print("PROCESSING COMPLETE")
-print("="*80)
-print(f"Transect chunks: {transect_dir}/")
-print(f"WDPA dataset: {wdpa_output}")
-print(f"Trends dataset: {trends_output}")
-print("Note: If you wish to calculate a different index (e.g., ndvi, ndbi, lai, fpar)")
-print("   change the 'INDEX_NAME' in modules/config.py and rerun this script.")
-print("="*80)
+print("=" * 80)
+print(f"PAs: {pa['WDPA_PID'].nunique():,} | PA-years: {len(pa):,}")
+print(f"Transect-years: {config.TRANSECT_YEARS_DIR}/")
+print(f"Final dataset: {config.PA_METRICS}")
+print(f"Counts: {config.PIPELINE_COUNTS}")
+print(f"Time: {(time.time() - t_start) / 60:.1f} min")
+print("=" * 80)

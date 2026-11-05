@@ -3,8 +3,7 @@ Google Earth Engine functions for remote sensing data collection.
 
 This module contains functions for:
 - Filtering protected area datasets
-- Computing vegetation and built-up indices
-- Generating spatial gradients
+- Computing NDVI gradient magnitude
 - Managing GEE task submissions
 """
 
@@ -12,7 +11,7 @@ import time
 import ee
 from modules.config import (
     MIN_AREA_KM2, VALID_STATUS, EXCLUDED_PIDS,
-    INDEX_CONFIGS, INDEX_NAME, START_YEAR, END_YEAR
+    NDVI_COLLECTION, NDVI_BAND, NDVI_SCALE_FACTOR
 )
 
 
@@ -157,78 +156,57 @@ def check_task_status(submitted_tasks):
     return active_tasks, len(active_tasks)
 
 
-def get_gradient_magnitude(index_name, y):
+def get_gradient_magnitude(y):
     """
-    Generic gradient function for computing spatial gradients of various indices.
-    
-    Computes annual median composites and their spatial gradient magnitude for
-    NDVI, NDBI, LAI, or FPAR indices. Automatically applies appropriate scaling
-    factors and cloud masking based on index configuration.
-    
+    Compute the spatial gradient magnitude of the annual median NDVI composite.
+
+    Builds the annual median of MOD13A1 NDVI for year ``y``, applies the scale
+    factor (0.0001), and returns sqrt(gx^2 + gy^2) from ee.Image.gradient().
+
     Parameters
     ----------
-    index_name : str
-        Index to compute. Must be one of: 'ndvi', 'ndbi', 'lai', 'fpar'
     y : int or ee.Number
-        Year to process (e.g., 2015)
-    
+        Year to process (e.g., 2015).
+
     Returns
     -------
     ee.Image
-        Single-band image containing gradient magnitude, with band name 'grad'.
-        Unmasked areas are set to -9999.
-    
-    Examples
-    --------
-    >>> # Create gradient function for NDVI
-    >>> ndvi_2015 = get_gradient_magnitude('ndvi', 2015)
-    >>> 
-    >>> # Map over multiple years
-    >>> years = ee.List.sequence(2001, 2021)
-    >>> ndvi_grads = years.map(lambda y: get_gradient_magnitude('ndvi', y))
-    
+        Single-band image 'grad' with the NDVI gradient magnitude.
+        Masked pixels are set to -9999.
+
     Notes
     -----
-    Scale factors applied:
-    - NDVI: 0.0001 (MOD13A1 stored as integers)
-    - NDBI: 0.0001 (applied to reflectance bands before index calculation)
-    - LAI: 0.1 (MCD15A3H stored as integers)
-    - FPAR: 0.01 (MCD15A3H stored as integers)
-    
-    NDBI requires cloud masking using the state_1km QA band from MOD09GA.
+    No quality (SummaryQA) masking is applied; the annual median uses every
+    16-day composite in the year.
+
+    The median composite is tagged with the native MOD13A1 projection (sinusoidal,
+    ~463 m) so gradient() works on the native pixel grid rather than the default
+    WGS84 projection of a composite. Sample it with the same projection
+    (get_ndvi_projection) in reduceRegions. Earth Engine does not document the
+    units of gradient(); the values are treated as relative contrast.
     """
-    config = INDEX_CONFIGS[index_name]
-    collection = ee.ImageCollection(config['collection'])
-    
-    if index_name == 'ndbi':
-        # Special handling for NDBI - compute from reflectance bands
-        annual = (collection
-                  .filter(ee.Filter.calendarRange(y, y, 'year'))
-                  .select(['sur_refl_b02', 'sur_refl_b06'])
-                  .median()
-                  .multiply(config['scale_factor']))
-        index_img = annual.normalizedDifference(['sur_refl_b06', 'sur_refl_b02'])
-    else:
-        # NDVI, LAI, FPAR - direct band selection
-        annual = (collection
-                  .filter(ee.Filter.calendarRange(y, y, 'year'))
-                  .select(config['band'])
-                  .median())
-        if config['scale_factor'] != 1.0:
-            annual = annual.multiply(config['scale_factor'])
-        index_img = annual
-    
-    # Compute gradient magnitude
-    grad = index_img.gradient()
+    annual = (ee.ImageCollection(NDVI_COLLECTION)
+              .filter(ee.Filter.calendarRange(y, y, 'year'))
+              .select(NDVI_BAND)
+              .median()
+              .multiply(NDVI_SCALE_FACTOR)
+              .setDefaultProjection(get_ndvi_projection()))
+
+    grad = annual.gradient()
     grad_mag = grad.select('x').hypot(grad.select('y')).unmask(-9999)
     return grad_mag.rename(['grad'])
 
 
+def get_ndvi_projection():
+    """Native projection of MOD13A1 NDVI (MODIS sinusoidal, ~463 m pixels)."""
+    return ee.ImageCollection(NDVI_COLLECTION).first().select(NDVI_BAND).projection()
+
+
 def get_annual_gradient_magnitude(y):
     """
-    Wrapper around get_gradient_magnitude using the index configured in config.INDEX_NAME.
+    Wrapper around get_gradient_magnitude for use with ee.List.map().
 
-    Designed for use with ee.List.map() to build a multi-year gradient image stack.
+    Designed to build a multi-year gradient image stack.
 
     Parameters
     ----------
@@ -238,13 +216,14 @@ def get_annual_gradient_magnitude(y):
     Returns
     -------
     ee.Image
-        Single-band gradient magnitude image for the configured index and year.
+        Single-band NDVI gradient magnitude image for that year.
     """
-    return get_gradient_magnitude(INDEX_NAME, y)
+    return get_gradient_magnitude(y)
 
 
-def batch_sample_assets(asset_path, image, selectors, folder_name, index_name,
-                        chunk_size=50_000, batch_size=10, chunks_to_run=None):
+def batch_sample_assets(asset_path, image, selectors, folder_name, export_prefix,
+                        chunk_size=50_000, batch_size=10, chunks_to_run=None,
+                        scale=500, crs=None):
     """
     Sample an image at transect points from a GEE asset and export results to Google Drive.
 
@@ -252,30 +231,36 @@ def batch_sample_assets(asset_path, image, selectors, folder_name, index_name,
     each point using reduceRegions with ee.Reducer.first(), and submits batched export
     tasks to Google Drive. Waits for each batch to complete before submitting the next.
 
-    If a task fails (typically due to GEE memory limits), it is automatically retried
-    by splitting the failed chunk into two halves (chunk_size // 2). The two retry tasks
-    are named with 'a' / 'b' suffixes (e.g., chunk_2a, chunk_2b) and are polled to
-    completion before proceeding. No manual intervention is required.
+    Each sub-chunk is exported as '{export_prefix}{asset_num}_part_{i}' (e.g.
+    ndvi_gradient_v2_003_part_7). If a task FAILS (typically due to GEE memory
+    limits), it is retried once by splitting it into two halves (chunk_size // 2),
+    named with '_01' / '_02' suffixes (e.g. ndvi_gradient_v2_003_part_7_01). CANCELLED
+    tasks are not retried.
 
     Parameters
     ----------
     asset_path : str
         Path to the Earth Engine FeatureCollection asset
-        (e.g., 'projects/dse-staff/assets/chunk_000').
+        (e.g., 'projects/my-project/assets/transect_points_v2_000').
+        The asset number is the text after the last '_'.
     image : ee.Image
         Multi-band image to sample (static layers + annual gradient bands).
     selectors : list of str
         Property and band names to include in the exported CSV.
     folder_name : str
         Google Drive folder name for export output.
-    index_name : str
-        Index name used in export task descriptions (e.g., 'ndvi', 'lai').
+    export_prefix : str
+        Start of the export task / CSV names (e.g., 'ndvi_gradient_v2_').
     chunk_size : int, optional
         Number of features per sub-chunk (default: 50,000).
     batch_size : int, optional
         Number of export tasks to submit and monitor simultaneously (default: 10).
     chunks_to_run : list of int, optional
         Specific sub-chunk indices to process. If None, all chunks are processed.
+    scale : float, optional
+        Sampling scale in meters for reduceRegions (default 500).
+    crs : ee.Projection or str, optional
+        Sampling projection for reduceRegions (default: the image's projection).
     """
     samples = ee.FeatureCollection(asset_path)
     size = samples.size().getInfo()
@@ -292,11 +277,12 @@ def batch_sample_assets(asset_path, image, selectors, folder_name, index_name,
         sampled = image.reduceRegions(
             collection=fcChunk,
             reducer=ee.Reducer.first(),
-            scale=500
+            scale=scale,
+            crs=crs
         )
         task = ee.batch.Export.table.toDrive(
             collection=sampled,
-            description=f'{index_name}_raw_grad_{asset_num}_chunk_{i}',
+            description=f'{export_prefix}{asset_num}_part_{i}',
             fileFormat='CSV',
             selectors=selectors,
             folder=folder_name
@@ -331,12 +317,13 @@ def batch_sample_assets(asset_path, image, selectors, folder_name, index_name,
                     sampled = image.reduceRegions(
                         collection=fcSub,
                         reducer=ee.Reducer.first(),
-                        scale=500
+                        scale=scale,
+                        crs=crs
                     )
                     suffix = f'0{sub + 1}'
                     task = ee.batch.Export.table.toDrive(
                         collection=sampled,
-                        description=f'{index_name}_raw_grad_{asset_num}_chunk_{i}_{suffix}',
+                        description=f'{export_prefix}{asset_num}_part_{i}_{suffix}',
                         fileFormat='CSV',
                         selectors=selectors,
                         folder=folder_name

@@ -19,3 +19,4 @@ seaborn==0.13.2
 statsmodels==0.14.6
 pyarrow==23.0.1
 dask[dataframe]==2026.1.2
+pytest==8.3.5

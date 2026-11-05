@@ -1,41 +1,54 @@
 """
-Data processing and edge detection analysis functions.
+Edge metric functions (script 04).
 
-This module contains functions for:
-- Sorting and concatenating GEE results
-- Pivoting data from long to wide format  
-- Computing edge detection metrics
-- Aggregating to WDPA-year level with Cohen's d effect sizes
-- Classifying per-PA temporal trends in edge metrics
+- find_asset_csvs: group the Earth Engine CSV parts by asset number
+- read_asset_csvs: read one asset's CSV parts
+- build_transect_years: one row per complete transect-year, with edge flag and
+  the water / other-PA flags
+- pa_year_metrics: PA-year edge extent, Cohen's d values, and edge intensity, for
+  four transect subsets (all, no water, no other-PA, neither)
+- add_trends: per-PA OLS trend of every extent and intensity metric
+- cohens_d, recategorize_biome, classify_trend
+
+Every PA lies within a single asset (script 02 writes whole PAs per upload file),
+so each asset is processed on its own; memory is bounded by one asset.
 """
 
-import os
-import glob
-import pandas as pd
-import numpy as np
+import re
+import warnings
+from collections import defaultdict
 from pathlib import Path
+
+import numpy as np
+import pandas as pd
 from scipy import stats
+
+POINT_IDS = [-2, -1, 0, 1, 2]
+PT_COLS = ['pt_m2', 'pt_m1', 'pt_0', 'pt_1', 'pt_2']
+
+# Cohen's d columns: boundary point (pt_0) vs each other position
+D_PAIRS = {'D02': 'pt_2', 'D01': 'pt_1', 'D0m1': 'pt_m1', 'D0m2': 'pt_m2'}
+
+# Metric versions: column suffix -> flags whose transects are excluded
+VERSIONS = {
+    '': (),
+    '_nowater': ('water_extent',),
+    '_nootherpa': ('in_other_pa',),
+    '_noflags': ('water_extent', 'in_other_pa'),
+}
+
+# Earth Engine CSV part names: {prefix}_{asset}_part_{i}[_{retry}].csv
+# (old runs: ..._{asset}_chunk_{i}.csv)
+_CSV_NAME = re.compile(r'_(\d{3})_(?:part|chunk)_(\d+)(?:_(\d{2}))?\.csv$')
 
 
 def cohens_d(x, y):
     """
-    Compute Cohen's d effect size between two samples.
-    
-    Parameters
-    ----------
-    x : array-like
-        First sample (e.g., values at boundary point)
-    y : array-like
-        Second sample (e.g., values at comparison point)
-    
-    Returns
-    -------
-    float
-        Cohen's d effect size (standardized mean difference)
-    
-    Notes
-    -----
-    Uses pooled standard deviation with (n-1) degrees of freedom.
+    Cohen's d between two samples, with pooled standard deviation ((n-1) df).
+
+    Reference implementation; pa_year_metrics computes the same values with
+    grouped statistics. Returns NaN if either sample has < 2 values or the
+    pooled SD is 0.
     """
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
@@ -54,290 +67,191 @@ def cohens_d(x, y):
     return (np.mean(x) - np.mean(y)) / pooled_std
 
 
-def sort_and_combine_csvs(input_dir, index_name, start_year, end_year, output_chunks=10):
+def find_asset_csvs(csv_dir):
     """
-    Read, concatenate, sort, and split GEE CSV results into parquet chunks.
-    
-    Processes all CSV files from GEE exports, replaces -9999 values with NaN,
-    sorts by WDPA_PID/transectID/pointID, and splits into chunks while keeping
-    each WDPA_PID together.
-    
-    Parameters
-    ----------
-    input_dir : str or Path
-        Directory containing raw CSV files from GEE
-    index_name : str
-        Index name (ndvi, lai, fpar, ndbi) for column selection
-    start_year : int
-        First year in the time series
-    end_year : int
-        Last year in the time series (inclusive)
-    output_chunks : int, optional
-        Number of output parquet files. Default 10.
-    
+    Group the Earth Engine CSV parts in ``csv_dir`` by asset number.
+
     Returns
     -------
-    list
-        Paths to created parquet chunk files
-    
-    Notes
-    -----
-    - Replaces -9999 with NaN for gradient values
-    - Uses memory-efficient dtypes
-    - Deletes intermediate sorted chunks after processing
+    tuple of (dict, list)
+        asset number ('000', ...) -> sorted list of CSV paths (including retry
+        halves), and the names of CSVs whose names don't match the pattern
+        (e.g. Drive duplicates like 'name (1).csv').
     """
-    input_dir = Path(input_dir)
-    
-    print(f"Reading CSV files from {input_dir}...")
-    
-    # Define columns
-    id_vars = ['WDPA_PID', 'transectID', 'pointID', 'max_extent', 'gHM', 'elevation', 'slope']
-    value_vars = [str(y) for y in range(start_year, end_year + 1)]
-    usecols = id_vars + value_vars
-    
-    dtypes = {
-        'WDPA_PID': 'string',
-        'transectID': 'string',
-        'pointID': 'int8',
-        'max_extent': 'float32',
-        'gHM': 'float32',
-        'elevation': 'float32',
-        'slope': 'float32',
-    }
-    
-    # Read all CSVs
-    all_files = sorted([input_dir / f for f in os.listdir(input_dir) if f.endswith(".csv")])
-    print(f"Found {len(all_files)} CSV files")
-    
-    df_list = [pd.read_csv(file, usecols=usecols, dtype=dtypes, low_memory=False) for file in all_files]
-    df = pd.concat(df_list, ignore_index=True)
-    del df_list
-    
-    # Replace -9999 values with NaN
-    df[value_vars] = df[value_vars].replace(-9999.0, np.nan)
-    print(f"Loaded {len(df):,} rows")
-    
-    # Sort
-    print("Sorting by WDPA_PID, transectID, pointID...")
-    df = df.sort_values(['WDPA_PID', 'transectID', 'pointID'])
-    
-    # Split into chunks keeping WDPA_PIDs together
-    print(f"Splitting into {output_chunks} parquet files...")
-    unique_pids = df['WDPA_PID'].unique()
-    n_splits = output_chunks
-    split_sizes = [len(unique_pids) // n_splits + (1 if x < len(unique_pids) % n_splits else 0) 
-                   for x in range(n_splits)]
-    
-    output_files = []
-    start = 0
-    for i, size in enumerate(split_sizes):
-        pids = unique_pids[start:start+size]
-        split_df = df[df['WDPA_PID'].isin(pids)]
-        out_file = input_dir / f"{index_name}_sorted_chunk_{i}.parquet"
-        split_df.to_parquet(out_file, engine="pyarrow", index=False)
-        output_files.append(str(out_file))
-        print(f"  Saved split {i}: {len(split_df):,} rows")
-        start += size
-    
-    return output_files
+    groups, unrecognized = defaultdict(list), []
+    for f in sorted(Path(csv_dir).glob('*.csv')):
+        m = _CSV_NAME.search(f.name)
+        if m:
+            groups[m.group(1)].append(f)
+        else:
+            unrecognized.append(f.name)
+    return dict(sorted(groups.items())), unrecognized
 
 
-def create_transect_dataset(input_dir, index_name, start_year, end_year, output_dir=None):
+def read_asset_csvs(files, years):
     """
-    Transform sorted point data to transect-level dataset with edge detection.
-    
-    Reads sorted parquet chunks, pivots from long (years) to wide (pointID columns),
-    computes edge detection metrics, and adds environmental covariates.
-    
+    Read and stack the CSV parts of one asset.
+
+    Gradient values of -9999 (masked pixels) become NaN. Values are float32.
+    """
+    year_cols = [str(y) for y in years]
+    dtypes = {'WDPA_PID': str, 'transectID': 'float64', 'pointID': 'float64',
+              'max_extent': 'float32', 'gHM': 'float32', 'elevation': 'float32',
+              'slope': 'float32', **{y: 'float32' for y in year_cols}}
+    df = pd.concat([pd.read_csv(f, dtype=dtypes, usecols=list(dtypes)) for f in files],
+                   ignore_index=True)
+    df['transectID'] = df['transectID'].astype('int32')
+    df['pointID'] = df['pointID'].astype('int8')
+    df[year_cols] = df[year_cols].mask(df[year_cols] == -9999)
+    return df
+
+
+def build_transect_years(df, years, flags=None):
+    """
+    Reshape one asset's points into one row per complete transect-year.
+
+    A transect needs all 5 points in the export, and a transect-year needs a
+    gradient value at all 5 points; incomplete ones are dropped (counted).
+
     Parameters
     ----------
-    input_dir : str or Path
-        Directory containing sorted parquet chunks
-    index_name : str
-        Index name for file naming
-    start_year : int
-        First year in time series
-    end_year : int
-        Last year in time series (inclusive)
-    output_dir : str or Path, optional
-        Output directory for transect chunks. If None, creates subdirectory.
-    
+    df : DataFrame
+        Output of read_asset_csvs.
+    years : sequence of int
+        Years in the order of the CSV columns.
+    flags : DataFrame, optional
+        WDPA_PID, transectID, in_other_pa (from transect_points.parquet).
+        Missing -> in_other_pa = 0.
+
     Returns
     -------
-    list
-        Paths to created transect chunk files
-    
+    tuple of (DataFrame, dict)
+        - transect-years: WDPA_PID, transectID, year, pt_m2 … pt_2, edge,
+          water_extent, in_other_pa, gHM_mean_outer, elevation_pt0, slope_pt0
+        - counts: transects_received, transects_missing_points,
+          complete_per_year {year: n}
+
     Notes
     -----
-    Edge detection logic: edge present when pt_0 > min(pt_2, pt_1) AND 
-    pt_0 > min(pt_m2, pt_m1), indicating higher values at boundary than both sides.
+    edge = 1 when pt_0 > min(pt_1, pt_2) and pt_0 > min(pt_m1, pt_m2).
+    water_extent = 1 when any of the 5 points has JRC max_extent == 1.
     """
-    input_dir = Path(input_dir)
-    if output_dir is None:
-        output_dir = input_dir / "transect_chunks"
+    key = ['WDPA_PID', 'transectID', 'pointID']
+    n_dup = int(df.duplicated(key).sum())
+    if n_dup:
+        raise ValueError(f"{n_dup:,} duplicate points in the CSVs (was a part downloaded twice?)")
+
+    df = df.sort_values(key, kind='stable')
+    n_points = df.groupby(['WDPA_PID', 'transectID'], sort=False)['pointID'].transform('size')
+    transects_received = int(df.groupby(['WDPA_PID', 'transectID'], sort=False).ngroups)
+    df = df[n_points.to_numpy() == len(POINT_IDS)]
+    n_tr = len(df) // len(POINT_IDS)
+    year_cols = [str(y) for y in years]
+    years = np.asarray(years, dtype='int16')
+
+    # Per-transect values (static layers) from the reshaped points
+    def per_point(col):
+        return df[col].to_numpy().reshape(n_tr, len(POINT_IDS))
+
+    ids = df.iloc[::len(POINT_IDS)][['WDPA_PID', 'transectID']].reset_index(drop=True)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)   # all-NaN outer gHM -> NaN
+        transects = ids.assign(
+            water_extent=(per_point('max_extent') == 1).any(axis=1).astype('int8'),
+            gHM_mean_outer=np.nanmean(per_point('gHM')[:, 3:5], axis=1),
+            elevation_pt0=per_point('elevation')[:, 2],
+            slope_pt0=per_point('slope')[:, 2],
+        )
+    if flags is not None and len(flags):
+        transects = transects.merge(flags[['WDPA_PID', 'transectID', 'in_other_pa']],
+                                    on=['WDPA_PID', 'transectID'], how='left')
+        transects['in_other_pa'] = transects['in_other_pa'].fillna(0).astype('int8')
     else:
-        output_dir = Path(output_dir)
-    
-    os.makedirs(output_dir, exist_ok=True)
-    
-    # Clean old chunks
-    for old_file in glob.glob(str(output_dir / f"{index_name}_transect_chunk_*.parquet")):
-        os.remove(old_file)
-    
-    print("Pivoting data in pandas chunks...")
-    files = sorted(glob.glob(str(input_dir / f"{index_name}_sorted_chunk_*.parquet")))
-    print(f"Found {len(files)} input files")
-    
-    output_files = []
-    
-    for idx, f in enumerate(files):
-        print(f"Processing chunk {idx+1}/{len(files)}: {os.path.basename(f)}")
-        df = pd.read_parquet(f)
-        
-        # Pivot long: year/value
-        long = (
-            df
-            .melt(id_vars=['WDPA_PID', 'transectID', 'pointID', 'max_extent', 'gHM', 
-                          'elevation', 'slope'],
-                  value_vars=[str(y) for y in range(start_year, end_year + 1)],
-                  var_name='year', value_name='value')
-            .dropna(subset=['value'])
-        )
-        long['year'] = long['year'].astype('int16')
-        long['value'] = long['value'].astype('float32')
-        
-        # Pivot wide: pointID to columns
-        pts = long.pivot_table(
-            index=['WDPA_PID', 'year', 'transectID'],
-            columns='pointID', values='value', aggfunc='first'
-        )
-        pts = pts.rename(columns={2: 'pt_2', 1: 'pt_1', 0: 'pt_0', -1: 'pt_m1', -2: 'pt_m2'})
-        pts = pts.dropna(subset=['pt_2', 'pt_1', 'pt_0', 'pt_m1', 'pt_m2']) # Drop any rows with missing points
-        #^might be why have fewer PAs by this point
+        transects['in_other_pa'] = np.int8(0)
 
-        # Compute covariates by joining back to long format
-        long_valid = long.set_index(['WDPA_PID', 'year', 'transectID'])
-        long_valid = long_valid[long_valid.index.isin(pts.index)].reset_index()
-        max_extent_df = long_valid.groupby(['WDPA_PID','year','transectID'])['max_extent'].max()
-        gHM_outer = long_valid[long_valid['pointID'].isin([1,2])].groupby(
-            ['WDPA_PID','year','transectID'])['gHM'].mean()
-        pt0_data = long_valid[long_valid['pointID']==0].set_index(
-            ['WDPA_PID','year','transectID'])[['elevation','slope']]
-        
-        covars = pd.DataFrame({
-            'trnst_max_extent': max_extent_df, # max water extent across transect points
-            'gHM_mean_outer': gHM_outer, # mean human modification on outer points
-            'elevation_pt0': pt0_data['elevation'], # elevation at boundary point
-            'slope_pt0': pt0_data['slope'] # slope at boundary point
-        })
-        
-        # Join covariates to pts data (wide) and compute edge
-        chunk_df = pts.join(covars)
-        chunk_df['edge'] = (
-            (chunk_df['pt_0'] > chunk_df[['pt_2','pt_1']].min(axis=1)) &
-            (chunk_df['pt_0'] > chunk_df[['pt_m2','pt_m1']].min(axis=1))
-        ).astype('int8')
-        
-        # Save chunk
-        output_file = output_dir / f"{index_name}_transect_chunk_{idx}.parquet"
-        chunk_df.to_parquet(output_file, engine='pyarrow', index=True)
-        output_files.append(str(output_file))
-        
-        del df, long, long_valid, pts, covars, max_extent_df, gHM_outer, pt0_data, chunk_df
-        print(f"  Chunk {idx+1} processed and saved")
-    
-    # Clean up intermediate sorted files
-    print("Deleting intermediate sorted chunk files...")
-    for sorted_file in files:
-        os.remove(sorted_file)
-        print(f"  Deleted {os.path.basename(sorted_file)}")
-    
-    return output_files
+    # Transect-years: (n_tr, 5, n_years) -> (n_tr * n_years, 5)
+    vals = df[year_cols].to_numpy(dtype='float32').reshape(n_tr, len(POINT_IDS), len(years))
+    vals = vals.transpose(0, 2, 1).reshape(-1, len(POINT_IDS))
+    complete = ~np.isnan(vals).any(axis=1)
+    t_idx = np.repeat(np.arange(n_tr), len(years))[complete]
+
+    ty = transects.iloc[t_idx][['WDPA_PID', 'transectID']].reset_index(drop=True)
+    ty['year'] = np.tile(years, n_tr)[complete]
+    ty[PT_COLS] = vals[complete]
+    p = ty[PT_COLS]
+    ty['edge'] = ((p['pt_0'] > p[['pt_1', 'pt_2']].min(axis=1)) &
+                  (p['pt_0'] > p[['pt_m1', 'pt_m2']].min(axis=1))).astype('int8')
+    for col in ['water_extent', 'in_other_pa', 'gHM_mean_outer', 'elevation_pt0', 'slope_pt0']:
+        ty[col] = transects[col].to_numpy()[t_idx]
+
+    counts = {
+        'transects_received': transects_received,
+        'transects_missing_points': transects_received - n_tr,
+        'complete_per_year': ty['year'].value_counts().sort_index().to_dict(),
+    }
+    return ty, counts
 
 
-def create_wdpa_dataset(transect_dir, attributes_path, index_name, output_path):
+def _grouped_cohens_d(edge_rows, keys):
+    """Cohen's d (pt_0 vs each position) per group, same formula as cohens_d()."""
+    g = edge_rows.groupby(keys, sort=False)
+    n = g.size()
+    mean = g[PT_COLS].mean()
+    var = g[PT_COLS].var(ddof=1)
+    out = {}
+    for name, col in D_PAIRS.items():
+        pooled = np.sqrt(((n - 1) * var['pt_0'] + (n - 1) * var[col]) / (2 * n - 2))
+        d = (mean['pt_0'] - mean[col]) / pooled
+        d[(n < 2) | (pooled == 0) | pooled.isna()] = np.nan
+        out[name] = d
+    return pd.DataFrame(out)
+
+
+def pa_year_metrics(ty):
     """
-    Aggregate transect-level data to WDPA-year level with edge metrics.
-    
-    Computes Cohen's d effect sizes for all point comparisons, derives edge
-    intensity (minimum d) and edge extent (proportion of transects with edges),
-    and merges with protected area attributes.
-    
-    Parameters
-    ----------
-    transect_dir : str or Path
-        Directory containing transect chunk parquet files
-    attributes_path : str or Path
-        Path to attributes CSV file
-    index_name : str
-        Index name for file selection
-    output_path : str or Path
-        Output path for WDPA-level parquet file
-    
+    PA-year edge metrics for each version (all transects, and without water /
+    other-PA / either flagged transects).
+
+    For each version suffix v ('', '_nowater', '_nootherpa', '_noflags'):
+    - n_trnst{v}: complete transects
+    - edge_extent{v}: share of transects with edge == 1
+    - D02{v}, D01{v}, D0m1{v}, D0m2{v}: Cohen's d of pt_0 vs each position,
+      on edge transects only
+    - edge_intensity{v}: mean of the four D values (NaN if any is NaN)
+
+    Covariates (all transects): gHM_mean, elevation_mean, slope_mean,
+    water_extent_pct, in_other_pa_pct.
+
     Returns
     -------
-    str
-        Path to created WDPA-level parquet file
-    
-    Notes
-    -----
-    Edge intensity = min(D02, D01, D0m1, D0m2) where D is Cohen's d.
-    Edge extent = proportion of transects where edge == 1.
+    DataFrame
+        One row per PA-year.
     """
-    transect_dir = Path(transect_dir)
-    
-    print("Computing WDPA-level statistics from transect chunks...")
-    wdpa_list = []
-    
-    transect_files = sorted(glob.glob(str(transect_dir / f"{index_name}_transect_chunk_*.parquet")))
-    
-    for chunk_num, transect_file in enumerate(transect_files):
-        print(f"  Processing WDPA stats from chunk {chunk_num+1}/{len(transect_files)}...")
-        transect_chunk = pd.read_parquet(transect_file).reset_index()
-        
-        for (wdpa, year), group in transect_chunk.groupby(['WDPA_PID','year']):
-            edge_extent = (group['edge']==1).sum() / len(group)
-            edge_group = group[group['edge']==1] #calculates cohen's d ONLY for transects with edges
-            d02 = cohens_d(edge_group['pt_0'], edge_group['pt_2'])
-            d01 = cohens_d(edge_group['pt_0'], edge_group['pt_1'])
-            d0m1 = cohens_d(edge_group['pt_0'], edge_group['pt_m1'])
-            d0m2 = cohens_d(edge_group['pt_0'], edge_group['pt_m2'])
-            d_vals = np.array([d02, d01, d0m1, d0m2], dtype=float)
-            edge_intensity = np.nan if np.any(np.isnan(d_vals)) else np.min(d_vals)
-            
-            wdpa_list.append({
-                'WDPA_PID': wdpa,
-                'year': year,
-                'n_trnst': len(group),
-                'D02': d02,
-                'D01': d01,
-                'D0m1': d0m1,
-                'D0m2': d0m2,
-                'edge_intensity': edge_intensity,
-                'edge_extent': edge_extent,
-                'gHM_mean': group['gHM_mean_outer'].mean(),
-                'elevation_mean': group['elevation_pt0'].mean(),
-                'slope_mean': group['slope_pt0'].mean(),
-                'water_extent_pct': (group['trnst_max_extent'] == 1).sum() / len(group) * 100
-            })
-        del transect_chunk
-    
-    print("Merging with attributes...")
-    wdpa_df = pd.DataFrame(wdpa_list)
-    attributes = pd.read_csv(attributes_path, dtype={'WDPA_PID': str})
-    # RESOLVE labels its Rock & Ice areas with BIOME_NAME "N/A", which pandas reads as
-    # missing. Re-read that column as plain text so recategorize_biome can map it.
-    attributes['BIOME_NAME'] = pd.read_csv(
-        attributes_path, usecols=['BIOME_NAME'], dtype=str,
-        keep_default_na=False, na_values=['']
-    )['BIOME_NAME']
-    wdpa_df = pd.merge(wdpa_df, attributes, on='WDPA_PID', how='left')
-    
-    print(f"Saving {output_path}...")
-    wdpa_df.to_parquet(output_path, engine='pyarrow', index=False)
-    print(f"WDPA-level dataset saved to {output_path}")
-    
-    return str(output_path)
+    keys = ['WDPA_PID', 'year']
+    ty = ty.astype({c: 'float64' for c in PT_COLS})
+    g_all = ty.groupby(keys, sort=False)
+    out = pd.DataFrame({
+        'gHM_mean': g_all['gHM_mean_outer'].mean(),
+        'elevation_mean': g_all['elevation_pt0'].mean(),
+        'slope_mean': g_all['slope_pt0'].mean(),
+        'water_extent_pct': g_all['water_extent'].mean() * 100,
+        'in_other_pa_pct': g_all['in_other_pa'].mean() * 100,
+    })
+
+    parts = []
+    for v, excluded in VERSIONS.items():
+        sub = ty
+        for flag in excluded:
+            sub = sub[sub[flag] == 0]
+        g = sub.groupby(keys, sort=False)
+        m = pd.DataFrame({f'n_trnst{v}': g.size(), f'edge_extent{v}': g['edge'].mean()})
+        d = _grouped_cohens_d(sub[sub['edge'] == 1], keys).add_suffix(v)
+        m = m.join(d, how='left')
+        m[f'edge_intensity{v}'] = m[[f'{k}{v}' for k in D_PAIRS]].mean(axis=1, skipna=False)
+        parts.append(m)
+
+    metrics = pd.concat(parts, axis=1)
+    return metrics.join(out, how='left').reset_index()
 
 
 def recategorize_biome(biome):
@@ -358,7 +272,6 @@ def recategorize_biome(biome):
     str
         Recategorized biome name
     """
-    import pandas as pd
     if biome == "N/A":
         return "Rock & Ice"
     if pd.isna(biome) or biome in ("Unknown", "None", ""):
@@ -388,69 +301,59 @@ def recategorize_biome(biome):
         return biome
 
 
-def classify_trend(group, metric='edge_extent', alpha=0.05):
+def classify_trend(group, metric='edge_extent', alpha=0.05, min_years=5):
     """
-    Classify temporal trend for a protected area using linear regression.
+    Classify the temporal trend of one PA's metric with OLS on year.
 
-    Returns a Series with 'trend_{suffix}' (classification string),
-    'slope_{suffix}', and 'p_value_{suffix}', where suffix is 'extent'
-    or 'intensity'.
+    Years where the metric is NaN are left out. With fewer than ``min_years``
+    observations, slope, p-value and trend are NaN.
+
+    Returns a Series with 'trend_{suffix}', 'slope_{suffix}', 'p_value_{suffix}',
+    where suffix is the metric name without 'edge_' (e.g. 'extent_nowater').
+    Trend classes: sig_increase / sig_decrease (p < alpha), otherwise
+    increase / decrease / no_change by the sign of the slope.
     """
-    X = group['year'].values
-    y = group[metric].values
-    suffix = metric.split('_')[1]
-    slope, intercept, r_value, p_value, std_err = stats.linregress(X, y)
+    suffix = metric.removeprefix('edge_')
+    ok = group[metric].notna().to_numpy()
+    if ok.sum() < min_years:
+        return pd.Series({f'trend_{suffix}': None, f'slope_{suffix}': np.nan, f'p_value_{suffix}': np.nan})
 
+    slope, intercept, r_value, p_value, std_err = stats.linregress(
+        group['year'].to_numpy()[ok], group[metric].to_numpy()[ok]
+    )
     if p_value < alpha:
         trend = 'sig_increase' if slope > 0 else 'sig_decrease'
+    elif slope > 0:
+        trend = 'increase'
+    elif slope < 0:
+        trend = 'decrease'
     else:
-        if slope > 0:
-            trend = 'increase'
-        elif slope < 0:
-            trend = 'decrease'
-        else:
-            trend = 'no_change'
+        trend = 'no_change'
 
     return pd.Series({f'trend_{suffix}': trend, f'slope_{suffix}': slope, f'p_value_{suffix}': p_value})
 
 
-def create_trends_dataset(wdpa_path, output_path, metrics=('edge_extent', 'edge_intensity')):
+def add_trends(pa_years):
     """
-    Add per-PA temporal trends to the WDPA-year dataset and save it as CSV.
-
-    Recategorizes BIOME_NAME (recategorize_biome), fits an OLS trend of each
-    metric on year for every PA (classify_trend), and merges the trend_,
-    slope_, and p_value_ columns onto each PA-year row.
+    Add per-PA trend columns for every edge_extent* and edge_intensity* metric.
 
     Parameters
     ----------
-    wdpa_path : str or Path
-        WDPA-year parquet written by create_wdpa_dataset.
-    output_path : str or Path
-        Output CSV path (e.g., results/wdpa_df_{index}_trends.csv).
-    metrics : tuple of str, optional
-        Metric columns to compute trends for.
+    pa_years : DataFrame
+        One row per PA-year (output of pa_year_metrics, plus attributes).
 
     Returns
     -------
     DataFrame
-        WDPA-year dataset with trend columns.
+        ``pa_years`` with trend_/slope_/p_value_ columns merged onto every row.
     """
-    wdpa_df = pd.read_parquet(wdpa_path)
-    wdpa_df['BIOME_NAME'] = wdpa_df['BIOME_NAME'].apply(recategorize_biome)
-
-    for metric in metrics:
-        trends = (
-            wdpa_df.groupby('WDPA_PID')
-            .apply(classify_trend, metric=metric, include_groups=False)
-            .reset_index()
-        )
-        wdpa_df = wdpa_df.merge(trends, on='WDPA_PID', how='left')
-
-    # edge_intensity_max: max Cohen's d across all four comparisons (NaN if any component is NaN) to compare
-    #wdpa_df['edge_intensity_max'] = wdpa_df[['D02', 'D01', 'D0m1', 'D0m2']].max(axis=1, skipna=False)
-
-    wdpa_df.to_csv(output_path, index=False)
-    print(f"Trends dataset saved to {output_path}")
-
-    return wdpa_df
+    metrics = [f'edge_{m}{v}' for v in VERSIONS for m in ('extent', 'intensity')]
+    out = pa_years
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)
+        for metric in metrics:
+            trends = (pa_years.groupby('WDPA_PID')[['year', metric]]
+                      .apply(classify_trend, metric=metric)
+                      .reset_index())
+            out = out.merge(trends, on='WDPA_PID', how='left')
+    return out

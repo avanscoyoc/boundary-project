@@ -9,7 +9,7 @@ Workflow:
 3. Export to Google Drive
 
 MANUAL STEP REQUIRED AFTER RUNNING:
-Download WDPA_polygons.geojson from Google Drive to data/raw/
+Download WDPA_polygons.geojson from Google Drive to data/01_wdpa/
 
 Then run: python scripts/02_generate_sampling_points.py
 """
@@ -31,6 +31,7 @@ print("="*80)
 
 # Initialize Earth Engine
 print("\nInitializing Google Earth Engine...")
+config.require_gee_project()
 ee.Authenticate()
 ee.Initialize(project=config.GEE_PROJECT)
 
@@ -72,13 +73,13 @@ task.start()
 print(f"\nExport task started: {task.id}")
 print("Monitor progress at: https://code.earthengine.google.com/tasks")
 
-config.DATA_RAW.mkdir(parents=True, exist_ok=True)
+config.WDPA_DIR.mkdir(parents=True, exist_ok=True)
 
 print("\n" + "="*80)
 print("MANUAL STEP REQUIRED:")
 print("="*80)
 print("1. Wait for the export task to complete (check GEE Tasks) ~2 hours")
 print("2. Download 'WDPA_polygons.geojson' from Google Drive")
-print("3. Place it in: data/raw/WDPA_polygons.geojson")
+print(f"3. Place it in: {config.WDPA_POLYGONS}")
 print("4. Then run: python scripts/02_generate_sampling_points.py")
 print("="*80)
