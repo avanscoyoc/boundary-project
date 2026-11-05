@@ -324,7 +324,13 @@ def create_wdpa_dataset(transect_dir, attributes_path, index_name, output_path):
     
     print("Merging with attributes...")
     wdpa_df = pd.DataFrame(wdpa_list)
-    attributes = pd.read_csv(attributes_path)
+    attributes = pd.read_csv(attributes_path, dtype={'WDPA_PID': str})
+    # RESOLVE labels its Rock & Ice areas with BIOME_NAME "N/A", which pandas reads as
+    # missing. Re-read that column as plain text so recategorize_biome can map it.
+    attributes['BIOME_NAME'] = pd.read_csv(
+        attributes_path, usecols=['BIOME_NAME'], dtype=str,
+        keep_default_na=False, na_values=['']
+    )['BIOME_NAME']
     wdpa_df = pd.merge(wdpa_df, attributes, on='WDPA_PID', how='left')
     
     print(f"Saving {output_path}...")
@@ -336,20 +342,26 @@ def create_wdpa_dataset(transect_dir, attributes_path, index_name, output_path):
 
 def recategorize_biome(biome):
     """
-    Recategorize biomes into 7 major groups.
-    
+    Recategorize biomes into 8 major groups.
+
+    RESOLVE's "N/A" biome (its Rock & Ice areas, e.g. Greenland, the Himalaya)
+    becomes "Rock & Ice". "Unknown" (no intersecting ecoregion) and missing
+    values become None.
+
     Parameters
     ----------
     biome : str
         Original RESOLVE Ecoregions biome name
-    
+
     Returns
     -------
     str
         Recategorized biome name
     """
     import pandas as pd
-    if pd.isna(biome) or biome in ("N/A", "Unknown", "None", ""):
+    if biome == "N/A":
+        return "Rock & Ice"
+    if pd.isna(biome) or biome in ("Unknown", "None", ""):
         return None
     if biome == "Mangroves":
         return "Mangrove"

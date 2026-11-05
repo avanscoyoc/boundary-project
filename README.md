@@ -103,7 +103,7 @@ boundary-project/
 2. When prompted, click **"Reopen in Container"** — VS Code will build the Docker container and install all pinned dependencies from `requirements.txt` (~5 minutes).
 3. Open `modules/config.py` and set your GEE project ID:
    ```python
-   GEE_PROJECT = 'your-project-id'  # at the top of the file
+   GEE_PROJECT = 'my-gee-project'  # replace 'YOUR-GEE-PROJECT' with your project ID
    ```
 4. Authenticate with Earth Engine in the VS Code terminal:
    ```bash
@@ -205,7 +205,7 @@ Follow the browser link, sign in, and paste the token into the terminal. Then re
 
 ## Legacy Workflow
 
-The original workflow in `src/` remains available for reference.
+The original workflow in `archive/src/` remains available for reference.
 
 ## License
 The code in this project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
