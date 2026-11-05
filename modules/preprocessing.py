@@ -15,6 +15,7 @@ import pandas as pd
 import geopandas as gpd
 import numpy as np
 from shapely.geometry import Polygon, MultiPolygon
+from shapely.geometry.polygon import orient
 
 
 def fill_holes(gdf, max_hole_area=2250000):  # 1500m * 1500m = 2250000 sq meters
@@ -370,24 +371,29 @@ def extract_coords(geom):
     
     For MultiPolygon geometries, extracts coordinates from the largest component
     polygon by area.
-    
+
+    The exterior ring is forced clockwise (orient sign=-1.0) so that transect()
+    places inner points inside the PA, regardless of the input file format
+    (shapefiles store clockwise rings; GeoJSON/GeoPackage may not).
+
     Parameters
     ----------
     geom : shapely.geometry.Polygon or shapely.geometry.MultiPolygon
         Input geometry to extract coordinates from.
-    
+
     Returns
     -------
     numpy.ndarray or None
-        Array of shape (N, 2) containing [x, y] coordinates of the exterior boundary.
+        Array of shape (N, 2) containing [x, y] coordinates of the exterior boundary,
+        in clockwise order.
         Returns None if geometry type is not Polygon or MultiPolygon.
     """
     if geom.geom_type == 'Polygon':
-        return np.array(geom.exterior.coords)
+        return np.array(orient(geom, sign=-1.0).exterior.coords)
     elif geom.geom_type == 'MultiPolygon':
         # Use the largest polygon for MultiPolygon
         largest = max(geom.geoms, key=lambda p: p.area)
-        return np.array(largest.exterior.coords)
+        return np.array(orient(largest, sign=-1.0).exterior.coords)
     else:
         return None
 
