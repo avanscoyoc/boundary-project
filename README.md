@@ -71,11 +71,14 @@ boundary-project/
 - PA attributes from the WDPA (name, country, IUCN category, establishment year, biome, …), plus `MERGED_PID`, `AREA_KM2`, `SHAPE_RATIO`
 - Transect coverage per PA (script 02): `N_TRNST_GEN` (transects generated, one per 500 m of boundary), `N_TRNST` (kept after the whole-line check), `PCT_KEPT` (% kept), and `MAX_GAP_PCT` (longest run of dropped transects as % of the boundary; 0 = full coverage)
 - Four versions of every metric, by suffix: none (all transects), `_nowater` (no transects with water), `_nootherpa` (no transects whose outer points fall in another PA), `_noflags` (neither)
-  - `n_trnst*`: complete transects that year
+  - `n_trnst*`: complete transects that year (all 5 points have a value)
+  - `pct_complete`: `n_trnst` as a % of the PA's transects (`N_TRNST`), to spot years with little data
   - `edge_extent*`: share of transects that are edges (`pt_0 > min(pt_1, pt_2)` and `pt_0 > min(pt_m1, pt_m2)`)
   - `D02*`, `D01*`, `D0m1*`, `D0m2*`: Cohen's d of the boundary point vs each other position, on edge transects
   - `edge_intensity*`: mean of the four Cohen's d values
-  - `trend_*`, `slope_*`, `p_value_*`: per-PA OLS trend on year (≥ 5 years of data)
+  - `slope_*`, `p_value_*`: per-PA OLS trend on year (≥ 5 years of data)
+  - `p_adj_*`: Benjamini–Hochberg adjusted p-value (across PAs, separately for each metric)
+  - `trend_*`: `increase` / `decrease` when `p_adj` < 0.05, otherwise `no_trend`
 - Covariates: `gHM_mean`, `elevation_mean`, `slope_mean`, `water_extent_pct`, `in_other_pa_pct`
 
 **`data/04_transect_years/ndvi_NNN.parquet`** — one row per complete transect-year: the five gradient values (`pt_m2` … `pt_2`), `edge`, and the per-transect flags `water_extent` and `in_other_pa`.

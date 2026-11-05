@@ -7,8 +7,9 @@ Edge metric functions (script 04).
   the water / other-PA flags
 - pa_year_metrics: PA-year edge extent, Cohen's d values, and edge intensity, for
   four transect subsets (all, no water, no other-PA, neither)
-- add_trends: per-PA OLS trend of every extent and intensity metric
-- cohens_d, recategorize_biome, classify_trend
+- add_trends: per-PA OLS trends of every extent and intensity metric, with
+  Benjamini-Hochberg adjusted p-values
+- cohens_d, recategorize_biome, fit_trend, bh_adjust
 
 Every PA lies within a single asset (script 02 writes whole PAs per upload file),
 so each asset is processed on its own; memory is bounded by one asset.
@@ -301,41 +302,58 @@ def recategorize_biome(biome):
         return biome
 
 
-def classify_trend(group, metric='edge_extent', alpha=0.05, min_years=5):
+def fit_trend(group, metric='edge_extent', min_years=5):
     """
-    Classify the temporal trend of one PA's metric with OLS on year.
+    OLS trend of one PA's metric on year.
 
     Years where the metric is NaN are left out. With fewer than ``min_years``
-    observations, slope, p-value and trend are NaN.
+    observations, slope and p-value are NaN.
 
-    Returns a Series with 'trend_{suffix}', 'slope_{suffix}', 'p_value_{suffix}',
-    where suffix is the metric name without 'edge_' (e.g. 'extent_nowater').
-    Trend classes: sig_increase / sig_decrease (p < alpha), otherwise
-    increase / decrease / no_change by the sign of the slope.
+    Returns a Series with 'slope_{suffix}' and 'p_value_{suffix}', where suffix
+    is the metric name without 'edge_' (e.g. 'extent_nowater').
     """
     suffix = metric.removeprefix('edge_')
     ok = group[metric].notna().to_numpy()
     if ok.sum() < min_years:
-        return pd.Series({f'trend_{suffix}': None, f'slope_{suffix}': np.nan, f'p_value_{suffix}': np.nan})
-
+        return pd.Series({f'slope_{suffix}': np.nan, f'p_value_{suffix}': np.nan})
     slope, intercept, r_value, p_value, std_err = stats.linregress(
         group['year'].to_numpy()[ok], group[metric].to_numpy()[ok]
     )
-    if p_value < alpha:
-        trend = 'sig_increase' if slope > 0 else 'sig_decrease'
-    elif slope > 0:
-        trend = 'increase'
-    elif slope < 0:
-        trend = 'decrease'
-    else:
-        trend = 'no_change'
-
-    return pd.Series({f'trend_{suffix}': trend, f'slope_{suffix}': slope, f'p_value_{suffix}': p_value})
+    return pd.Series({f'slope_{suffix}': slope, f'p_value_{suffix}': p_value})
 
 
-def add_trends(pa_years):
+def bh_adjust(p_values):
+    """
+    Benjamini-Hochberg adjusted p-values (false discovery rate); NaN stays NaN.
+
+    The number of tests is the number of non-NaN p-values.
+    """
+    p = np.asarray(p_values, dtype=float)
+    out = np.full(p.shape, np.nan)
+    ok = ~np.isnan(p)
+    m = int(ok.sum())
+    if m == 0:
+        return out
+    order = np.argsort(p[ok])
+    ranked = p[ok][order] * m / np.arange(1, m + 1)
+    adjusted = np.minimum(np.minimum.accumulate(ranked[::-1])[::-1], 1.0)
+    vals = np.empty(m)
+    vals[order] = adjusted
+    out[ok] = vals
+    return out
+
+
+def add_trends(pa_years, alpha=0.05, min_years=5):
     """
     Add per-PA trend columns for every edge_extent* and edge_intensity* metric.
+
+    For each metric (suffix = name without 'edge_', e.g. 'extent_nowater'):
+    - slope_{suffix}: OLS slope on year (per year), from >= min_years years
+    - p_value_{suffix}: unadjusted p-value of the slope
+    - p_adj_{suffix}: Benjamini-Hochberg adjusted p-value, across PAs, separately
+      for each metric
+    - trend_{suffix}: 'increase' / 'decrease' when p_adj < alpha (by the sign of
+      the slope), otherwise 'no_trend'; NaN when there are too few years
 
     Parameters
     ----------
@@ -345,15 +363,21 @@ def add_trends(pa_years):
     Returns
     -------
     DataFrame
-        ``pa_years`` with trend_/slope_/p_value_ columns merged onto every row.
+        ``pa_years`` with the trend columns merged onto every row.
     """
     metrics = [f'edge_{m}{v}' for v in VERSIONS for m in ('extent', 'intensity')]
     out = pa_years
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', RuntimeWarning)
         for metric in metrics:
+            suffix = metric.removeprefix('edge_')
             trends = (pa_years.groupby('WDPA_PID')[['year', metric]]
-                      .apply(classify_trend, metric=metric)
+                      .apply(fit_trend, metric=metric, min_years=min_years)
                       .reset_index())
+            slope, p_adj = trends[f'slope_{suffix}'], bh_adjust(trends[f'p_value_{suffix}'])
+            trends[f'p_adj_{suffix}'] = p_adj
+            trends[f'trend_{suffix}'] = np.where(
+                np.isnan(p_adj), None,
+                np.where(p_adj < alpha, np.where(slope > 0, 'increase', 'decrease'), 'no_trend'))
             out = out.merge(trends, on='WDPA_PID', how='left')
     return out

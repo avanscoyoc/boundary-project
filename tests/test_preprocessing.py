@@ -165,6 +165,20 @@ def test_merge_same_name_only_touching_same_country():
     assert counts['groups_merged'] == 1 and counts['pas_merged_away'] == 1
 
 
+def test_merge_takes_attributes_from_largest_and_oldest_year():
+    gdf = pas_frame([
+        ('NP', box(0, 0, 10000, 10000), 'Denali', 'USA', 0),         # largest, unknown year
+        ('SP', box(10000, 0, 11000, 1000), 'Denali', 'USA', 1970),   # small, oldest known year
+    ])
+    gdf['DESIG_ENG'] = ['National Park', 'State Park']
+    gdf['IUCN_CAT'] = ['II', 'V']
+    kept, _, _ = merge_same_name(gdf)
+    row = kept.iloc[0]
+    assert row['WDPA_PID'] == 'SP'                     # ID unchanged (matches uploaded points)
+    assert row['STATUS_YR'] == 1970                    # oldest non-zero year
+    assert (row['DESIG_ENG'], row['IUCN_CAT'], row['ATTR_PID']) == ('National Park', 'II', 'NP')
+
+
 # ---------------------------------------------------------------- shape metric (#14)
 
 def test_shape_ratio_is_size_neutral():
@@ -208,3 +222,25 @@ def test_generate_transects_removes_pa_with_coverage_gap(tmp_path):
     assert strict['totals']['in_pas_removed_for_coverage_gap'] == strict['n_transects']['U'] > 0
     loose = generate_transects(pas, max_gap_pct_limit=None, **kwargs)
     assert loose['status'] == {'U': 'ok', 'SQ': 'ok'}
+
+
+# ---------------------------------------------------------------- Earth Engine retries (script 03)
+
+def test_retry_recovers_from_transient_errors(monkeypatch):
+    import modules.remotesensing as rs
+    monkeypatch.setattr(rs.time, 'sleep', lambda s: None)
+    calls = {'n': 0}
+
+    def flaky():
+        calls['n'] += 1
+        if calls['n'] < 3:
+            raise ConnectionError('network down')
+        return 'COMPLETED'
+
+    assert rs._retry(flaky, 'test') == 'COMPLETED' and calls['n'] == 3
+
+    def always_fails():
+        raise ConnectionError('still down')
+    import pytest
+    with pytest.raises(ConnectionError):
+        rs._retry(always_fails, 'test', attempts=3)

@@ -126,6 +126,8 @@ attributes = pyogrio.read_dataframe(config.PAS_SELECTED, read_geometry=False)
 attributes['WDPA_PID'] = attributes['WDPA_PID'].astype(str)
 pa = pa.merge(attributes, on='WDPA_PID', how='left')
 pa['BIOME_NAME'] = pa['BIOME_NAME'].apply(recategorize_biome)
+# Share of the PA's transects with data at all 5 points that year
+pa['pct_complete'] = 100 * pa['n_trnst'] / pa['N_TRNST']
 pa = add_trends(pa.sort_values(['WDPA_PID', 'year']).reset_index(drop=True))
 
 config.RESULTS_DIR.mkdir(parents=True, exist_ok=True)

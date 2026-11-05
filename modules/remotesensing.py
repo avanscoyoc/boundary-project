@@ -221,6 +221,30 @@ def get_annual_gradient_magnitude(y):
     return get_gradient_magnitude(y)
 
 
+def _retry(fn, what, attempts=10, wait=60):
+    """
+    Call ``fn()``; on an error (e.g. a dropped connection), wait ``wait`` seconds
+    and try again, up to ``attempts`` times in total (~10 minutes by default).
+
+    Only used for read-only requests (task status, collection size), never for
+    starting tasks, so a retry can't submit an export twice.
+    """
+    for attempt in range(1, attempts + 1):
+        try:
+            return fn()
+        except Exception as e:
+            if attempt == attempts:
+                raise
+            print(f"  {what} failed ({type(e).__name__}: {e}); "
+                  f"retrying in {wait}s ({attempt}/{attempts - 1})", flush=True)
+            time.sleep(wait)
+
+
+def _state(task):
+    """Task state ('READY', 'RUNNING', 'COMPLETED', 'FAILED', ...), with retries."""
+    return _retry(lambda: task.status()['state'], 'Task status check')
+
+
 def batch_sample_assets(asset_path, image, selectors, folder_name, export_prefix,
                         chunk_size=50_000, batch_size=10, chunks_to_run=None,
                         scale=500, crs=None):
@@ -263,7 +287,7 @@ def batch_sample_assets(asset_path, image, selectors, folder_name, export_prefix
         Sampling projection for reduceRegions (default: the image's projection).
     """
     samples = ee.FeatureCollection(asset_path)
-    size = samples.size().getInfo()
+    size = _retry(lambda: samples.size().getInfo(), 'Asset size request')
     nChunks = int((size + chunk_size - 1) // chunk_size)
     tasks = []
 
@@ -298,14 +322,14 @@ def batch_sample_assets(asset_path, image, selectors, folder_name, export_prefix
         print(f"  Processing chunks {chunk_nums}...")
 
         while True:
-            statuses = [t.status()['state'] for _, t in batch]
+            statuses = [_state(t) for _, t in batch]
             if all(s in ['COMPLETED', 'FAILED', 'CANCELLED'] for s in statuses):
                 print(f"  Completed chunks {chunk_nums}")
                 break
             time.sleep(30)
 
         # Retry any failed chunks at half chunk_size
-        failed = [(idx, t) for idx, t in batch if t.status()['state'] == 'FAILED']
+        failed = [(idx, t) for idx, t in batch if _state(t) == 'FAILED']
         if failed:
             half = chunk_size // 2
             failed_nums = [idx for idx, _ in failed]
@@ -333,10 +357,10 @@ def batch_sample_assets(asset_path, image, selectors, folder_name, export_prefix
 
             print(f"  Polling {len(retry_tasks)} retry tasks...")
             while True:
-                statuses = [t.status()['state'] for t in retry_tasks]
+                statuses = [_state(t) for t in retry_tasks]
                 if all(s in ['COMPLETED', 'FAILED', 'CANCELLED'] for s in statuses):
                     still_failed = [t.config['description'] for t in retry_tasks
-                                    if t.status()['state'] == 'FAILED']
+                                    if _state(t) == 'FAILED']
                     if still_failed:
                         print(f"  WARNING: retry tasks still failed: {still_failed}")
                     else:

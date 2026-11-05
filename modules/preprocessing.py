@@ -202,11 +202,17 @@ def merge_same_name(gdf, max_hole_area=2250000):
     Dissolve protected areas that share a name and country and touch or overlap.
 
     PAs are grouped by ORIG_NAME + ISO3. Within a group, members that touch or
-    overlap (directly or through each other) are dissolved into one polygon
-    that keeps the attributes of the oldest non-zero STATUS_YR member. The
-    'MERGED_PID' column lists the PIDs merged into it (';'-separated). Members
-    that don't touch stay separate PAs. If a union isn't a single Polygon, its
-    members are left separate. Small holes in each union are filled again.
+    overlap (directly or through each other) are dissolved into one polygon:
+
+    - WDPA_PID: the oldest member's (oldest non-zero STATUS_YR), as before
+    - STATUS_YR: the oldest non-zero establishment year among the members
+    - all other attributes (designation, IUCN category, ...): the LARGEST
+      member's, recorded in 'ATTR_PID'
+    - 'MERGED_PID': the other members' PIDs (';'-separated)
+
+    Members that don't touch stay separate PAs. If a union isn't a single
+    Polygon, its members are left separate. Small holes in each union are
+    filled again.
 
     Parameters
     ----------
@@ -219,13 +225,14 @@ def merge_same_name(gdf, max_hole_area=2250000):
     Returns
     -------
     tuple of (GeoDataFrame, DataFrame, dict)
-        - PAs after merging (index reset), with 'MERGED_PID'
+        - PAs after merging (index reset), with 'MERGED_PID' and 'ATTR_PID'
         - removed (merged-away) rows with 'reason' = 'same_name_merged' and
           'replaced_by'
         - counts: n_in, groups_merged, pas_merged_away, groups_not_single_polygon, n_out
     """
     gdf = gdf.reset_index(drop=True).copy()
     gdf['MERGED_PID'] = ''
+    gdf['ATTR_PID'] = gdf['WDPA_PID']
     key = gdf['ORIG_NAME'].fillna('<NA>').astype(str) + '||' + gdf['ISO3'].fillna('<NA>').astype(str)
     pids = gdf['WDPA_PID'].to_numpy()
 
@@ -245,8 +252,16 @@ def merge_same_name(gdf, max_hole_area=2250000):
             if union.geom_type != 'Polygon':
                 not_single += 1
                 continue
-            keep = get_min_year_from_group(gdf.iloc[members]).name
+            group = gdf.iloc[members]
+            keep = get_min_year_from_group(group).name            # PID: oldest member
+            largest = group.geometry.area.idxmax()                # attributes: largest member
+            oldest_year = group['STATUS_YR'][group['STATUS_YR'] != 0].min()
             others = [m for m in members if m != keep]
+            attr_cols = [c for c in gdf.columns
+                         if c not in ('WDPA_PID', 'geometry', 'MERGED_PID', 'ATTR_PID', 'STATUS_YR')]
+            gdf.loc[keep, attr_cols] = gdf.loc[largest, attr_cols].to_numpy()
+            gdf.at[keep, 'STATUS_YR'] = 0 if pd.isna(oldest_year) else oldest_year
+            gdf.at[keep, 'ATTR_PID'] = pids[largest]
             gdf.at[keep, 'geometry'] = union
             gdf.at[keep, 'MERGED_PID'] = ';'.join(pids[others])
             drop += others
