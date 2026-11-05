@@ -98,7 +98,7 @@ def read_asset_csvs(files, years):
     year_cols = [str(y) for y in years]
     dtypes = {'WDPA_PID': str, 'transectID': 'float64', 'pointID': 'float64',
               'max_extent': 'float32', 'gHM': 'float32', 'elevation': 'float32',
-              'slope': 'float32', **{y: 'float32' for y in year_cols}}
+              'terrain_slope': 'float32', **{y: 'float32' for y in year_cols}}
     df = pd.concat([pd.read_csv(f, dtype=dtypes, usecols=list(dtypes)) for f in files],
                    ignore_index=True)
     df['transectID'] = df['transectID'].astype('int32')
@@ -128,7 +128,7 @@ def build_transect_years(df, years, flags=None):
     -------
     tuple of (DataFrame, dict)
         - transect-years: WDPA_PID, transectID, year, pt_m2 … pt_2, edge,
-          water_extent, in_other_pa, gHM_mean_outer, elevation_pt0, slope_pt0
+          water_extent, in_other_pa, gHM_mean_outer, elevation_pt0, terrain_slope_pt0
         - counts: transects_received, transects_missing_points,
           complete_per_year {year: n}
 
@@ -161,7 +161,7 @@ def build_transect_years(df, years, flags=None):
             water_extent=(per_point('max_extent') == 1).any(axis=1).astype('int8'),
             gHM_mean_outer=np.nanmean(per_point('gHM')[:, 3:5], axis=1),
             elevation_pt0=per_point('elevation')[:, 2],
-            slope_pt0=per_point('slope')[:, 2],
+            terrain_slope_pt0=per_point('terrain_slope')[:, 2],
         )
     if flags is not None and len(flags):
         transects = transects.merge(flags[['WDPA_PID', 'transectID', 'in_other_pa']],
@@ -182,7 +182,7 @@ def build_transect_years(df, years, flags=None):
     p = ty[PT_COLS]
     ty['edge'] = ((p['pt_0'] > p[['pt_1', 'pt_2']].min(axis=1)) &
                   (p['pt_0'] > p[['pt_m1', 'pt_m2']].min(axis=1))).astype('int8')
-    for col in ['water_extent', 'in_other_pa', 'gHM_mean_outer', 'elevation_pt0', 'slope_pt0']:
+    for col in ['water_extent', 'in_other_pa', 'gHM_mean_outer', 'elevation_pt0', 'terrain_slope_pt0']:
         ty[col] = transects[col].to_numpy()[t_idx]
 
     counts = {
@@ -220,7 +220,7 @@ def pa_year_metrics(ty):
       on edge transects only
     - edge_intensity{v}: mean of the four D values (NaN if any is NaN)
 
-    Covariates (all transects): gHM_mean, elevation_mean, slope_mean,
+    Covariates (all transects): gHM_mean, elevation_mean, terrain_slope_mean,
     water_extent_pct, in_other_pa_pct.
 
     Returns
@@ -234,7 +234,7 @@ def pa_year_metrics(ty):
     out = pd.DataFrame({
         'gHM_mean': g_all['gHM_mean_outer'].mean(),
         'elevation_mean': g_all['elevation_pt0'].mean(),
-        'slope_mean': g_all['slope_pt0'].mean(),
+        'terrain_slope_mean': g_all['terrain_slope_pt0'].mean(),
         'water_extent_pct': g_all['water_extent'].mean() * 100,
         'in_other_pa_pct': g_all['in_other_pa'].mean() * 100,
     })

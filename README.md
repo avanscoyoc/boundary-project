@@ -79,7 +79,7 @@ boundary-project/
   - `slope_*`, `p_value_*`: per-PA OLS trend on year (≥ 5 years of data)
   - `p_adj_*`: Benjamini–Hochberg adjusted p-value (across PAs, separately for each metric)
   - `trend_*`: `increase` / `decrease` when `p_adj` < 0.05, otherwise `no_trend`
-- Covariates: `gHM_mean`, `elevation_mean`, `slope_mean`, `water_extent_pct`, `in_other_pa_pct`
+- Covariates: `gHM_mean`, `elevation_mean`, `terrain_slope_mean`, `water_extent_pct`, `in_other_pa_pct`
 
 **`data/04_transect_years/ndvi_NNN.parquet`** — one row per complete transect-year: the five gradient values (`pt_m2` … `pt_2`), `edge`, and the per-transect flags `water_extent` and `in_other_pa`.
 

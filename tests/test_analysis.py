@@ -50,3 +50,4 @@ def test_grouped_cohens_d_matches_reference():
     d = _grouped_cohens_d(df, ['WDPA_PID', 'year']).iloc[0]
     for name, col in {'D02': 'pt_2', 'D01': 'pt_1', 'D0m1': 'pt_m1', 'D0m2': 'pt_m2'}.items():
         assert np.isclose(d[name], cohens_d(df['pt_0'], df[col]))
+

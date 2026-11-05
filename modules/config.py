@@ -47,7 +47,7 @@ RUN_TAG = 'v2'
 
 # Replace with your GEE project ID (e.g. 'my-gee-project')
 # Find it at: https://console.cloud.google.com/
-GEE_PROJECT = 'GEE-PROJECT-ID'  # --- EDIT THIS ---
+GEE_PROJECT = 'YOUR-GEE-PROJECT'  # --- EDIT THIS ---
 
 # =====================================================================
 # Dataset Parameters

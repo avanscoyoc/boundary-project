@@ -80,7 +80,7 @@ hm = ee.ImageCollection('CSP/HM/GlobalHumanModification').mean()
 # near-zero or missing slopes (Earth Engine catalog: COPERNICUS/DEM/GLO30_2024_1).
 dem = ee.ImageCollection('COPERNICUS/DEM/GLO30_2024_1').select('DEM')
 elevation = dem.mosaic().setDefaultProjection(dem.first().projection()).rename('elevation')
-slope = ee.Terrain.slope(elevation)
+slope = ee.Terrain.slope(elevation).rename('terrain_slope')
 
 staticImage = ee.Image.cat([
     gsw.select('max_extent'),
@@ -92,7 +92,7 @@ staticImage = ee.Image.cat([
 # Year configuration
 years = ee.List.sequence(config.START_YEAR, config.END_YEAR)
 gradBandNames = [str(y) for y in range(config.START_YEAR, config.END_YEAR + 1)]
-selectors = ['WDPA_PID', 'transectID', 'pointID', 'max_extent', 'gHM', 'elevation', 'slope'] + gradBandNames
+selectors = ['WDPA_PID', 'transectID', 'pointID', 'max_extent', 'gHM', 'elevation', 'terrain_slope'] + gradBandNames
 
 # Annual gradient band layers
 gradientBands = ee.ImageCollection.fromImages(
