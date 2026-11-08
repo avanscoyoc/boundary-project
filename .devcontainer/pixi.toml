@@ -1,0 +1,32 @@
+# R environment for the statistical analysis (scripts/05–10), built into the dev container at /opt/r.
+# Python is not managed here: it uses the system interpreter (requirements.txt + constraints.txt).
+#
+# pixi.lock pins every package for both Linux architectures, so the container builds the same way on
+# Apple Silicon (linux-aarch64) and on Windows/WSL2, Intel Macs and Linux (linux-64).
+#   After editing this file, update the lock with:  pixi lock --manifest-path .devcontainer/pixi.toml
+[workspace]
+name = "boundary-project-r"
+channels = ["conda-forge"]
+platforms = ["linux-64", "linux-aarch64"]
+
+[dependencies]
+r-base = "4.5.*"            # conda-forge had no R 4.6 package builds yet (2026-11-07); move to 4.6 once it does
+r-tidyverse = "*"
+r-sf = "*"
+r-nlme = "*"
+r-emmeans = "*"
+r-spdep = "*"
+r-boot = "*"
+r-broom = "*"
+r-multcompview = "*"
+r-patchwork = "*"
+r-scales = "*"
+r-gghalves = "*"
+r-jsonlite = "*"
+r-testthat = "*"
+compilers = "*"             # builds Kendall and zyp (below); conda-forge lacks them for linux-aarch64
+make = "*"
+
+[tasks]
+# Kendall and zyp (Yue–Pilon trend test) come from a dated CRAN snapshot, so their versions are fixed too.
+install-cran = '''Rscript -e 'install.packages(c("Kendall", "zyp"), repos = "https://packagemanager.posit.co/cran/2026-11-01", type = "source"); stopifnot(packageVersion("Kendall") == "2.2.2", packageVersion("zyp") == "0.11-1")' '''

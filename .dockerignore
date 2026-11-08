@@ -1,0 +1,7 @@
+# The dev container builds with the repo root as context (.devcontainer/devcontainer.json).
+# Send Docker only the files the Dockerfile copies, not data/ or results/ (many GB).
+*
+!requirements.txt
+!constraints.txt
+!.devcontainer/pixi.toml
+!.devcontainer/pixi.lock

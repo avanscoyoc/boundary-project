@@ -1,7 +1,9 @@
 {
   "name": "boundary-project-devcontainer",
-  "dockerFile": "Dockerfile",
-  "context": ".",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
   "workspaceFolder": "/workspace",
   "mounts": [
     "source=${localWorkspaceFolder},target=/workspace,type=bind"
@@ -13,6 +15,6 @@
       }
     }
   },
-  "postCreateCommand": "python3 -m ipykernel install --user --name gee-dev-kernel && earthengine authenticate --quiet || true",
+  "postCreateCommand": "earthengine authenticate --quiet || true",
   "remoteUser": "root"
 }
