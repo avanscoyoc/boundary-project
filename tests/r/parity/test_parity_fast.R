@@ -56,3 +56,46 @@ test_that("legacy inputs are consistent with the old outputs", {
                c(stats::sd(ms$edge_extent_mean), stats::sd(ms$edge_intensity_mean)),
                tolerance = 1e-12)
 })
+
+# ── Step 2: per-PA trends (02:63-128, 437-470) ─────────────────────────────────
+# New: pa_trends() on the old annual series. Old: pa_level_clean.csv (all trend columns)
+# and pa_trends.csv (written by the same run of 02).
+legacy_new_trends <- local({
+  cache <- NULL
+  function() {
+    if (is.null(cache)) {
+      L <- legacy(); s <- L$settings
+      cache <<- lapply(c(extent = "edge_extent", intensity = "edge_intensity"), function(resp)
+        pa_trends(L$annual, resp, sub("edge_", "", resp), s$min_years, s$fdr, CFG$trend$levels))
+    }
+    cache
+  }
+})
+
+test_that("per-PA OLS trends, BH classes and Yue-Pilon reproduce the old run", {
+  skip_if_no_legacy()
+  L <- legacy()
+  old_tr <- as.data.frame(readr::read_csv(legacy_file("data", "processed", "pa_trends.csv"),
+                                          col_types = readr::cols(WDPA_PID = "c"),
+                                          show_col_types = FALSE, progress = FALSE))
+  for (m in c("extent", "intensity")) {
+    new <- legacy_new_trends()[[m]]
+    # Same PA set per metric as the old run
+    has_old <- !is.na(L$pa[[paste0("slope_", m)]])
+    expect_setequal(new$WDPA_PID, L$pa$WDPA_PID[has_old])
+    i <- match(L$pa$WDPA_PID, new$WDPA_PID)
+    for (col in paste0(c("slope_", "se_", "stat_", "p_value_", "p_fdr_", "sen_", "p_zyp_",
+                         "p_fdr_zyp_"), m)) {
+      parity_check("pa_level_clean.csv", col, new[[col]][i], L$pa[[col]], tol = 1e-8)
+    }
+    for (col in c(paste0("trend_", m), paste0("trend_", m, "_zyp"))) {
+      parity_check("pa_level_clean.csv", col, new[[col]][i], L$pa[[col]], kind = "identical")
+    }
+    j <- match(old_tr$WDPA_PID, new$WDPA_PID)
+    for (col in paste0(c("slope_", "se_", "p_value_", "p_fdr_", "sen_", "p_fdr_zyp_"), m)) {
+      parity_check("pa_trends.csv", col, new[[col]][j], old_tr[[col]], tol = 1e-8)
+    }
+    parity_check("pa_trends.csv", paste0("trend_", m), new[[paste0("trend_", m)]][j],
+                 legacy_map_classes(old_tr[[paste0("trend_", m)]]), kind = "identical")
+  }
+})

@@ -7,10 +7,15 @@ FROM osgeo/gdal:ubuntu-small-3.6.3@sha256:398d5aca0ca88295c13ada87e0f382ed409dac
 
 WORKDIR /workspace
 ENV DEBIAN_FRONTEND=noninteractive
+# UTF-8 locale: without it R writes ×, ±, ·, é and en dashes in figures as "..".
+# TZ: R otherwise warns that the time zone is unknown (no /etc/localtime in the base image).
+ENV LANG=C.UTF-8 TZ=UTC
 
 # System tools. google-cloud-cli is optional (scripts sign in with auth_mode='notebook', not gcloud).
+# fonts-liberation: Liberation Sans has Helvetica's metrics; R's PNG devices use it when a figure
+# asks for "Helvetica" (the PDF device has Helvetica built in).
 RUN apt-get update && \
-    apt-get install -y python3-pip git curl ca-certificates gnupg && \
+    apt-get install -y python3-pip git curl ca-certificates gnupg fonts-liberation && \
     echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" \
       > /etc/apt/sources.list.d/google-cloud-sdk.list && \
     curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg \
