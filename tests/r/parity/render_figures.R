@@ -20,10 +20,16 @@ tab <- function(name) {
 rows <- fig3a_rows(tab("model_coef_additive_gls.csv"), tab("response_sd_gls.csv"), s$biome_order,
                    contrasts = tab("model_contrasts_additive_gls.csv"))
 sl_i <- tab("hmi_slopes_iucn_gls.csv"); sl_b <- tab("hmi_slopes_biome_gls.csv")
+# Panels from the Wald tests (B3): on the old data extent × IUCN, extent × biome and intensity ×
+# biome are supported (intensity × IUCN p = 0.27), which are the old panels B, C, D.
+wald <- tab("model_tests_wald_gls.csv")
+panels <- fig3_panels(wald)
+stopifnot(identical(paste(panels$factor, panels$response),
+                    c("IUCN_group extent", "BIOME_NAME extent", "BIOME_NAME intensity")))
 p3 <- fig3(rows, tab("pred_extent_hmi_iucn_gls.csv"),
            rbind(tab("pred_extent_hmi_biome_gls.csv"), tab("pred_intensity_hmi_biome_gls.csv")),
            sl_i[sl_i$spatial == "spatial", ], sl_b[sl_b$spatial == "spatial", ],
-           tab("model_tests_wald_gls.csv"), s$biome_order)
+           wald, s$biome_order, panels)
 ggplot2::ggsave(file.path(out, "fig3_model_port.pdf"), p3, width = 13.5, height = 12.5, device = grDevices::cairo_pdf)
 ggplot2::ggsave(file.path(out, "fig3_model_port.png"), p3, width = 13.5, height = 12.5, dpi = 200)
 

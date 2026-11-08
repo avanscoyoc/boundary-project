@@ -106,11 +106,33 @@ fig3a_rows <- function(coef, response_sd, biome_order, contrasts = NULL, ref = N
   rows
 }
 
-#' Fig. 3 (06): A = additive-model effects (fig3a_rows()); B = predicted extent across HMI by
-#' IUCN group; C, D = predicted extent / intensity across HMI by biome. B–D carry the Wald F of
-#' the interaction; stars = Holm p of each group's HMI slope. `pred_iucn` NULL drops panel B.
+#' The Fig. 3 interaction panels to show (B3): one per response and factor whose interaction
+#' with HMI is supported (marginal Wald p < alpha), as the methods interpret the HMI slopes only
+#' there. `wald`: the H2/H3 rows of the interaction models (TableSY_wald_interactions). Returns
+#' factor ("IUCN_group" or "BIOME_NAME"), response, p.value: IUCN panels first, then biome, each
+#' in the order of `responses`.
+fig3_panels <- function(wald, alpha = 0.05,
+                        responses = intersect(names(RESPONSE_LABELS), wald$response)) {
+  out <- do.call(rbind, lapply(c(IUCN_group = "IUCN", BIOME_NAME = "BIOME"), function(pat) {
+    do.call(rbind, lapply(responses, function(r) {
+      w <- wald[wald$response == r & grepl(":", wald$term) & grepl(pat, wald$term), ]
+      stopifnot(nrow(w) == 1)
+      data.frame(term = w$term, response = r, p.value = w$p.value, stringsAsFactors = FALSE)
+    }))
+  }))
+  out <- cbind(factor = ifelse(grepl("IUCN", out$term), "IUCN_group", "BIOME_NAME"),
+               out[c("response", "p.value")], stringsAsFactors = FALSE)
+  out <- out[out$p.value < alpha, , drop = FALSE]
+  rownames(out) <- NULL
+  out
+}
+
+#' Fig. 3: A = main-effects model effects (fig3a_rows()), on the left; on the right, one panel
+#' per row of `panels` (fig3_panels()): the predicted response across HMI by IUCN group or by
+#' biome from the interaction model, with the Wald F of the interaction; stars = Holm p of each
+#' group's HMI slope. With no supported interaction the figure is panel A alone.
 fig3 <- function(rows_a, pred_iucn, pred_biome, slopes_iucn, slopes_biome, wald, biome_order,
-                 alpha = 0.05, iucn_response = "extent") {
+                 panels, alpha = 0.05) {
   gg <- ggplot2::ggplot; aes <- ggplot2::aes
   theme_fig3 <- ggplot2::theme(axis.title = ggplot2::element_text(size = 16),
                                axis.text = ggplot2::element_text(size = 14),
@@ -140,43 +162,42 @@ fig3 <- function(rows_a, pred_iucn, pred_biome, slopes_iucn, slopes_biome, wald,
                    legend.position = "bottom") +
     theme_fig3
 
-  # ── B ──
-  p_b <- NULL
-  if (!is.null(pred_iucn)) {
-    pe <- pred_iucn[pred_iucn$response == iucn_response, ]
+  # ── HMI × IUCN panel ──
+  iucn_panel <- function(resp) {
+    pe <- pred_iucn[pred_iucn$response == resp, ]
     pe$group <- factor(pe$IUCN_group, levels = IUCN_LEVELS, labels = IUCN_LABELS)
-    st <- slopes_iucn[slopes_iucn$response == iucn_response, ]
+    st <- slopes_iucn[slopes_iucn$response == resp, ]
     st$group <- factor(st$IUCN_group, levels = IUCN_LEVELS, labels = IUCN_LABELS)
     ends <- do.call(rbind, lapply(split(pe, pe$group, drop = TRUE), function(x) x[which.max(x$gHM_mean), ]))
     ends$star <- p_stars(st$p.value, alpha)[match(ends$group, st$group)]
     xr <- range(pe$gHM_mean)
-    p_b <- gg(pe, aes(x = gHM_mean, y = predicted, color = group, fill = group, linetype = group)) +
+    gg(pe, aes(x = gHM_mean, y = predicted, color = group, fill = group, linetype = group)) +
       ggplot2::geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.12, color = NA, show.legend = FALSE) +
       ggplot2::geom_line(linewidth = 1) +
       ggplot2::geom_text(data = ends, aes(label = trimws(paste(group, star))), hjust = -0.08,
                          vjust = 0.5, size = 3.6, family = PLOT_FAMILY, show.legend = FALSE) +
       ggplot2::annotate("text", x = xr[1] + 0.12 * diff(xr), y = Inf, hjust = 0, vjust = 1.5,
                         size = annot, family = PLOT_FAMILY,
-                        label = paste0("HMI × IUCN\n", .wald_label(wald, iucn_response, "IUCN"))) +
+                        label = paste0("HMI × IUCN\n", .wald_label(wald, resp, "IUCN"))) +
       ggplot2::scale_color_manual(values = IUCN_COLORS, name = NULL) +
       ggplot2::scale_fill_manual(values = IUCN_COLORS, guide = "none") +
       ggplot2::scale_linetype_manual(values = IUCN_LTYPES, name = NULL) +
       ggplot2::scale_x_continuous(breaks = seq(0, 1, 0.2), expand = ggplot2::expansion(mult = c(0.02, 0.42))) +
       ggplot2::scale_y_continuous(labels = scales::label_number(accuracy = 0.01),
                                   expand = ggplot2::expansion(mult = c(0.05, 0.22))) +
-      ggplot2::labs(x = "Human modification index", y = RESPONSE_LABELS[[iucn_response]]) +
+      ggplot2::labs(x = "Human modification index", y = RESPONSE_LABELS[[resp]]) +
       theme_pa() + ggplot2::theme(legend.position = "none") + theme_fig3
   }
 
-  # ── C, D ──
-  n_pa <- slopes_biome[!duplicated(slopes_biome$BIOME_NAME), c("BIOME_NAME", "n_PA")]
-  bo <- biome_order[biome_order %in% pred_biome$BIOME_NAME]
-  biome_lab <- stats::setNames(paste0(bo, " (n = ", format(n_pa$n_PA[match(bo, n_pa$BIOME_NAME)],
-                                                           big.mark = ",", trim = TRUE), ")"), bo)
-  pb <- pred_biome
-  pb$biome <- factor(pb$BIOME_NAME, levels = bo)
-  xr_all <- range(pb$gHM_mean)
-  panel <- function(resp) {
+  # ── HMI × biome panel ──
+  biome_panel <- function(resp) {
+    n_pa <- slopes_biome[!duplicated(slopes_biome$BIOME_NAME), c("BIOME_NAME", "n_PA")]
+    bo <- biome_order[biome_order %in% pred_biome$BIOME_NAME]
+    biome_lab <- stats::setNames(paste0(bo, " (n = ", format(n_pa$n_PA[match(bo, n_pa$BIOME_NAME)],
+                                                             big.mark = ",", trim = TRUE), ")"), bo)
+    pb <- pred_biome
+    pb$biome <- factor(pb$BIOME_NAME, levels = bo)
+    xr_all <- range(pb$gHM_mean)
     d <- pb[pb$response == resp, ]
     st <- slopes_biome[slopes_biome$response == resp, ]
     ends <- do.call(rbind, lapply(split(d, d$biome, drop = TRUE), function(x) x[which.max(x$gHM_mean), ]))
@@ -198,23 +219,36 @@ fig3 <- function(rows_a, pred_iucn, pred_biome, slopes_iucn, slopes_biome, wald,
       ggplot2::labs(x = "Human modification index", y = RESPONSE_LABELS[[resp]]) +
       theme_pa() + theme_fig3
   }
-  p_c <- panel("extent") + ggplot2::theme(legend.position = "none")
-  p_d <- panel("intensity") +
-    ggplot2::guides(color = ggplot2::guide_legend(ncol = 3, byrow = TRUE)) +
-    ggplot2::theme(legend.position = "bottom", legend.margin = ggplot2::margin(0, 0, 0, 0),
-                   legend.key.width = grid::unit(1.2, "lines"), legend.spacing.x = grid::unit(2, "pt"),
-                   legend.text = ggplot2::element_text(size = 10))
 
-  if (is.null(p_b)) {
-    design <- "AC\nAD\nEE"; parts <- list(p_a, p_c, p_d); heights <- c(1, 1, 0.2)
+  # Right column: the panels in order; the last biome panel carries the biome legend.
+  last_biome <- utils::tail(which(panels$factor == "BIOME_NAME"), 1)
+  right <- lapply(seq_len(nrow(panels)), function(i) {
+    if (panels$factor[i] == "IUCN_group") return(iucn_panel(panels$response[i]))
+    p <- biome_panel(panels$response[i])
+    if (length(last_biome) && i == last_biome) {
+      p + ggplot2::theme(legend.position = "bottom", legend.margin = ggplot2::margin(0, 0, 0, 0),
+                         legend.key.width = grid::unit(1.2, "lines"), legend.spacing.x = grid::unit(2, "pt"),
+                         legend.text = ggplot2::element_text(size = 10))
+    } else {
+      p + ggplot2::theme(legend.position = "none")
+    }
+  })
+  k <- length(right)
+  if (k == 0) {
+    design <- "A\nB"; widths <- 1; heights <- c(1, 0.08)
   } else {
-    design <- "AB\nAC\nAD\nEE"; parts <- list(p_a, p_b, p_c, p_d); heights <- c(1, 1, 1, 0.2)
+    design <- paste(c(paste0("A", LETTERS[1 + seq_len(k)]), strrep(LETTERS[k + 2], 2)), collapse = "\n")
+    widths <- c(1.1, 1); heights <- c(rep(1, k), 0.2)
   }
-  patchwork::wrap_plots(c(parts, list(patchwork::guide_area()))) +
-    patchwork::plot_layout(design = design, guides = "collect", widths = c(1.1, 1), heights = heights) &
+  patchwork::wrap_plots(c(list(p_a), right, list(patchwork::guide_area()))) +
+    patchwork::plot_layout(design = design, guides = "collect", widths = widths, heights = heights) &
     ggplot2::theme(legend.box = "horizontal", legend.box.spacing = grid::unit(0.2, "lines"),
                    legend.justification = "center")
 }
+
+#' Height (in) for fig3() with k interaction panels: the old 3-panel figure is 12.5 in; panel A
+#' needs about 8 in on its own.
+fig3_height <- function(k) max(8, 3.9 * k + 0.8)
 
 #' Fig. 4A (07:25-230): standardised change by biome and for all PAs — half violin of the
 #' bootstrap means (left) and mean with 95% percentile CI (right), extent and intensity.

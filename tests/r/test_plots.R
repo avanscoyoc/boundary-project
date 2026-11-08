@@ -47,3 +47,37 @@ test_that("fig4a, slope-correlation and correlogram builders build", {
   mb <- data.frame(model = rep(c("a", "b"), each = 3), mid_km = c(25, 75, 175), I = c(0.1, 0.05, NA), p = 0.01)
   expect_true(builds(fig_moran_correlogram(mb)))
 })
+
+test_that("fig3_panels keeps the supported interactions; fig3 builds with 0 to 4 panels", {
+  wald <- data.frame(response = rep(c("extent", "intensity"), each = 2),
+                     term = rep(c("gHM_mean_z:IUCN_group", "gHM_mean_z:BIOME_NAME"), 2),
+                     numDF = rep(c(2, 5), 2), denDF = 4570, F.value = c(6.6, 5.6, 1.3, 5.1),
+                     p.value = c(0.001, 4e-5, 0.27, 1e-4))
+  p <- fig3_panels(wald)
+  expect_identical(paste(p$factor, p$response),
+                   c("IUCN_group extent", "BIOME_NAME extent", "BIOME_NAME intensity"))
+  expect_equal(nrow(fig3_panels(wald, alpha = 1e-6)), 0)
+  expect_error(fig3_panels(wald[-1, ]))           # each response needs both interaction rows
+
+  bo <- CFG$biome_order
+  coef <- data.frame(response = rep(c("extent", "intensity"), each = 13),
+                     term = c(names(TERM_LABELS), "IUCN_groupnon-strict", "IUCN_groupunknown", paste0("BIOME_NAME", bo[-1])),
+                     estimate = 0.02, conf.low = 0.01, conf.high = 0.03, p.value = 0.01)
+  rows <- fig3a_rows(coef, data.frame(response = c("extent", "intensity"), sd_response = 0.1), bo,
+                     ref = list(iucn = "strict", biome = bo[1]))
+  g <- seq(0, 0.8, length.out = 5)
+  pi <- expand.grid(gHM_mean = g, IUCN_group = IUCN_LEVELS, response = c("extent", "intensity"), stringsAsFactors = FALSE)
+  pb <- expand.grid(gHM_mean = g, BIOME_NAME = bo, response = c("extent", "intensity"), stringsAsFactors = FALSE)
+  for (x in c("pi", "pb")) {
+    y <- get(x); y$predicted <- 0.5 + 0.1 * y$gHM_mean; y$conf.low <- y$predicted - 0.01; y$conf.high <- y$predicted + 0.01
+    assign(x, y)
+  }
+  si <- expand.grid(IUCN_group = IUCN_LEVELS, response = c("extent", "intensity"), stringsAsFactors = FALSE); si$p.value <- 0.01
+  sb <- expand.grid(BIOME_NAME = bo, response = c("extent", "intensity"), stringsAsFactors = FALSE)
+  sb$p.value <- 0.2; sb$n_PA <- 100
+  for (a in c(1e-6, 0.05, 1)) {
+    pn <- fig3_panels(wald, alpha = a)
+    expect_true(builds(fig3(rows, pi, pb, si, sb, wald, bo, pn)), info = nrow(pn))
+  }
+  expect_equal(fig3_height(3), 12.5)
+})
