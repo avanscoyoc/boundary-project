@@ -4,6 +4,7 @@
 #
 # Slow (each optimiser step refactors an n × n matrix): run in the background from the repo root,
 #   Rscript tests/r/parity/run_parity_full.R [mean] [change] [--cores 2]
+# Rscript reads this file as it runs, so do not edit it during a run (or run a copy of it).
 # Fits are cached in data/parity/cache, so a rerun only refits what changed. Writes the rows of
 # source "full_mean" / "full_change" to data/parity/parity_report.csv, the new tables to
 # data/parity/full_<part>_tables.rds, and a log to data/parity/run_parity_full.log.
@@ -33,6 +34,14 @@ say <- function(...) {
   cat(msg, "\n", sep = ""); cat(msg, "\n", sep = "", file = log_file, append = TRUE)
 }
 say("run_parity_full.R: parts %s, %d cores", paste(parts, collapse = ","), cores)
+
+# A failing check must not stop the run before the report is written: testthat signals the
+# failure as an error at the end of test_that(), after the rows are recorded. Failures are
+# logged and the script exits with status 1 at the end.
+run_checks <- function(desc, code) {
+  r <- tryCatch({ testthat::test_that(desc, code); NULL }, error = function(e) conditionMessage(e))
+  if (!is.null(r)) say("checks failed: %s", desc)
+}
 
 pa <- legacy_pa(); s <- legacy_settings(pa); co <- legacy_coords(pa$WDPA_PID)
 d <- legacy_model_data(pa, co, s)
@@ -67,9 +76,8 @@ if ("mean" %in% parts) {
                       pred_by = c(if (r == "extent") "IUCN_group", "BIOME_NAME"))
   })
   saveRDS(tabs, file.path(CFG$paths$parity_dir, "full_mean_tables.rds"))
-  testthat::test_that("optimised mean models reproduce the old 03 tables", {
-    check_mean_tables(tabs, what = c("full", "add", "optimised"), tol = 1e-4, source = "full_mean")
-  })
+  run_checks("optimised mean models reproduce the old 03 tables",
+    check_mean_tables(tabs, what = c("full", "add", "optimised"), tol = 1e-4, source = "full_mean"))
 }
 
 if ("change" %in% parts) {
@@ -101,14 +109,16 @@ if ("change" %in% parts) {
                         moran_settings = list(nsim = CFG$spatial$moran_nsim, seed = CFG$spatial$moran_seed))
   })
   saveRDS(tabs, file.path(CFG$paths$parity_dir, "full_change_tables.rds"))
-  testthat::test_that("optimised change models reproduce the old 02b tables", {
-    check_change_tables(tabs, models = c("A", "B"), optimised = TRUE, tol = 1e-4, source = "full_change")
-  })
+  run_checks("optimised change models reproduce the old 02b tables",
+    check_change_tables(tabs, models = c("A", "B"), optimised = TRUE, tol = 1e-4, source = "full_change"))
 }
 
+# Only this run's rows (sources full_mean / full_change) are summarised; the report keeps the
+# other sources' rows.
 rep <- parity_write_report(file.path(CFG$paths$parity_dir, "parity_report.csv"))
-full <- rep[startsWith(rep$source, "full"), ]
-say("parity rows (full_*): %d, failing: %d; worst rel diff %.3g", nrow(full), sum(!full$pass),
-    max(full$max_rel_diff[full$kind == "rel"], na.rm = TRUE))
+full <- rep[rep$source %in% paste0("full_", parts), ]
+say("parity rows (%s): %d, failing: %d; worst rel diff %.3g", paste0("full_", parts, collapse = ", "),
+    nrow(full), sum(!full$pass), max(full$max_rel_diff[full$kind == "rel"], na.rm = TRUE))
 for (i in which(!full$pass)) say("FAIL %s / %s: %s", full$output[i], full$item[i], full$detail[i])
 say("done")
+if (any(!full$pass)) quit(status = 1)

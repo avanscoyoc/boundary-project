@@ -67,6 +67,10 @@ check_mean_tables <- function(tabs, what, tol, source) {
   }
   if ("optimised" %in% what) {
     cmp("spatial_params_gls.csv", "spatial_params", "response",
-        c("range_km", "range_lo", "range_hi", "AICc_spatial", "delta_AICc_nonspatial_minus_spatial"))
+        c("range_km", "AICc_spatial", "delta_AICc_nonspatial_minus_spatial"))
+    # Range CI (nlme apVar, finite-difference Hessian): within 0.1% of the CI width
+    old <- old_tab("spatial_params_gls.csv")
+    parity_check_ci_width("spatial_params_gls.csv", match_rows(stack("spatial_params"), old, "response"),
+                          old, "range_lo", "range_hi", tol = 1e-3, source = source)
   }
 }

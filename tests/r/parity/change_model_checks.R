@@ -1,7 +1,8 @@
 # Parity checks of the change-model tables (02b) against the old outputs/tables/, shared by the
 # fast suite (A at its saved range) and run_parity_full.R (A and B optimised).
 # `tabs` = named list (extent, intensity) of change_model_tables() results; `models` = which of
-# "A", "B" were tabulated; `optimised` adds the range, its CI and AICc spatial.
+# "A", "B" were tabulated; `optimised` adds the range, its CI (within 0.1% of the CI width,
+# see parity_check_ci_width()) and AICc spatial.
 check_change_tables <- function(tabs, models, optimised, tol, source) {
   old_tab <- function(name) {
     x <- legacy_table(name)
@@ -30,8 +31,12 @@ check_change_tables <- function(tabs, models, optimised, tol, source) {
   cmp("trend_drivers_spatial_params_trend_gls.csv", "spatial_params", "response",
       c("sigma", "AICc_nonspatial", "pseudoR2_spatial", "pseudoR2_nonspatial"), ident = "n")
   if (optimised) {
-    cmp("trend_drivers_spatial_params_trend_gls.csv", "spatial_params", "response",
-        c("range_km", "range_lo", "range_hi", "AICc_spatial", "delta_AICc_nonspatial_minus_spatial"))
+    f <- "trend_drivers_spatial_params_trend_gls.csv"
+    cmp(f, "spatial_params", "response", c("range_km", "AICc_spatial", "delta_AICc_nonspatial_minus_spatial"))
+    # Range CI (nlme apVar, finite-difference Hessian): within 0.1% of the CI width
+    old <- old_tab(f)
+    parity_check_ci_width(f, match_rows(stack("spatial_params"), old, "response"), old,
+                          "range_lo", "range_hi", tol = 1e-3, source = source)
   }
   cmp("trend_drivers_moran_trend_gls.csv", "moran", "model", c("I", "expected_I", "p"))
   # Table SZ (long): built from the coefficient and contrast tables
