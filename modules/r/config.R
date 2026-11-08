@@ -67,6 +67,19 @@ CFG <- local({
       levels = c("increase", "no_trend", "decrease")  # the same codes as Python's trend_* columns (A9)
     ),
 
+    # ── Analysis data (05) ───────────────────────────────────────────────────
+    # Responses: the yearly metric columns of script 04 (PA means are <col>_mean).
+    responses = c(extent = "edge_extent", intensity = "edge_intensity"),
+    # Model covariates, z-scored over the analysis set: z column = source column (raw names as in
+    # 04, terrain_slope_mean renamed terrain_slope, A9). log_area_z = z of log(AREA_KM2), the
+    # geodesic area of the selected polygon (old: log(AREA_DISSO)). Names must match models.R.
+    covariates = c(STATUS_YR_z = "STATUS_YR", log_area_z = "AREA_KM2", elevation_mean_z = "elevation_mean",
+                   terrain_slope_z = "terrain_slope", water_extent_pct_z = "water_extent_pct",
+                   gHM_mean_z = "gHM_mean"),
+    log_covariates = "log_area_z",
+    # Point-on-surface is computed in Mollweide, then transformed to EPSG:4326 (as the old 03)
+    coords_crs = "+proj=moll +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs",
+
     # ── Establishment-year imputation (STATUS_YR == 0) ───────────────────────
     impute = list(
       draws       = 1000L,    # draws per PA; the median is used
