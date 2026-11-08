@@ -338,3 +338,20 @@ test_that("slope correlation and % change reproduce the old tables", {
   parity_check(f, "n_pa", n$n, old$n_pa, kind = "identical")
   for (col in c("baseline", "pct_change", "pct_lo", "pct_hi")) parity_check(f, col, n[[col]], old[[col]], tol = 1e-8)
 })
+
+# ── Step 4: spatial set-up (HaversineLMEfunctions.R; 03:126-181) ───────────────
+# The full check (all 3,914 PAs, 7,657,741 pairs: bit-identical; 0.6 s vs 27 s) was run once on
+# 2026-11-08; here the first 800 PAs of the old model set, against the original file's loop.
+test_that("vectorised distances on the old model set equal the original function", {
+  skip_if_no_legacy()
+  L <- legacy(); s <- L$settings
+  ms <- legacy_model_set(L$pa, L$coords)
+  j <- jitter_duplicates(ms, s$jitter_deg, s$jitter_seed, s$jitter_tries)
+  parity_check("model set coordinates", "PAs jittered (none coincide)", attr(j, "n_jittered"), 0,
+               kind = "identical")
+  env <- new.env(parent = globalenv())
+  sys.source(legacy_file("scripts", "HaversineLMEfunctions.R"), envir = env)
+  xy <- cbind(j$lon, j$lat)[1:800, ]
+  parity_check("HaversineLMEfunctions.R", "haversineDist, first 800 PAs (bitwise)",
+               as.vector(haversineDist(xy)), as.vector(env$haversineDist(xy)), kind = "identical")
+})
