@@ -128,6 +128,13 @@ test_that("spatial_setup and fit_gls_cached cache by content", {
               "cache_key"))
   expect_false(anyDuplicated(k) > 0)
   expect_length(list.files(cache, "^gls_"), length(k))
+  # Rebuilt structures (new formula environments, as in a new session) give the same key
+  cs_new <- local(spatial_setup(d, value = 200))
+  vf <- local(nlme::varIdent(form = ~ 1 | g))
+  expect_identical(attr(fit_gls_cached(f, d, correlation = cs_new, cache_dir = cache), "cache_key"), k[1])
+  expect_identical(attr(fit_gls_cached(f, d, weights = vf, cache_dir = cache), "cache_key"), k[7])
+  expect_identical(attr(fit_gls_cached(local(y ~ x + g), d, correlation = cs1, cache_dir = cache),
+                        "cache_key"), k[1])
   # Unused columns are not in the key
   d4 <- d; d4$unused <- 1
   expect_identical(attr(fit_gls_cached(f, d4, correlation = cs1, cache_dir = cache), "cache_key"), k[1])

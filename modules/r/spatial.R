@@ -80,13 +80,17 @@ fit_gls_cached <- function(formula, data, correlation = NULL, weights = NULL, me
                    if (!is.null(correlation)) all.vars(attr(correlation, "formula"))))
   stopifnot(all(vars %in% names(data)))
   used <- lapply(data[vars], function(x) if (is.factor(x)) list(levels(x), as.integer(x)) else x)
+  # Formulas enter the key as text: a formula object carries its environment, which differs
+  # between sessions and would make every key new.
+  txt <- function(f) paste(deparse(f), collapse = " ")
   cor_key <- if (!is.null(correlation)) list(
     class = class(correlation), value = as.numeric(correlation),
-    attrs = attributes(correlation)[c("formula", "nugget", "fixed", "function")],
+    formula = txt(attr(correlation, "formula")),
+    attrs = attributes(correlation)[c("nugget", "fixed", "function")],
     covariate = rlang::hash(attr(correlation, "covariate")))
-  w_key <- if (!is.null(weights)) list(class = class(weights), formula = attr(weights, "formula"),
+  w_key <- if (!is.null(weights)) list(class = class(weights), formula = txt(attr(weights, "formula")),
                                        value = as.numeric(weights))
-  key_obj <- list(what = "gls-v1", formula = paste(deparse(formula), collapse = " "),
+  key_obj <- list(what = "gls-v1", formula = txt(formula),
                   data = used, correlation = cor_key, weights = w_key, method = method,
                   max_iter = max_iter, nlme = as.character(utils::packageVersion("nlme")))
   path <- if (!is.null(cache_dir)) .cache_path(cache_dir, "gls", key_obj)

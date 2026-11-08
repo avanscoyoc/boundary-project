@@ -138,15 +138,6 @@ legacy_step3 <- local({
   }
 })
 
-# Rows of `new` in the order of `old`, matched on the key columns (all must be found).
-match_rows <- function(new, old, key_new, key_old = key_new) {
-  kn <- do.call(paste, c(unname(as.list(new[key_new])), sep = "\r"))
-  ko <- do.call(paste, c(unname(as.list(old[key_old])), sep = "\r"))
-  i <- match(ko, kn)
-  testthat::expect_false(anyNA(i), label = "all old rows found in the new table")
-  new[i, , drop = FALSE]
-}
-
 test_that("standardised change reproduces the old change_*_z", {
   skip_if_no_legacy()
   L <- legacy(); S <- legacy_step3()
@@ -354,4 +345,79 @@ test_that("vectorised distances on the old model set equal the original function
   xy <- cbind(j$lon, j$lat)[1:800, ]
   parity_check("HaversineLMEfunctions.R", "haversineDist, first 800 PAs (bitwise)",
                as.vector(haversineDist(xy)), as.vector(env$haversineDist(xy)), kind = "identical")
+})
+
+# ── Step 5: mean models (03) at the saved range ────────────────────────────────
+# The full spatial models are fitted with the range FIXED at the old estimate (corHaversine
+# fixed = TRUE), plus the non-spatial full models. This reproduces every table of the full
+# models, emmeans df included (emmeans counts the fixed range as a covariance parameter). The
+# additive models (range not saved), the range CI and AICc_spatial are checked by the optimised
+# refits (tests/r/parity/run_parity_full.R). Fits are cached in data/parity/cache (≈ 1 GB);
+# the first run fits them (≈ +3 min). Normalised residuals of a spatial fit take ≈ 35 s each,
+# so this block adds ≈ 2 min even with the cache.
+source(testthat::test_path("parity", "mean_model_checks.R"), local = TRUE)
+
+legacy_mean_fixed <- local({
+  cache <- NULL
+  function() {
+    if (is.null(cache)) {
+      L <- legacy(); s <- L$settings
+      d <- legacy_model_data(L$pa, L$coords, s)
+      rng <- legacy_ranges()
+      cdir <- file.path(CFG$paths$parity_dir, "cache")
+      w <- suppressWarnings(moran_weights(d, CFG$spatial$k_nn, CFG$spatial$bands_km))  # sparse short bands
+      cache <<- lapply(stats::setNames(names(LEGACY_RESPONSES), names(LEGACY_RESPONSES)), function(r) {
+        resp <- LEGACY_RESPONSES[[r]]
+        cs <- spatial_setup(d, value = rng[[r]], fixed = TRUE, cache_dir = cdir)
+        fits <- list(
+          full = fit_gls_cached(model_formula(resp, "full"), d, cs, cache_dir = cdir),
+          full_nosp = fit_gls_cached(model_formula(resp, "full"), d, NULL, cache_dir = cdir))
+        fits$add <- fits$full_nosp   # placeholder: additive tables are not compared here
+        mean_model_tables(fits, d, resp, r, s$hmi[["mean"]], s$hmi[["sd"]], moran = w,
+                          moran_settings = list(nsim = CFG$spatial$moran_nsim, seed = CFG$spatial$moran_seed),
+                          pred_by = c(if (r == "extent") "IUCN_group", "BIOME_NAME"))
+      })
+    }
+    cache
+  }
+})
+
+test_that("mean models at the saved range reproduce the old full-model tables", {
+  skip_if_no_legacy()
+  check_mean_tables(legacy_mean_fixed(), what = "full", tol = 1e-6, source = "fast")
+})
+
+# ── Step 6: change models (02b), model A at its saved range ────────────────────
+# Responses are the standardised changes from step 3 (new trends). Model A is fitted at its saved
+# range (fixed) with its non-spatial analogue; this also fixes σ_A and so τ² and the weights.
+# Model B (range not saved), the ranges, CIs and AICc spatial: run_parity_full.R.
+source(testthat::test_path("parity", "change_model_checks.R"), local = TRUE)
+
+legacy_change_data <- function() {
+  L <- legacy(); S <- legacy_step3()
+  d <- legacy_model_data(L$pa, L$coords, L$settings)
+  i <- match(d$WDPA_PID, S$pa$WDPA_PID)
+  for (col in c("change_extent_z", "se_change_extent_z", "change_intensity_z", "se_change_intensity_z")) {
+    d[[col]] <- S$pa[[col]][i]
+  }
+  stopifnot(!anyNA(d$change_extent_z), !anyNA(d$change_intensity_z))
+  d
+}
+
+test_that("change model A at its saved range reproduces the old 02b tables", {
+  skip_if_no_legacy()
+  s <- legacy()$settings
+  d <- legacy_change_data()
+  rng <- legacy_change_ranges()
+  cdir <- file.path(CFG$paths$parity_dir, "cache")
+  w <- suppressWarnings(moran_weights(d, CFG$spatial$k_nn, CFG$spatial$bands_km[1:2]))
+  tabs <- lapply(stats::setNames(names(LEGACY_CHANGE), names(LEGACY_CHANGE)), function(r) {
+    cs <- spatial_setup(d, value = rng[[r]], fixed = TRUE, cache_dir = cdir)
+    cm <- fit_change_models(d, LEGACY_CHANGE[[r]][["response"]], LEGACY_CHANGE[[r]][["se"]], cs,
+                            cache_dir = cdir, label = r, fit_B = FALSE)
+    change_model_tables(cm, LEGACY_CHANGE[[r]][["response"]], r, s$ref_contrast, moran = w,
+                        moran_settings = list(nsim = CFG$spatial$moran_nsim, seed = CFG$spatial$moran_seed),
+                        models = "A")
+  })
+  check_change_tables(tabs, models = "A", optimised = FALSE, tol = 1e-6, source = "fast")
 })

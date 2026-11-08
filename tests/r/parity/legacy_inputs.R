@@ -143,3 +143,40 @@ legacy_table <- function(name, root = CFG$paths$legacy_root) {
   as.data.frame(readr::read_csv(legacy_file("outputs", "tables", name, root = root),
                                 show_col_types = FALSE, progress = FALSE))
 }
+
+# Old model term and column names → new (for comparing model tables).
+legacy_rename_terms <- function(x) {
+  for (o in names(LEGACY_TERMS)) x <- gsub(o, LEGACY_TERMS[[o]], x, fixed = TRUE)
+  x
+}
+
+# Saved spatial ranges of the old FULL models (spatial_params_gls.csv). The additive models'
+# ranges were not saved; their tables are checked by the optimised refits (run_parity_full.R).
+legacy_ranges <- function(root = CFG$paths$legacy_root) {
+  sp <- legacy_table("spatial_params_gls.csv", root = root)
+  stats::setNames(sp$range_km, sp$response)
+}
+
+# The old model data (03:77-141), in the new conventions: the 3,914-PA model set in file order,
+# coordinates jittered as 03 (none coincide), factors with the old levels (strict first,
+# BIOME_ORDER: Grassland first).
+legacy_model_data <- function(pa, coords, settings) {
+  d <- legacy_model_set(pa, coords)
+  d <- jitter_duplicates(d, settings$jitter_deg, settings$jitter_seed, settings$jitter_tries)
+  d$IUCN_group <- set_reference(d$IUCN_group, settings$ref_fit$iucn, c("strict", "non-strict", "unknown"))
+  d$BIOME_NAME <- set_reference(d$BIOME_NAME, settings$ref_fit$biome, settings$biome_order)
+  rownames(d) <- NULL
+  d
+}
+
+LEGACY_RESPONSES <- c(extent = "edge_extent_mean", intensity = "edge_intensity_mean")
+
+# Saved spatial ranges of the old change models A (trend_drivers_spatial_params_trend_gls.csv).
+# The ranges of the precision-weighted models B were not saved (checked by run_parity_full.R).
+legacy_change_ranges <- function(root = CFG$paths$legacy_root) {
+  sp <- legacy_table("trend_drivers_spatial_params_trend_gls.csv", root = root)
+  stats::setNames(sp$range_km, sp$response)
+}
+
+LEGACY_CHANGE <- list(extent    = c(response = "change_extent_z",    se = "se_change_extent_z"),
+                      intensity = c(response = "change_intensity_z", se = "se_change_intensity_z"))

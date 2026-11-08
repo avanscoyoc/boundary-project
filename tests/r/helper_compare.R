@@ -63,3 +63,12 @@ parity_write_report <- function(path) {
   utils::write.csv(new, path, row.names = FALSE)
   invisible(new)
 }
+
+# Rows of `new` in the order of `old`, matched on the key columns (all must be found).
+match_rows <- function(new, old, key_new, key_old = key_new) {
+  kn <- do.call(paste, c(unname(as.list(new[key_new])), sep = "\r"))
+  ko <- do.call(paste, c(unname(as.list(old[key_old])), sep = "\r"))
+  i <- match(ko, kn)
+  testthat::expect_false(anyNA(i), label = "all old rows found in the new table")
+  new[i, , drop = FALSE]
+}
