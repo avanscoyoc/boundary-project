@@ -99,3 +99,242 @@ test_that("per-PA OLS trends, BH classes and Yue-Pilon reproduce the old run", {
                  legacy_map_classes(old_tr[[paste0("trend_", m)]]), kind = "identical")
   }
 })
+
+# ── Step 3: standardised change, bootstraps, biome GLS, correlation, % change ──
+# (02:135-150, 185-435, 494-534; 10:35-79; 11:31-52.) The new functions run on the PA table
+# with the step 2 trends (new), so this also checks that the chain reproduces the old tables.
+# Metric labels and the pooled label are the old ones, so rows match by (metric, group).
+LEGACY_METRICS <- c(extent = "Edge extent", intensity = "Edge intensity")
+LEGACY_POOLED  <- "All biomes"
+
+legacy_step3 <- local({
+  cache <- NULL
+  function() {
+    if (is.null(cache)) {
+      L <- legacy(); s <- L$settings; tr <- legacy_new_trends()
+      pa <- L$pa[, c("WDPA_PID", "BIOME_NAME", "area_km2", "edge_extent_mean", "edge_intensity_mean")]
+      k <- c()
+      for (m in names(LEGACY_METRICS)) {
+        pa <- cbind(pa, tr[[m]][match(pa$WDPA_PID, tr[[m]]$WDPA_PID), -1])
+        ch <- standardised_change(pa[[paste0("slope_", m)]], pa[[paste0("se_", m)]],
+                                  s$n_span, s$sd_resp[[m]])
+        pa[[paste0("change_", m, "_z")]]    <- ch$change
+        pa[[paste0("se_change_", m, "_z")]] <- ch$se_change
+        k[[LEGACY_METRICS[[m]]]] <- ch$k
+      }
+      cols <- function(prefix) stats::setNames(paste0(prefix, names(LEGACY_METRICS)), LEGACY_METRICS)
+      run <- function(cl, seed, ...) boot_means(pa, cl, "BIOME_NAME", s$biome_order, s$boot_R,
+                                               seed, pooled_label = LEGACY_POOLED, ...)
+      cache <<- list(
+        pa = pa, k = unlist(k), cols = cols,
+        biome    = run(cols("slope_"), s$boot_seeds[["biome"]]),
+        pooled   = run(cols("slope_"), s$boot_seeds[["pooled"]], pooled = "only"),
+        weighted = run(cols("slope_"), s$boot_seeds[["weighted"]], pooled = "append",
+                       weights = "area_km2"),
+        sen      = run(cols("sen_"), s$boot_seeds[["sen"]], pooled = "append")
+      )
+    }
+    cache
+  }
+})
+
+# Rows of `new` in the order of `old`, matched on the key columns (all must be found).
+match_rows <- function(new, old, key_new, key_old = key_new) {
+  kn <- do.call(paste, c(unname(as.list(new[key_new])), sep = "\r"))
+  ko <- do.call(paste, c(unname(as.list(old[key_old])), sep = "\r"))
+  i <- match(ko, kn)
+  testthat::expect_false(anyNA(i), label = "all old rows found in the new table")
+  new[i, , drop = FALSE]
+}
+
+test_that("standardised change reproduces the old change_*_z", {
+  skip_if_no_legacy()
+  L <- legacy(); S <- legacy_step3()
+  for (m in names(LEGACY_METRICS)) for (col in paste0(c("change_", "se_change_"), m, "_z")) {
+    parity_check("pa_level_clean.csv", col, S$pa[[col]], L$pa[[col]], tol = 1e-8)
+  }
+})
+
+test_that("bootstrap means reproduce the old biome, pooled, area-weighted and Sen summaries", {
+  skip_if_no_legacy()
+  S <- legacy_step3()
+  z <- function(x, metric) x * S$k[metric]
+
+  # Seed 42 (biomes) and 45 (pooled): same seed and order as the old run → identical
+  for (b in list(list("biome", "biome_slope_summary.csv", "biome_boot_replicates.csv"),
+                 list("pooled", "pooled_slope_summary.csv", "pooled_boot_replicates.csv"))) {
+    new <- S[[b[[1]]]]; old <- legacy_table(b[[2]])
+    n <- match_rows(new$summary, old, c("metric", "BIOME_NAME"))
+    parity_check(b[[2]], "n_pa", n$n, old$n_pa, kind = "identical")
+    for (col in c("mean", "ci_lo", "ci_hi")) {
+      oc <- c(mean = "mean_slope", ci_lo = "ci_lo", ci_hi = "ci_hi")[[col]]
+      parity_check(b[[2]], oc, n[[col]], old[[oc]], tol = 1e-8)
+      oz <- c(mean = "mean_change_z", ci_lo = "ci_lo_z", ci_hi = "ci_hi_z")[[col]]
+      parity_check(b[[2]], oz, z(n[[col]], n$metric), old[[oz]], tol = 1e-8)
+    }
+    oreps <- legacy_table(b[[3]])
+    nr <- match_rows(new$reps, oreps, c("metric", "BIOME_NAME", "rep"))
+    parity_check(b[[3]], "mean_slope", nr$mean, oreps$mean_slope, tol = 1e-8)
+    parity_check(b[[3]], "change_z", z(nr$mean, nr$metric), oreps$change_z, tol = 1e-8)
+  }
+
+  # Seed 44 (Sen, biomes): same seed and order → identical
+  old <- legacy_table("biome_sen_slope_summary.csv")
+  n <- match_rows(S$sen$summary, old, c("metric", "BIOME_NAME"))
+  parity_check("biome_sen_slope_summary.csv", "n_pa", n$n, old$n_pa, kind = "identical")
+  for (col in c("mean", "ci_lo", "ci_hi")) {
+    oc <- c(mean = "mean_slope", ci_lo = "ci_lo", ci_hi = "ci_hi")[[col]]
+    parity_check("biome_sen_slope_summary.csv", oc, n[[col]], old[[oc]], tol = 1e-8)
+  }
+
+  # Seed 43 (area-weighted, biomes): the old block also ran a duplicate unweighted bootstrap,
+  # removed here (A4) → point estimates identical, CIs within 5% of the CI width
+  old <- legacy_table("biome_slope_weighted_comparison.csv")
+  n <- match_rows(S$weighted$summary, old, c("metric", "BIOME_NAME"))
+  u <- match_rows(S$biome$summary, old, c("metric", "BIOME_NAME"))
+  f <- "biome_slope_weighted_comparison.csv"
+  parity_check(f, "n_pa", n$n, old$n_pa, kind = "identical")
+  parity_check(f, "mean_slope", u$mean, old$mean_slope, tol = 1e-8)
+  parity_check(f, "mean_slope_weighted", n$mean, old$mean_slope_weighted, tol = 1e-8)
+  parity_check(f, "mean_slope_weighted_z", z(n$mean, n$metric), old$mean_slope_weighted_z, tol = 1e-8)
+  w_w <- old$ci_hi_weighted - old$ci_lo_weighted
+  w_u <- old$ci_hi_unweighted - old$ci_lo_unweighted
+  parity_check(f, "ci_lo_weighted (/ CI width)", n$ci_lo / w_w, old$ci_lo_weighted / w_w, 0.05, "abs")
+  parity_check(f, "ci_hi_weighted (/ CI width)", n$ci_hi / w_w, old$ci_hi_weighted / w_w, 0.05, "abs")
+  # The old duplicate unweighted CIs (seed 43) vs the seed-42 CIs: Monte Carlo error only
+  parity_check(f, "ci_lo_unweighted (/ CI width)", u$ci_lo / w_u, old$ci_lo_unweighted / w_u, 0.05, "abs")
+  parity_check(f, "ci_hi_unweighted (/ CI width)", u$ci_hi / w_u, old$ci_hi_unweighted / w_u, 0.05, "abs")
+
+  # Pooled area-weighted and Sen rows: only in Table SV (10:57-79), rounded to 3 dp, from a
+  # stream with a duplicate bootstrap (removed) → points within rounding, CIs within 5% of the
+  # CI width plus rounding
+  sv <- legacy_table("TableSV_biome_trend_summary.csv")
+  sv <- sv[sv$BIOME_NAME == LEGACY_POOLED, ]
+  half <- 0.5e-3 + 1e-12
+  for (b in list(list("weighted", "change_area_weighted", "aw_lo", "aw_hi"),
+                 list("sen", "sen_change_mean", "sen_lo", "sen_hi"))) {
+    p <- S[[b[[1]]]]$summary
+    p <- match_rows(p[p$BIOME_NAME == LEGACY_POOLED, ], sv, c("metric", "BIOME_NAME"))
+    f <- "TableSV_biome_trend_summary.csv (All biomes)"
+    parity_check(f, b[[2]], z(p$mean, p$metric), sv[[b[[2]]]], tol = half, kind = "abs")
+    w <- sv[[b[[4]]]] - sv[[b[[3]]]]
+    for (col in c(3, 4)) {
+      parity_check(f, paste0(b[[col]], " (/ CI width)"), z(p[[c("ci_lo", "ci_hi")[col - 2]]], p$metric) / w,
+                   sv[[b[[col]]]] / w, tol = 0.05 + half / min(w), kind = "abs")
+    }
+  }
+})
+
+test_that("class counts and Yue-Pilon agreement reproduce the old tables", {
+  skip_if_no_legacy()
+  S <- legacy_step3(); s <- legacy()$settings
+  cls <- c("Edge extent" = "trend_extent", "Edge intensity" = "trend_intensity")
+  new <- class_counts(S$pa, cls, "BIOME_NAME", s$biome_order, CFG$trend$levels, LEGACY_POOLED)
+  old <- legacy_table("trend_class_counts.csv")
+  old$class <- legacy_map_classes(old$class)
+  n <- match_rows(new, old, c("metric", "BIOME_NAME", "class"))
+  parity_check("trend_class_counts.csv", "n", n$n, old$n, kind = "identical")
+  parity_check("trend_class_counts.csv", "pct", n$pct, old$pct, tol = 1e-12)
+  # Classes absent from the old table (count() drops them) have n = 0 here
+  key <- function(x) paste(x$metric, x$BIOME_NAME, x$class)
+  expect_true(all(new$n[!key(new) %in% key(old)] == 0))
+
+  pairs <- list("Edge extent" = c("trend_extent", "trend_extent_zyp"),
+                "Edge intensity" = c("trend_intensity", "trend_intensity_zyp"))
+  ag <- trend_agreement(S$pa, pairs, "BIOME_NAME", s$biome_order, CFG$trend$levels, LEGACY_POOLED)
+  old <- legacy_table("trend_yuepilon_agreement.csv")
+  n <- match_rows(ag$agreement, old, c("metric", "BIOME_NAME"))
+  f <- "trend_yuepilon_agreement.csv"
+  parity_check(f, "n", n$n, old$n, kind = "identical")
+  parity_check(f, "n_concordant", n$n_concordant, old$n_concordant, kind = "identical")
+  for (col in c("pct_concordant", "pct_increase_ols", "pct_decrease_ols", "pct_increase_zyp",
+                "pct_decrease_zyp")) {
+    oc <- sub("increase", "increasing", sub("decrease", "decreasing", col))
+    parity_check(f, oc, n[[col]], old[[oc]], tol = 1e-12)
+  }
+  old <- legacy_table("trend_yuepilon_crosstab.csv")
+  old$ols <- legacy_map_classes(old$ols); old$zyp <- legacy_map_classes(old$zyp)
+  n <- match_rows(ag$crosstab, old, c("metric", "ols", "zyp"))
+  parity_check("trend_yuepilon_crosstab.csv", "Freq", n$n, old$Freq, kind = "identical")
+  expect_equal(nrow(ag$crosstab), nrow(old))
+})
+
+# GLS tolerance: the collaborator's own rerun on this platform differed from the saved tables by
+# up to 2e-5 (REML optimiser, BLAS; Phase 1), so 1e-4 here. Group means are exact.
+test_that("biome GLS reproduces the old omnibus, means, contrasts, letters and sigma", {
+  skip_if_no_legacy()
+  S <- legacy_step3(); s <- legacy()$settings
+  tab <- function(n) { x <- legacy_table(n); x }
+  fits <- lapply(c("Edge extent" = "change_extent_z", "Edge intensity" = "change_intensity_z"),
+                 function(r) biome_gls(S$pa, r, "BIOME_NAME", s$biome_order))
+  stack <- function(field) do.call(rbind, lapply(names(fits), function(m)
+    cbind(metric = m, fits[[m]][[field]], stringsAsFactors = FALSE)))
+  tol <- 1e-4
+
+  old <- tab("biome_trend_gls_omnibus.csv"); n <- match_rows(stack("omnibus"), old, "metric")
+  f <- "biome_trend_gls_omnibus.csv"
+  parity_check(f, "numDF/denDF", c(n$numDF, n$denDF), c(old$numDF, old$denDF), kind = "identical")
+  parity_check(f, "F.value", n$F_value, old$F.value, tol = tol)
+  parity_check(f, "p.value", n$p_value, old$p.value, tol = tol)
+
+  old <- tab("biome_trend_gls_means.csv"); n <- match_rows(stack("means"), old, c("metric", "BIOME_NAME"))
+  f <- "biome_trend_gls_means.csv"
+  parity_check(f, "emmean", n$emmean, old$emmean, tol = 1e-8)
+  parity_check(f, "df", n$df, old$df, kind = "identical")
+  for (col in c("SE", "lower.CL", "upper.CL", "t.ratio", "p.value")) parity_check(f, col, n[[col]], old[[col]], tol = tol)
+
+  old <- tab("biome_trend_gls_pairwise.csv"); n <- match_rows(stack("pairs"), old, c("metric", "contrast"))
+  f <- "biome_trend_gls_pairwise.csv"
+  parity_check(f, "estimate", n$estimate, old$estimate, tol = 1e-8)
+  parity_check(f, "df", n$df, old$df, kind = "identical")
+  for (col in c("SE", "lower.CL", "upper.CL", "t.ratio", "p.value")) parity_check(f, col, n[[col]], old[[col]], tol = tol)
+
+  old <- tab("biome_trend_gls_letters.csv"); n <- match_rows(stack("letters"), old, c("metric", "BIOME_NAME"))
+  parity_check("biome_trend_gls_letters.csv", "letters", n$letters, old$letters, kind = "identical")
+
+  old <- tab("biome_trend_gls_sigma.csv"); n <- match_rows(stack("sigma"), old, c("metric", "BIOME_NAME"))
+  parity_check("biome_trend_gls_sigma.csv", "resid_sd", n$resid_sd, old$resid_sd, tol = tol)
+})
+
+test_that("slope correlation and % change reproduce the old tables", {
+  skip_if_no_legacy()
+  S <- legacy_step3(); s <- legacy()$settings
+  # Table SV correlation: only saved rounded to 4 dp (10:138). Run on the OLD slopes: edge extent
+  # is a ratio of transect counts, so some PAs have mathematically equal slopes (ties, incl. seven
+  # exact zeros computed as ±1e-17 by lm and ±1e-19 by the sums). The two computations split these
+  # ties differently in the last bits, so Spearman ranks them differently (Boreal rho moves by
+  # 3e-5, just over the rounding). The new-slope result is checked below after rounding both
+  # slope sets to 9 significant digits (and |slope| < 1e-15 to 0), which restores the ties.
+  L <- legacy()
+  new <- slope_correlation(L$pa, "slope_extent", "slope_intensity", "BIOME_NAME", s$biome_order,
+                           LEGACY_POOLED)
+  old <- legacy_table("TableSV_slope_correlation.csv")
+  n <- match_rows(new, old, "stratum")
+  f <- "TableSV_slope_correlation.csv"
+  parity_check(f, "n", n$n, old$n, kind = "identical")
+  for (col in c("r_pearson", "r_lo", "r_hi", "p_pearson", "rho_spearman", "p_spearman")) {
+    parity_check(f, col, n[[col]], old[[col]], tol = 0.5e-4 + 1e-12, kind = "abs")
+  }
+  zero_noise <- function(x) signif(ifelse(abs(x) < 1e-15, 0, x), 9)
+  a <- data.frame(BIOME_NAME = L$pa$BIOME_NAME, x = zero_noise(S$pa$slope_extent),
+                  y = zero_noise(S$pa$slope_intensity))
+  b <- data.frame(BIOME_NAME = L$pa$BIOME_NAME, x = zero_noise(L$pa$slope_extent),
+                  y = zero_noise(L$pa$slope_intensity))
+  ca <- slope_correlation(a, "x", "y", "BIOME_NAME", s$biome_order, LEGACY_POOLED)
+  cb <- slope_correlation(b, "x", "y", "BIOME_NAME", s$biome_order, LEGACY_POOLED)
+  for (col in c("r_pearson", "r_lo", "r_hi", "rho_spearman")) {
+    parity_check("slope correlation, new vs old slopes (9 significant digits)", col,
+                 ca[[col]], cb[[col]], tol = 1e-8)
+  }
+
+  # % change (11:31-52): biome rows from the seed-42 summaries, pooled from seed 45
+  summ <- rbind(S$biome$summary, S$pooled$summary)
+  new <- percent_change(summ, S$pa, S$cols("slope_"),
+                        stats::setNames(c("edge_extent_mean", "edge_intensity_mean"), LEGACY_METRICS),
+                        "BIOME_NAME", s$n_span, LEGACY_POOLED)
+  old <- legacy_table("trend_percent_change_biome.csv")
+  n <- match_rows(new, old, c("metric", "BIOME_NAME"))
+  f <- "trend_percent_change_biome.csv"
+  parity_check(f, "n_pa", n$n, old$n_pa, kind = "identical")
+  for (col in c("baseline", "pct_change", "pct_lo", "pct_hi")) parity_check(f, col, n[[col]], old[[col]], tol = 1e-8)
+})

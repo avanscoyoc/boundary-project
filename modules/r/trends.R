@@ -122,3 +122,225 @@ pa_trends <- function(d, response, suffix, min_years, fdr, levels) {
                       paste0("trend_", suffix, "_zyp"))
   out
 }
+
+# ── Step 3: standardised change, bootstraps, biome GLS, correlation, % change ──
+# Ported from PA_New_Analysis/scripts/02_trend_analysis.R (135-150, 185-435, 494-534),
+# 10_TableSV_trend_supp.R (35-79) and 11_trend_percent_change.R (31-52).
+# Input is one row per PA. `cols` arguments are named character vectors, metric label → column,
+# e.g. c("Edge extent" = "slope_extent", "Edge intensity" = "slope_intensity"); outputs carry
+# the label in a `metric` column and the group in a column named by `group`.
+
+#' Standardised change over the record (Stats ¶5): slope × n_span / sd, in response SDs per
+#' record. The SE is rescaled the same way (used by the precision weights of the change models).
+standardised_change <- function(slope, se, n_span, sd) {
+  stopifnot(length(sd) == 1, is.finite(sd), sd > 0)
+  k <- n_span / sd
+  list(change = slope * k, se_change = se * k, k = k)
+}
+
+#' Percentile-bootstrap means by group (Stats ¶5), with boot::boot and boot.ci(type = "perc").
+#'
+#' PAs are resampled within each group (same n as the group), R times. With `weights` (a column
+#' name) the statistic is the weighted mean, resampling (value, weight) pairs; a failed
+#' bootstrap gives NA limits. Rows with a missing value or group are left out.
+#'
+#' The random-number stream: `seed` is set once, then the bootstraps run in this order —
+#'   pooled = "none":   for each metric, each group in `levels` order;
+#'   pooled = "only":   for each metric, all PAs as one group (`pooled_label`);
+#'   pooled = "append": as "none", then for each metric the pooled group.
+#' "append" leaves the group results identical to "none", so a pooled row can be added to a
+#' block without changing the old by-group CIs. Within a group, rows keep their order in `d`
+#' (the resampled indices refer to it).
+#'
+#' Returns list(summary, reps). summary: metric, <group>, n, mean, ci_lo, ci_hi (rows in run
+#' order). reps: metric, <group>, rep, mean (the R bootstrap means; for Fig. 4A).
+boot_means <- function(d, cols, group, levels, R, seed, weights = NULL,
+                       pooled = c("none", "only", "append"), pooled_label = "All PAs") {
+  pooled <- match.arg(pooled)
+  stopifnot(!is.null(names(cols)), all(c(cols, group, weights) %in% names(d)),
+            !pooled_label %in% levels)
+  stat <- if (is.null(weights)) {
+    function(dat, i) mean(dat$x[i])
+  } else {
+    function(dat, i) stats::weighted.mean(dat$x[i], w = dat$w[i])
+  }
+  one <- function(metric, g, x, w) {
+    dat <- data.frame(x = x)
+    if (!is.null(weights)) dat$w <- w
+    bt <- boot::boot(dat, stat, R = R)
+    ci <- tryCatch(boot::boot.ci(bt, type = "perc")$percent[4:5],
+                   error = function(e) c(NA_real_, NA_real_))
+    est <- if (is.null(weights)) mean(x) else stats::weighted.mean(x, w)
+    list(summary = data.frame(metric = metric, g = g, n = length(x), mean = est,
+                              ci_lo = ci[1], ci_hi = ci[2], stringsAsFactors = FALSE),
+         reps = data.frame(metric = metric, g = g, rep = seq_len(R), mean = bt$t[, 1],
+                           stringsAsFactors = FALSE))
+  }
+  jobs <- list()
+  for (m in names(cols)) {   # by group
+    if (pooled == "only") break
+    ok <- !is.na(d[[cols[[m]]]]) & !is.na(d[[group]])
+    for (g in levels[levels %in% d[[group]][ok]]) jobs[[length(jobs) + 1]] <- list(m, g, ok & d[[group]] %in% g)
+  }
+  if (pooled != "none") for (m in names(cols)) {
+    ok <- !is.na(d[[cols[[m]]]]) & !is.na(d[[group]])
+    jobs[[length(jobs) + 1]] <- list(m, pooled_label, ok)
+  }
+  if (!is.null(seed)) set.seed(seed)
+  res <- lapply(jobs, function(j) {
+    rows <- which(j[[3]])
+    one(j[[1]], j[[2]], d[[cols[[j[[1]]]]]][rows], if (!is.null(weights)) d[[weights]][rows])
+  })
+  out <- lapply(c(summary = "summary", reps = "reps"), function(k) {
+    x <- do.call(rbind, lapply(res, `[[`, k))
+    names(x)[names(x) == "g"] <- group
+    rownames(x) <- NULL
+    x
+  })
+  out
+}
+
+#' Do the groups differ in mean change? (Stats ¶5) Non-spatial GLS of `response` on `group`
+#' with a separate residual variance per group (varIdent), REML; emmeans with mode "df.error".
+#'
+#' Returns list(omnibus, means, pairs, letters, sigma):
+#'   omnibus  marginal Wald F for the group term (denDF = N − p, as the old table);
+#'   means    estimated group means with 95% CIs;
+#'   pairs    all pairwise contrasts, Holm-adjusted p (Bonferroni-simultaneous CIs);
+#'   letters  compact letter display at `alpha` from the Holm p-values (multcompView);
+#'   sigma    residual SD per group (sigma × varIdent ratio).
+#' Groups take the order of `levels` (the first is the model's reference); rows with a missing
+#' response or group are left out, the remaining rows keep their order in `d`.
+biome_gls <- function(d, response, group, levels, max_iter = 200L, alpha = 0.05) {
+  stopifnot(all(c(response, group) %in% names(d)))
+  dd <- data.frame(y = d[[response]], g = factor(as.character(d[[group]]), levels = levels))
+  dd <- dd[!is.na(dd$y) & !is.na(dd$g), , drop = FALSE]
+  dd$g <- droplevels(dd$g)
+  m <- nlme::gls(y ~ g, data = dd, weights = nlme::varIdent(form = ~ 1 | g), method = "REML",
+                 control = nlme::glsControl(maxIter = max_iter, msMaxIter = max_iter))
+
+  a <- stats::anova(m, type = "marginal")
+  omnibus <- data.frame(term = group, numDF = a["g", "numDF"], denDF = m$dims$N - m$dims$p,
+                        F_value = a["g", "F-value"], p_value = a["g", "p-value"],
+                        stringsAsFactors = FALSE)
+
+  em <- emmeans::emmeans(m, ~ g, data = dd, mode = "df.error")
+  means <- as.data.frame(summary(em, infer = c(TRUE, TRUE)))
+  pr <- emmeans::contrast(em, method = "pairwise")
+  pairs <- as.data.frame(summary(pr, infer = c(TRUE, TRUE), adjust = "holm"))
+
+  # Letters from the Holm p-values. emmeans orders the pairs as combn(k, 2); checked on labels.
+  lv  <- levels(dd$g)
+  idx <- utils::combn(length(lv), 2)
+  stopifnot(nrow(pairs) == ncol(idx),
+            identical(as.character(pairs$contrast), paste(lv[idx[1, ]], "-", lv[idx[2, ]])))
+  pv <- stats::setNames(pairs$p.value, paste(idx[1, ], idx[2, ], sep = "-"))
+  L <- multcompView::multcompLetters(pv, threshold = alpha)$Letters
+  letters <- data.frame(g = lv, letters = unname(L[as.character(seq_along(lv))]),
+                        stringsAsFactors = FALSE)
+
+  vr <- stats::coef(m$modelStruct$varStruct, unconstrained = FALSE, allCoef = TRUE)
+  sigma <- data.frame(g = lv, resid_sd = unname(m$sigma * vr[lv]), stringsAsFactors = FALSE)
+
+  means$g <- as.character(means$g)
+  pairs$contrast <- as.character(pairs$contrast)
+  rename_g <- function(x) { names(x)[names(x) == "g"] <- group; rownames(x) <- NULL; x }
+  list(omnibus = omnibus, means = rename_g(means), pairs = rename_g(pairs),
+       letters = rename_g(letters), sigma = rename_g(sigma))
+}
+
+#' Correlation of two per-PA slopes (D2): Pearson with its 95% CI, and Spearman
+#' (exact = FALSE) as a check; all PAs (`pooled_label`) and by group in `levels` order.
+#' PAs missing either slope are left out.
+slope_correlation <- function(d, x, y, group, levels, pooled_label = "All PAs") {
+  one <- function(rows, label) {
+    a <- d[[x]][rows]; b <- d[[y]][rows]
+    ok <- !is.na(a) & !is.na(b); a <- a[ok]; b <- b[ok]
+    ct <- stats::cor.test(a, b, method = "pearson")
+    sp <- suppressWarnings(stats::cor.test(a, b, method = "spearman", exact = FALSE))
+    data.frame(stratum = label, n = length(a), r_pearson = unname(ct$estimate),
+               r_lo = ct$conf.int[1], r_hi = ct$conf.int[2], p_pearson = ct$p.value,
+               rho_spearman = unname(sp$estimate), p_spearman = sp$p.value,
+               stringsAsFactors = FALSE)
+  }
+  g <- as.character(d[[group]])
+  out <- rbind(one(rep(TRUE, nrow(d)), pooled_label),
+               do.call(rbind, lapply(levels[levels %in% g], function(b) one(g %in% b, b))))
+  rownames(out) <- NULL
+  out
+}
+
+#' Trend-class counts and percentages by group and for all PAs (`pooled_label`, first).
+#' Every class in `class_levels` gets a row (n = 0 if absent). PAs with no class are left out.
+class_counts <- function(d, cols, group, levels, class_levels, pooled_label = "All PAs") {
+  g <- as.character(d[[group]])
+  out <- do.call(rbind, lapply(names(cols), function(m) {
+    cls <- d[[cols[[m]]]]
+    do.call(rbind, lapply(c(pooled_label, levels[levels %in% g[!is.na(cls)]]), function(s) {
+      rows <- !is.na(cls) & (s == pooled_label | g %in% s)
+      n <- as.vector(table(factor(cls[rows], levels = class_levels)))
+      data.frame(metric = m, s = s, class = class_levels, n = n, pct = 100 * n / sum(n),
+                 stringsAsFactors = FALSE)
+    }))
+  }))
+  names(out)[names(out) == "s"] <- group
+  rownames(out) <- NULL
+  out
+}
+
+#' Agreement of the OLS + BH classes with the Yue–Pilon classes (Stats ¶4 robustness check).
+#' `pairs` is a named list, metric label → c(ols column, Yue–Pilon column).
+#' Returns list(agreement, crosstab):
+#'   agreement  metric, <group>, n, n_concordant, pct_concordant and the % increase / decrease
+#'              under each method; all PAs (`pooled_label`) and by group; PAs with both classes;
+#'   crosstab   metric, ols, zyp, n over all PAs (NA classes kept as their own row/column).
+trend_agreement <- function(d, pairs, group, levels, class_levels, pooled_label = "All PAs") {
+  g <- as.character(d[[group]])
+  agreement <- do.call(rbind, lapply(names(pairs), function(m) {
+    o <- d[[pairs[[m]][1]]]; z <- d[[pairs[[m]][2]]]
+    both <- !is.na(o) & !is.na(z)
+    do.call(rbind, lapply(c(pooled_label, levels[levels %in% g[both]]), function(s) {
+      r <- both & (s == pooled_label | g %in% s)
+      data.frame(metric = m, s = s, n = sum(r), n_concordant = sum(o[r] == z[r]),
+                 pct_concordant = 100 * mean(o[r] == z[r]),
+                 pct_increase_ols = 100 * mean(o[r] == class_levels[1]),
+                 pct_decrease_ols = 100 * mean(o[r] == class_levels[3]),
+                 pct_increase_zyp = 100 * mean(z[r] == class_levels[1]),
+                 pct_decrease_zyp = 100 * mean(z[r] == class_levels[3]),
+                 stringsAsFactors = FALSE)
+    }))
+  }))
+  names(agreement)[names(agreement) == "s"] <- group
+  crosstab <- do.call(rbind, lapply(names(pairs), function(m) {
+    t <- as.data.frame(table(ols = factor(d[[pairs[[m]][1]]], levels = class_levels),
+                             zyp = factor(d[[pairs[[m]][2]]], levels = class_levels),
+                             useNA = "ifany"), stringsAsFactors = FALSE)
+    data.frame(metric = m, ols = t$ols, zyp = t$zyp, n = t$Freq, stringsAsFactors = FALSE)
+  }))
+  rownames(agreement) <- rownames(crosstab) <- NULL
+  list(agreement = agreement, crosstab = crosstab)
+}
+
+#' Mean change over the record as % of the baseline (Results text; diagnostics).
+#'
+#' `summary` is a boot_means() summary in slope units (metric, <group>, n, mean, ci_lo, ci_hi).
+#' The baseline of a group is the unweighted mean of the PA means (`base_cols`, metric → column)
+#' over the PAs that enter its trend mean (non-missing slope, `slope_cols`); for
+#' `pooled_label`, over all such PAs. pct = 100 × slope × n_span / baseline, for the mean and
+#' both CI limits (the baseline is held fixed).
+percent_change <- function(summary, d, slope_cols, base_cols, group, n_span,
+                           pooled_label = "All PAs") {
+  stopifnot(identical(sort(names(slope_cols)), sort(names(base_cols))))
+  g <- as.character(d[[group]])
+  base <- vapply(seq_len(nrow(summary)), function(i) {
+    m <- summary$metric[i]; s <- summary[[group]][i]
+    rows <- !is.na(d[[slope_cols[[m]]]]) & !is.na(g) & (s == pooled_label | g %in% s)
+    mean(d[[base_cols[[m]]]][rows], na.rm = TRUE)
+  }, numeric(1))
+  out <- summary[, c("metric", group, "n")]
+  out$baseline   <- base
+  out$pct_change <- 100 * summary$mean  * n_span / base
+  out$pct_lo     <- 100 * summary$ci_lo * n_span / base
+  out$pct_hi     <- 100 * summary$ci_hi * n_span / base
+  out
+}

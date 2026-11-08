@@ -17,15 +17,26 @@ max_rel_diff <- function(new, old, rel_floor = 1e-6) {
 .parity <- new.env()
 .parity$rows <- list()
 
-# Record one parity check and assert it. `kind` is "rel" (numeric, max relative difference ≤ tol)
-# or "identical" (exact equality, e.g. classes and letters; tol is ignored).
-parity_check <- function(output, item, new, old, tol = 1e-8, kind = c("rel", "identical"),
+# Record one parity check and assert it. `kind` is
+#   "rel"        numeric, max relative difference (max_rel_diff) ≤ tol;
+#   "abs"        numeric, max absolute difference ≤ tol (rounded old tables: tol = half the last
+#                digit; bootstrap CIs whose random stream changed: values divided by the old CI
+#                width, tol = 0.05, i.e. within 5% of the CI width);
+#   "identical"  exact equality, e.g. classes and letters (tol is ignored).
+# The max_rel_diff column holds the max relative or absolute difference, by kind.
+parity_check <- function(output, item, new, old, tol = 1e-8, kind = c("rel", "abs", "identical"),
                          source = "fast") {
   kind <- match.arg(kind)
   if (kind == "rel") {
     d <- max_rel_diff(new, old)
     pass <- is.finite(d) && d <= tol
     detail <- sprintf("max rel diff %.3g (tol %.0e)", d, tol)
+  } else if (kind == "abs") {
+    new <- as.numeric(new); old <- as.numeric(old)
+    d <- if (length(new) != length(old) || any(is.na(new) != is.na(old))) Inf
+         else if (all(is.na(old))) 0 else max(abs(new - old), na.rm = TRUE)
+    pass <- is.finite(d) && d <= tol
+    detail <- sprintf("max abs diff %.3g (tol %.3g)", d, tol)
   } else {
     n_diff <- if (length(new) != length(old)) NA else sum(xor(is.na(new), is.na(old)) |
                                                          (!is.na(new) & !is.na(old) & new != old))
@@ -34,7 +45,7 @@ parity_check <- function(output, item, new, old, tol = 1e-8, kind = c("rel", "id
     d <- if (pass) 0 else NA_real_
   }
   .parity$rows[[length(.parity$rows) + 1]] <- data.frame(
-    source = source, output = output, item = item, kind = kind, tol = if (kind == "rel") tol else NA,
+    source = source, output = output, item = item, kind = kind, tol = if (kind != "identical") tol else NA,
     max_rel_diff = d, pass = pass, detail = detail, stringsAsFactors = FALSE)
   testthat::expect_true(pass, label = sprintf("%s / %s: %s", output, item, detail))
   invisible(pass)

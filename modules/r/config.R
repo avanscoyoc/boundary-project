@@ -81,6 +81,7 @@ CFG <- local({
       R     = 10000L,
       seeds = c(biome = 42L, weighted = 43L, sen = 44L, pooled = 45L)
     ),
+    pooled_label = "All PAs",   # the all-PAs row of the biome summaries (old tables: "All biomes")
 
     # ── Spatial GLS (Stats ¶2–3, ¶6) ─────────────────────────────────────────
     spatial = list(
