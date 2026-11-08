@@ -30,6 +30,16 @@ set_reference <- function(x, ref, order) {
   droplevels(factor(as.character(x), levels = c(ref, setdiff(order, ref))))
 }
 
+#' Model factors of one model family (D1): IUCN_group and BIOME_NAME with the family's
+#' reference levels first. `ref` = list(iucn, biome) (config ref$mean or ref$change);
+#' `iucn_levels`, `biome_order` = the other levels' order. A different reference refits the same
+#' model reparametrised: the categorical coefficients are then the contrasts against `ref`.
+set_model_references <- function(d, ref, iucn_levels, biome_order) {
+  d$IUCN_group <- set_reference(d$IUCN_group, ref$iucn, iucn_levels)
+  d$BIOME_NAME <- set_reference(d$BIOME_NAME, ref$biome, biome_order)
+  d
+}
+
 #' Fixed-effect table (03:227-235): estimate, SE, t, p and 95% CI (t, df = N − p).
 coef_table <- function(m, label) {
   tt <- summary(m)$tTable

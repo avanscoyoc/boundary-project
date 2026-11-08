@@ -72,6 +72,28 @@ test_that("ref_contrasts equal coefficient differences, with Holm p", {
   expect_equal(r$p_holm, p.adjust(r$p.value, "holm"))
 })
 
+test_that("set_model_references: a refit with another reference is the same model reparametrised", {
+  d <- sim_model_data(); m <- fit_ns(d, "add")
+  ref <- list(iucn = "non-strict", biome = "Boreal Forest")
+  d2 <- set_model_references(d, ref, names(CFG$iucn_groups), CFG$biome_order)
+  expect_identical(levels(d2$IUCN_group), c("non-strict", "strict", "unknown"))
+  expect_identical(levels(d2$BIOME_NAME), c("Boreal Forest", CFG$biome_order[1:3]))
+  m2 <- fit_ns(d2, "add")
+  expect_equal(fitted(m2), fitted(m), tolerance = 1e-10)
+  expect_equal(m2$sigma, m$sigma, tolerance = 1e-10)
+  b2 <- coef_table(m2, "y")
+  expect_equal(b2$estimate[b2$term %in% MODEL_COVARIATES], coef_table(m, "y")$estimate[b2$term %in% MODEL_COVARIATES],
+               tolerance = 1e-10)
+  # The categorical coefficients of the refit are the first fit's contrasts against `ref`
+  for (f in c("IUCN_group", "BIOME_NAME")) {
+    r <- ref_contrasts(m, d, f, ref[[if (f == "IUCN_group") "iucn" else "biome"]], "y")
+    k <- match(paste0(f, r$level), b2$term)
+    expect_equal(b2$estimate[k], r$estimate, tolerance = 1e-10, info = f)
+    expect_equal(b2$std.error[k], r$SE, tolerance = 1e-10, info = f)
+    expect_equal(b2$p.value[k], r$p.value, tolerance = 1e-10, info = f)
+  }
+})
+
 test_that("aicc_gls, pseudo_r2, spatial_params", {
   d <- sim_model_data(); m <- fit_ns(d, "add")
   ll <- logLik(m); k <- attr(ll, "df"); n <- nrow(d)

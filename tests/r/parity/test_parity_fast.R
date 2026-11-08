@@ -421,3 +421,47 @@ test_that("change model A at its saved range reproduces the old 02b tables", {
   })
   check_change_tables(tabs, models = "A", optimised = FALSE, tol = 1e-6, source = "fast")
 })
+
+# ── Phase 3, D1: the change models fitted with their own reference levels ──────
+# The old run fitted the change models with strict / Grassland as the reference and reported
+# emmeans contrasts against non-strict / Boreal. The new 08 fits them with non-strict / Boreal
+# as the reference (config ref$change), the same model reparametrised. Model A refitted that way
+# at its saved range: the categorical coefficients equal the old contrasts, and the continuous
+# coefficients the old ones. (The coefficient CIs use df = N − p, the emmeans contrasts N − p − 1,
+# as the fixed range counts as a covariance parameter, so the CIs and p are recomputed at the
+# old df: the df is then the only difference.)
+test_that("change model A with the change reference levels reproduces the old contrasts", {
+  skip_if_no_legacy()
+  expect_identical(CFG$ref$change, legacy()$settings$ref_contrast)
+  d <- set_model_references(legacy_change_data(), CFG$ref$change, names(CFG$iucn_groups),
+                            CFG$biome_order)
+  rng <- legacy_change_ranges()
+  cdir <- file.path(CFG$paths$parity_dir, "cache")
+  model_a <- function(x) {
+    x <- x[x$model == CHANGE_MODEL_LABELS[["A"]], ]
+    for (v in intersect(c("factor", "term"), names(x))) x[[v]] <- legacy_rename_terms(x[[v]])
+    x
+  }
+  oc <- model_a(legacy_table("trend_drivers_contrasts_trend_gls.csv"))
+  ob <- model_a(legacy_table("trend_drivers_coef_trend_gls.csv"))
+  f_c <- "trend_drivers_contrasts_trend_gls.csv (A refitted, ref$change)"
+  f_b <- "trend_drivers_coef_trend_gls.csv (A refitted, ref$change)"
+  cols <- c(estimate = "estimate", std.error = "SE", statistic = "t.ratio", p.value = "p.value",
+            conf.low = "lower.CL", conf.high = "upper.CL")
+  for (r in names(LEGACY_CHANGE)) {
+    cs <- spatial_setup(d, value = rng[[r]], fixed = TRUE, cache_dir = cdir)
+    ct <- coef_table(fit_gls_cached(model_formula(LEGACY_CHANGE[[r]][["response"]], "add"), d, cs,
+                                    cache_dir = cdir), r)
+    o <- oc[oc$response == r, ]
+    n <- ct[match(paste0(o$factor, o$level), ct$term), ]
+    parity_check(f_c, paste(r, "terms"), sum(!is.na(n$term)), nrow(o), kind = "identical")
+    parity_check(f_c, paste(r, "df (coef N - p = contrast df + 1)"), n$df - 1, o$df, kind = "identical")
+    q <- stats::qt(0.975, o$df)
+    n$conf.low <- n$estimate - q * n$std.error; n$conf.high <- n$estimate + q * n$std.error
+    n$p.value <- 2 * stats::pt(-abs(n$statistic), o$df)
+    for (k in names(cols)) parity_check(f_c, paste(r, cols[[k]]), n[[k]], o[[cols[[k]]]], tol = 1e-6)
+    o <- ob[ob$response == r & ob$term %in% c(MODEL_COVARIATES, MODEL_HMI), ]
+    n <- ct[match(o$term, ct$term), ]
+    for (k in names(cols)) parity_check(f_b, paste(r, "continuous", k), n[[k]], o[[k]], tol = 1e-6)
+  }
+})

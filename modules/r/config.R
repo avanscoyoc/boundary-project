@@ -112,6 +112,9 @@ CFG <- local({
       bands_km        = c(0, 50, 100, 250, 500, 1000, 2000)
     ),
 
+    # Seed of the random PA subset of a pilot run (scripts 06, 08, 09 --pilot N)
+    pilot_seed = 1L,
+
     # ── Sensitivity (09) ─────────────────────────────────────────────────────
     sensitivity = list(
       established_by = 2003L    # PA subset (a): analysed establishment year ≤ 2003
