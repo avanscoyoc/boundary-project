@@ -6,7 +6,10 @@
   },
   "workspaceFolder": "/workspace",
   "mounts": [
-    "source=${localWorkspaceFolder},target=/workspace,type=bind"
+    "source=${localWorkspaceFolder},target=/workspace,type=bind",
+    // Earth Engine sign-in and default project live in a named Docker volume, so they
+    // survive "Rebuild Container". Each person signs in once per machine; nothing is in the repo.
+    "source=boundary-project-earthengine,target=/root/.config/earthengine,type=volume"
   ],
   "customizations": {
     "vscode": {
@@ -15,6 +18,7 @@
       }
     }
   },
-  "postCreateCommand": "earthengine authenticate --quiet || true",
+  // Sign-in needs a browser, so it can't run here. Remind instead (see README > Setup).
+  "postAttachCommand": "test -f /root/.config/earthengine/credentials || echo 'Earth Engine: not signed in. Run: earthengine authenticate --auth_mode=notebook && earthengine set_project YOUR-PROJECT-ID'",
   "remoteUser": "root"
 }

@@ -1,5 +1,7 @@
 __pycache__
 .DS_Store
+.pixi
+
 data
 results
 old_data
@@ -12,4 +14,4 @@ PLAN_pipeline_v2.md
 PA_New_Analysis
 PLAN_R_analysis.md
 notes
-.pixi
+

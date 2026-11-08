@@ -8,7 +8,7 @@ FROM osgeo/gdal:ubuntu-small-3.6.3@sha256:398d5aca0ca88295c13ada87e0f382ed409dac
 WORKDIR /workspace
 ENV DEBIAN_FRONTEND=noninteractive
 
-# System tools. google-cloud-cli stays: ee.Authenticate() signs in through gcloud when it is installed.
+# System tools. google-cloud-cli is optional (scripts sign in with auth_mode='notebook', not gcloud).
 RUN apt-get update && \
     apt-get install -y python3-pip git curl ca-certificates gnupg && \
     echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" \

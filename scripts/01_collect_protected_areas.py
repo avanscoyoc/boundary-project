@@ -32,7 +32,7 @@ print("="*80)
 # Initialize Earth Engine
 print("\nInitializing Google Earth Engine...")
 config.require_gee_project()
-ee.Authenticate()
+ee.Authenticate(auth_mode='notebook')  # prompts only if not signed in yet
 ee.Initialize(project=config.GEE_PROJECT)
 
 # Load WDPA dataset

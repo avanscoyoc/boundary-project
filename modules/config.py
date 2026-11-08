@@ -8,6 +8,8 @@ This module centralizes all configurable parameters:
 - Google Earth Engine settings
 """
 
+import json
+import os
 from pathlib import Path
 
 # =====================================================================
@@ -45,9 +47,24 @@ RUN_TAG = 'v2'
 # Google Earth Engine Project - REQUIRED for scripts 01 and 03
 # =====================================================================
 
-# Replace with your GEE project ID (e.g. 'my-gee-project')
-# Find it at: https://console.cloud.google.com/
-GEE_PROJECT = 'YOUR-GEE-PROJECT'  # --- EDIT THIS ---
+# Each person sets their project once, outside the repo, so this file never needs
+# editing. In order of precedence:
+#   1. the GEE_PROJECT environment variable (one-off override)
+#   2. the default saved by `earthengine set_project MY-PROJECT`, which is stored
+#      next to the Earth Engine credentials and survives container rebuilds
+# Find your project ID at: https://console.cloud.google.com/
+EE_CREDENTIALS = Path.home() / ".config" / "earthengine" / "credentials"
+
+
+def _saved_gee_project():
+    """Project saved by `earthengine set_project`, or None."""
+    try:
+        return json.loads(EE_CREDENTIALS.read_text()).get("project")
+    except (OSError, ValueError):
+        return None
+
+
+GEE_PROJECT = os.environ.get("GEE_PROJECT") or _saved_gee_project() or 'YOUR-GEE-PROJECT'
 
 # =====================================================================
 # Dataset Parameters
@@ -177,8 +194,10 @@ def require_gee_project():
     """Raise if GEE_PROJECT is still the placeholder. Called by scripts 01 and 03."""
     if GEE_PROJECT == 'YOUR-GEE-PROJECT':
         raise ValueError(
-            "GEE_PROJECT has not been set. "
-            "Edit modules/config.py and replace 'YOUR-GEE-PROJECT' with your GEE project ID."
+            "GEE_PROJECT has not been set. Run once in the container terminal:\n"
+            "    earthengine authenticate --auth_mode=notebook\n"
+            "    earthengine set_project YOUR-PROJECT-ID\n"
+            "or set the GEE_PROJECT environment variable."
         )
 
 # Run validation on import

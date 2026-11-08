@@ -90,7 +90,7 @@ boundary-project/
 ### Prerequisites
 - [VS Code](https://code.visualstudio.com/) with the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) running
-- A [Google Earth Engine account](https://earthengine.google.com/signup/) with API access enabled
+- A Google account with a Google Cloud project [registered for Earth Engine](https://code.earthengine.google.com/register) (free for noncommercial use). You use your own account and project; you do not need access to the authors' project.
 
 ### Initial Setup
 1. Clone the repository and open in VS Code:
@@ -99,15 +99,15 @@ boundary-project/
    code boundary-project
    ```
 2. When prompted, click **"Reopen in Container"** — VS Code will build the Docker container and install all pinned dependencies from `requirements.txt` (~5 minutes).
-3. Open `modules/config.py` and set your GEE project ID:
-   ```python
-   GEE_PROJECT = 'my-gee-project'  # replace 'YOUR-GEE-PROJECT' with your project ID
-   ```
-4. Authenticate with Earth Engine in the VS Code terminal:
+3. Sign in to Earth Engine with your Google account and set your project. Do this once, in the VS Code terminal:
    ```bash
-   python3 -c "import ee; ee.Authenticate()"
+   earthengine authenticate --auth_mode=notebook
+   earthengine set_project YOUR-PROJECT-ID
    ```
-   Follow the browser link, sign in with your Google account, and paste the token back into the terminal. Credentials are stored inside the container and persist for the session.
+   Open the printed link, sign in, and paste the code back into the terminal. Your sign-in and project are saved in a Docker volume on your machine (`boundary-project-earthengine`), not in the repo, so they survive **Rebuild Container**. You do not need to edit `modules/config.py`.
+4. Run the scripts in order (see [Detailed Workflow](#detailed-workflow)). Every dataset the scripts read is in the public Earth Engine catalog. The script 02 uploads go into your project, and the exports from scripts 01 and 03 go to your Google Drive.
+
+**Sharing a project (optional).** To let a collaborator use your project and the transect assets you already uploaded, add their Google account in Cloud Console → IAM with the roles *Service Usage Consumer* and *Earth Engine Resource Writer*. They still sign in as themselves, then run `earthengine set_project YOUR-PROJECT-ID`. To use a different project for a single run, put `GEE_PROJECT=other-project` before the command.
 
 ## Detailed Workflow
 
@@ -166,7 +166,7 @@ Processes one asset at a time: checks that every exported point arrived exactly 
 Edit [modules/config.py](modules/config.py) for:
 
 **Required settings** (scripts 01 and 03):
-- `GEE_PROJECT`: Your Google Earth Engine project ID
+- `GEE_PROJECT`: Your Google Earth Engine project ID. Not edited here: it comes from `earthengine set_project` or the `GEE_PROJECT` environment variable (see [Setup](#initial-setup))
 
 **Optional settings** (defaults reproduce the analysis):
 - `START_YEAR`, `END_YEAR`: Analysis period (default: 2003–2025)
@@ -191,12 +191,12 @@ Edit [modules/config.py](modules/config.py) for:
 
 **GEE authentication errors**
 ```bash
-python3 -c "import ee; ee.Authenticate()"
+earthengine authenticate --auth_mode=notebook --force
 ```
-Follow the browser link, sign in, and paste the token into the terminal. Then re-run the script.
+Open the link, sign in, and paste the code into the terminal. Then re-run the script. Use `notebook` mode: the default `gcloud` mode warns that the Google Drive scope is blocked and saves no credentials.
 
 **"GEE_PROJECT has not been set"**
-- Open `modules/config.py` and change `GEE_PROJECT = 'YOUR-GEE-PROJECT'` to your actual project ID
+- Run `earthengine set_project YOUR-PROJECT-ID` (saved with your credentials), or set the `GEE_PROJECT` environment variable
 - Your project ID is visible at [console.cloud.google.com](https://console.cloud.google.com/)
 
 ## Legacy Workflow

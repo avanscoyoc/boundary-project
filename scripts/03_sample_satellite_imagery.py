@@ -13,7 +13,7 @@ Workflow:
 4. Export results to Google Drive in parts of 50,000 points
 
 BEFORE RUNNING:
-1. Set GEE_PROJECT in modules/config.py
+1. Set your GEE project once: earthengine set_project YOUR-PROJECT-ID (see README Setup)
 2. Upload every data/02_transects/upload/transect_points_{RUN_TAG}_NNN.zip as a
    table asset (see output from script 02)
 
@@ -59,7 +59,7 @@ print(f"Years: {config.START_YEAR}-{config.END_YEAR}")
 # Initialize Earth Engine
 print("\nInitializing Google Earth Engine...")
 config.require_gee_project()
-ee.Authenticate()
+ee.Authenticate(auth_mode='notebook')  # prompts only if not signed in yet
 ee.Initialize(project=config.GEE_PROJECT)
 
 # Export folder and names
