@@ -165,6 +165,34 @@ GEE_ASSET_PREFIX = f'projects/{GEE_PROJECT}/assets/{UPLOAD_PREFIX}'
 # Google Drive folder that script 03 exports CSVs to
 GEE_DRIVE_FOLDER = f'{INDEX_NAME}_gradient_{RUN_TAG}'
 
+# =====================================================================
+# Validation: displaced-transect null model (scripts 11-13; draft for review)
+# =====================================================================
+# Each sampled PA's full transect set is translated by one random vector (no rotation) in a
+# local azimuthal equidistant projection. Values in [brackets] in the methods text are set here.
+
+VALIDATION_DIR = DATA_DIR / "11_validation"                  # script 11: sample, candidates, log
+VALIDATION_UPLOAD_DIR = VALIDATION_DIR / "upload"            # zipped shapefiles to upload to Earth Engine
+VALIDATION_GEE_CSV_DIR = DATA_DIR / "12_gee_validation"      # script 12 CSVs (download from Drive)
+VALIDATION_SAMPLE_FRAME = DATA_DIR / "05_analysis" / "pa_level.csv"   # the analysis PAs (R script 05)
+
+VALIDATION_N_PER_BIOME = 50        # [n] PAs per biome
+VALIDATION_RESERVE = 25            # extra PAs drawn per biome, used in draw order to replace PAs
+                                   # without an accepted displacement
+VALIDATION_N_CANDIDATES = 5        # displacements per PA passing the local checks, sent to Earth
+                                   # Engine; the first that passes the imagery checks is accepted
+VALIDATION_MAX_ATTEMPTS = 200      # [N] vectors drawn per PA for the local checks
+VALIDATION_MIN_DIST_KM = 50        # [50 km] minimum displacement (and more than the PA's extent)
+VALIDATION_DIST_SPAN_KM = 100      # distance drawn uniformly in [minimum, minimum + span]
+VALIDATION_SEED = 20261108
+
+VALIDATION_UPLOAD_PREFIX = f'displaced_points_{RUN_TAG}_'
+VALIDATION_ASSET_PREFIX = f'projects/{GEE_PROJECT}/assets/{VALIDATION_UPLOAD_PREFIX}'
+VALIDATION_DRIVE_FOLDER = f'{INDEX_NAME}_gradient_displaced_{RUN_TAG}'
+VALIDATION_PA_METRICS = RESULTS_DIR / "validation_displaced_pa_years.csv"   # script 13
+VALIDATION_LOG = RESULTS_DIR / "validation_displacement_log.csv"           # script 13
+
+
 def get_num_chunks():
     """
     Count the upload zips written by script 02 (one Earth Engine asset each).

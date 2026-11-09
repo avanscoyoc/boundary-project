@@ -399,3 +399,22 @@ residual_table <- function(m, data, label) {
              resid = as.numeric(stats::resid(m, type = "normalized")), log_area_z = data$log_area_z,
              BIOME_NAME = as.character(data$BIOME_NAME), stringsAsFactors = FALSE)
 }
+
+#' S figure (validation; draft): paired difference PA − displaced copy per biome and for all PAs,
+#' mean with 95% bootstrap CI, one panel per metric. `summ`: paired_null_summary() output.
+fig_validation <- function(summ, biome_order, pooled_label = "All PAs") {
+  aes <- ggplot2::aes
+  lv <- c(pooled_label, biome_order[biome_order %in% summ$BIOME_NAME])
+  s <- summ[summ$BIOME_NAME %in% lv, ]
+  s$BIOME_NAME <- factor(s$BIOME_NAME, levels = rev(lv))
+  s$label <- sprintf("n = %d", s$n)
+  ggplot2::ggplot(s, aes(x = mean_diff, y = BIOME_NAME, colour = metric)) +
+    ggplot2::geom_vline(xintercept = 0, linetype = "dashed", colour = "grey50") +
+    ggplot2::geom_errorbar(aes(xmin = ci_lo, xmax = ci_hi), orientation = "y", width = 0.2) +
+    ggplot2::geom_point(size = 2.5) +
+    ggplot2::geom_text(aes(label = label), nudge_y = 0.3, size = 3, colour = "grey30", family = PLOT_FAMILY) +
+    ggplot2::scale_colour_manual(values = FIG4_COLORS, guide = "none") +
+    ggplot2::facet_wrap(~ metric, scales = "free_x") +
+    ggplot2::labs(x = "PA \u2212 displaced copy (mean, 95% CI)", y = NULL) +
+    theme_pa(base_size = 11)
+}
