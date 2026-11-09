@@ -33,6 +33,8 @@
 #          <tables>/mean_models_response_sd.csv            response SD over the PAs (Fig. 3A units)
 #          <diagnostics>/mean_models_{wald_all_terms,spatial_params,fit_stats,moran_knn,
 #                         moran_bands,residuals}.csv
+#          <diagnostics>/mean_models_ranges.csv           estimated range of each spatial fit (09
+#                                                         fixes the sensitivity refits at these)
 
 source(file.path("modules", "r", "config.R"))
 for (f in setdiff(list.files(file.path("modules", "r"), "\\.R$", full.names = TRUE),
@@ -100,6 +102,9 @@ tabs <- lapply(stats::setNames(names(resp_cols), names(resp_cols)), function(r) 
   tb <- mean_model_tables(fits, d, resp_cols[[r]], r, hmi$mean, hmi$sd, contrast_ref = NULL, moran = w,
                           moran_settings = list(nsim = CFG$spatial$moran_nsim, seed = CFG$spatial$moran_seed),
                           pred_by = c("IUCN_group", "BIOME_NAME"))
+  rg <- function(m) stats::coef(m$modelStruct$corStruct, unconstrained = FALSE)[["range"]]
+  tb$ranges <- data.frame(response = r, model = c("main effects", "interaction"),
+                          range_km = c(rg(fits$add), rg(fits$full)), stringsAsFactors = FALSE)
   tb$residuals <- rbind(cbind(model = "interaction, spatial", residual_table(fits$full, d, r)),
                         cbind(model = "interaction, non-spatial", residual_table(fits$full_nosp, d, r)))
   tb
@@ -125,6 +130,7 @@ write("fit_stats",              out$diagnostics, "mean_models_fit_stats.csv")
 write("moran_knn",              out$diagnostics, "mean_models_moran_knn.csv")
 write("moran_bands",            out$diagnostics, "mean_models_moran_bands.csv")
 write("residuals",              out$diagnostics, "mean_models_residuals.csv")
+write("ranges",                 out$diagnostics, "mean_models_ranges.csv")   # fixed ranges of 09
 
 wd <- stack("wald")
 for (i in seq_len(nrow(wd))) say("%s %s: F(%d, %d) = %.2f, p = %.3g", wd$response[i], wd$hypothesis[i],

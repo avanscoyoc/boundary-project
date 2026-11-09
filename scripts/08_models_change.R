@@ -23,7 +23,7 @@
 # Outputs: <tables>/TableSZ_change_models.csv   long: continuous terms (per 1 SD) and categorical
 #                                               contrasts vs the reference, models A and B
 #          <diagnostics>/change_models_{coef,wald,contrasts,tau2,spatial_params,moran,
-#                         residuals}.csv
+#                         residuals,ranges}.csv
 
 source(file.path("modules", "r", "config.R"))
 for (f in setdiff(list.files(file.path("modules", "r"), "\\.R$", full.names = TRUE),
@@ -89,6 +89,9 @@ tabs <- lapply(stats::setNames(metrics, metrics), function(m) {
   tb <- change_model_tables(cm, resp[[m]][["response"]], m, CFG$ref$change, moran = w,
                             moran_settings = list(nsim = CFG$spatial$moran_nsim, seed = CFG$spatial$moran_seed))
   tb$sz <- table_sz(tb$coef, tb$contrasts)
+  rg <- function(x) stats::coef(x$modelStruct$corStruct, unconstrained = FALSE)[["range"]]
+  tb$ranges <- data.frame(response = m, model = unname(CHANGE_MODEL_LABELS[c("A", "B")]),
+                          range_km = c(rg(cm$fits$A), rg(cm$fits$B)), stringsAsFactors = FALSE)
   tb$residuals <- cbind(model = CHANGE_MODEL_LABELS[["A"]], residual_table(cm$fits$A, cm$data, m))
   tb
 })
@@ -105,6 +108,7 @@ write("tau",            out$diagnostics, "change_models_tau2.csv")
 write("spatial_params", out$diagnostics, "change_models_spatial_params.csv")
 write("moran",          out$diagnostics, "change_models_moran.csv")
 write("residuals",      out$diagnostics, "change_models_residuals.csv")
+write("ranges",         out$diagnostics, "change_models_ranges.csv")   # fixed ranges of 09
 
 sp <- stack("spatial_params")
 for (i in seq_len(nrow(sp))) say("%s model A: range %.2f km (%.2f–%.2f), ΔAICc (non-spatial − spatial) %.1f, pseudo-R² %.3f",
