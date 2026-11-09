@@ -1,7 +1,9 @@
 # 05_prepare_analysis_data.R: the analysis data (Stats ¶1).
 #
-# The analysis set, establishment-year imputation, z-scores on the final set, point-on-surface
-# coordinates, the response SDs and the HMI mean and SD, the long PA-year table and the counts.
+# The analysis set (biomes; PAs whose boundary is dominated by sea or by open water; missing
+# covariates; too few years), establishment-year imputation, z-scores on the final set,
+# point-on-surface coordinates, the response SDs and the HMI mean and SD, the long PA-year table,
+# the PA set of the transect-subset sensitivity runs, and the counts.
 #
 # Run from the repository root:
 #   Rscript scripts/05_prepare_analysis_data.R [--out DIR]
@@ -13,8 +15,11 @@
 #                                          STATUS_YR (imputed where 0) + STATUS_YR_reported,
 #                                          STATUS_YR_imputed, impute_pool; IUCN_group; z-scores;
 #                                          lon/lat; PA means and n_years per transect version
-#                                          (unsuffixed = "all"); PA-set flags set_* (A3)
+#                                          (unsuffixed = "all"); pct_complete (median share of
+#                                          complete transects); PA-set flags set_* (A3)
 #          data/05_analysis/pa_year.csv    analysis PAs × transect version × year (long, A2)
+#          data/05_analysis/excluded_pas.csv   every PA with metrics that is not analysed, the
+#                                          step that removed it, pct_complete, water_extent_pct
 #          data/05_analysis/scaling.csv    n, mean, SD of each z-scored covariate (gHM_mean_z: the
 #                                          HMI back-transform) and of each response's PA means
 #                                          (the SD for the standardised change)
@@ -48,13 +53,15 @@ say("04 metrics: %d PA-years, %d PAs", nrow(m), length(unique(m$WDPA_PID)))
 # they can differ slightly between years: the PA value is their mean over the PA's years.
 attr_cols <- c("WDPA_PID", "NAME", "ISO3", "BIOME_NAME", "IUCN_CAT", "STATUS_YR", "AREA_KM2")
 cov_cols  <- c("gHM_mean", "elevation_mean", "terrain_slope", "water_extent_pct")
-stopifnot(all(c(attr_cols, cov_cols) %in% names(m)), !anyDuplicated(unique(m[attr_cols])$WDPA_PID))
+stopifnot(all(c(attr_cols, cov_cols, "pct_complete") %in% names(m)), !anyDuplicated(unique(m[attr_cols])$WDPA_PID))
 pa_attr <- m[!duplicated(m$WDPA_PID), attr_cols]
 pid <- factor(m$WDPA_PID, levels = pa_attr$WDPA_PID)
 for (v in cov_cols) {
   x <- as.vector(tapply(m[[v]], pid, mean, na.rm = TRUE))
   pa_attr[[v]] <- ifelse(is.nan(x), NA_real_, x)
 }
+# Share of the PA's transects complete (data at all 5 points), median over its years: the sea rule
+pa_attr$pct_complete <- as.vector(tapply(m$pct_complete, pid, stats::median, na.rm = TRUE))
 
 # ── 2. PA-year table and PA means (all transect versions) ────────────────────
 py <- pa_year_long(m, CFG$transects)
@@ -66,7 +73,8 @@ stopifnot(nrow(pa) == nrow(pa_attr))
 # ── 3. Analysis set ──────────────────────────────────────────────────────────
 year_cols <- paste0("n_years_", CFG$responses)
 aset <- analysis_set(pa, CFG$exclude_biomes, unique(c("IUCN_CAT", "STATUS_YR", unname(CFG$covariates))),
-                   year_cols, CFG$min_years)
+                     year_cols, CFG$min_years, min_complete = CFG$min_complete_pct,
+                     max_water = CFG$max_water_pct)
 d <- aset$set
 print(aset$steps, row.names = FALSE)
 
@@ -108,11 +116,12 @@ for (v in setdiff(CFG$transects, "all")) {
   i <- match(d$WDPA_PID, x$WDPA_PID)
   for (col in mean_cols) d[[paste0(col, "_", v)]] <- x[[col]][i]
 }
-enough <- function(v) {
-  sfx <- if (v == "all") "" else paste0("_", v)
-  Reduce(`&`, lapply(paste0(year_cols, sfx), function(col) !is.na(d[[col]]) & d[[col]] >= CFG$min_years))
-}
-d$set_transects   <- Reduce(`&`, lapply(CFG$transects, enough))      # ≥ min_years in every version
+# Transect-subset runs: PA-years with ≥ sensitivity$min_transects complete transects in the
+# version; PAs with ≥ min_years such years of both metrics in every version
+ts <- transect_subset_set(py[py$WDPA_PID %in% d$WDPA_PID, ], CFG$transects, unname(CFG$responses),
+                          CFG$sensitivity$min_transects, CFG$min_years)
+stopifnot(identical(ts$WDPA_PID, d$WDPA_PID))
+d$set_transects   <- ts$ok_every_version
 d$set_established <- d$STATUS_YR <= CFG$sensitivity$established_by  # analysed (imputed) year
 d$set_reported    <- !d$STATUS_YR_imputed
 
@@ -122,6 +131,10 @@ dir.create(dirname(out$counts), recursive = TRUE, showWarnings = FALSE)
 readr::write_csv(d, file.path(out$dir, "pa_level.csv"), na = "")
 readr::write_csv(py[py$WDPA_PID %in% d$WDPA_PID, ], file.path(out$dir, "pa_year.csv"), na = "")
 readr::write_csv(scaling, file.path(out$dir, "scaling.csv"))
+ex <- merge(aset$removed, pa[c("WDPA_PID", "NAME", "ISO3", "BIOME_NAME", "pct_complete", "water_extent_pct")],
+            by = "WDPA_PID", sort = FALSE)
+readr::write_csv(ex[order(match(ex$step, aset$steps$step), ex$WDPA_PID, method = "radix"), ],
+                 file.path(out$dir, "excluded_pas.csv"), na = "")
 
 g <- d[d$STATUS_YR_imputed, ]
 counts <- list(
@@ -140,11 +153,13 @@ counts <- list(
     imputed_year_quantiles = as.list(stats::quantile(g$STATUS_YR, c(0, 0.25, 0.5, 0.75, 1))),
     settings = CFG$impute),
   coordinates = list(n_jittered = attr(xy, "n_jittered"), crs_point_on_surface = CFG$coords_crs),
-  pa_sets = list(main = nrow(d), transects = sum(d$set_transects),
+  exclusion_settings = list(min_complete_pct = CFG$min_complete_pct, max_water_pct = CFG$max_water_pct),
+  pa_sets = list(main = nrow(d),
+                 transects = list(n = sum(d$set_transects), min_transects = CFG$sensitivity$min_transects),
                  established_by = list(year = CFG$sensitivity$established_by, n = sum(d$set_established)),
                  reported_year = sum(d$set_reported)),
   transect_versions = as.list(vapply(stats::setNames(CFG$transects, CFG$transects),
-                                     function(v) sum(enough(v)), integer(1))),
+                                     function(v) sum(ts[[paste0("ok_", v)]]), integer(1))),
   scaling = scaling)
 jsonlite::write_json(counts, out$counts, auto_unbox = TRUE, pretty = TRUE, digits = NA, dataframe = "rows")
 say("wrote %s (%d PAs), pa_year.csv (%d rows), scaling.csv, %s", file.path(out$dir, "pa_level.csv"),

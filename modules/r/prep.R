@@ -33,7 +33,7 @@ pa_year_long <- function(metrics, versions, cols = c("n_trnst", "edge_extent", "
 #' n_years_<metric> counts those years. Returns WDPA_PID, transects, <metric>_mean,
 #' n_years_<metric> for each metric, ordered by WDPA_PID, version.
 pa_means <- function(py, metrics = c("edge_extent", "edge_intensity")) {
-  key <- paste(py$WDPA_PID, as.integer(py$transects), sep = "\r")
+  key <- paste(py$WDPA_PID, as.character(py$transects), sep = "\r")   # factor or character
   first <- !duplicated(key)
   out <- data.frame(WDPA_PID = py$WDPA_PID[first], transects = py$transects[first],
                     stringsAsFactors = FALSE)
@@ -51,31 +51,72 @@ pa_means <- function(py, metrics = c("edge_extent", "edge_intensity")) {
 
 #' The analysis set (Stats ¶1), step by step, from one row per PA with metrics.
 #'
-#' Steps: drop PAs in `exclude_biomes` (or with no biome); drop PAs missing any of `covariates`
-#' (one step per covariate, in the order given); drop PAs with fewer than `min_years` years of
-#' any of `year_cols` (the main version's n_years_<metric>). Returns list(set = the kept rows
-#' ordered by WDPA_PID, steps = data frame of step, n_removed, n_left).
-analysis_set <- function(pa, exclude_biomes, covariates, year_cols, min_years) {
-  stopifnot(!anyDuplicated(pa$WDPA_PID), all(c(covariates, year_cols, "BIOME_NAME") %in% names(pa)))
+#' Steps, in order: drop PAs in `exclude_biomes` (or with no biome); if `min_complete` is given,
+#' drop PAs whose `pct_complete` (median share of complete transects) is below it (boundaries
+#' largely on the sea, where MODIS has no data); if `max_water` is given, drop PAs whose
+#' `water_extent_pct` is above it (lakes, wetlands; a missing value is left to the covariate
+#' step); drop PAs missing any of `covariates` (one step per covariate, in the order given); drop
+#' PAs with fewer than `min_years` years of any of `year_cols` (the main version's
+#' n_years_<metric>). Returns list(set = the kept rows ordered by WDPA_PID, steps = data frame of
+#' step, n_removed, n_left, removed = WDPA_PID and step of every removed PA).
+analysis_set <- function(pa, exclude_biomes, covariates, year_cols, min_years,
+                         min_complete = NULL, max_water = NULL) {
+  stopifnot(!anyDuplicated(pa$WDPA_PID), all(c(covariates, year_cols, "BIOME_NAME") %in% names(pa)),
+            is.null(min_complete) || "pct_complete" %in% names(pa),
+            is.null(max_water) || "water_extent_pct" %in% names(pa))
   # Each filter is a function of the remaining rows, applied in order.
-  filters <- c(
-    list(function(x) !is.na(x$BIOME_NAME) & !x$BIOME_NAME %in% exclude_biomes),
-    lapply(covariates, function(v) function(x) !is.na(x[[v]])),
-    list(function(x) Reduce(`&`, lapply(year_cols, function(v) x[[v]] >= min_years))))
-  labels <- c(paste0("excluded biomes (", paste(exclude_biomes, collapse = ", "), ") or no biome"),
-              paste("missing", covariates),
+  filters <- list(function(x) !is.na(x$BIOME_NAME) & !x$BIOME_NAME %in% exclude_biomes)
+  labels <- paste0("excluded biomes (", paste(exclude_biomes, collapse = ", "), ") or no biome")
+  if (!is.null(min_complete)) {
+    filters <- c(filters, list(function(x) !is.na(x$pct_complete) & x$pct_complete >= min_complete))
+    labels <- c(labels, sprintf("median share of complete transects < %g%% (sea)", min_complete))
+  }
+  if (!is.null(max_water)) {
+    filters <- c(filters, list(function(x) is.na(x$water_extent_pct) | x$water_extent_pct <= max_water))
+    labels <- c(labels, sprintf("more than %g%% of transects with surface water (lakes, wetlands)", max_water))
+  }
+  filters <- c(filters, lapply(covariates, function(v) function(x) !is.na(x[[v]])),
+               list(function(x) Reduce(`&`, lapply(year_cols, function(v) x[[v]] >= min_years))))
+  labels <- c(labels, paste("missing", covariates),
               sprintf("fewer than %d years of %s", min_years, paste(year_cols, collapse = " or ")))
   steps <- data.frame(step = c("PAs with metrics", labels), n_removed = NA_integer_, n_left = NA_integer_)
   steps$n_left[1] <- nrow(pa)
+  removed <- data.frame(WDPA_PID = character(), step = character(), stringsAsFactors = FALSE)
   for (j in seq_along(filters)) {
     keep <- filters[[j]](pa)
     keep[is.na(keep)] <- FALSE
     steps$n_removed[j + 1] <- sum(!keep); steps$n_left[j + 1] <- sum(keep)
+    if (any(!keep)) removed <- rbind(removed, data.frame(WDPA_PID = pa$WDPA_PID[!keep], step = labels[j],
+                                                         stringsAsFactors = FALSE))
     pa <- pa[keep, , drop = FALSE]
   }
   pa <- pa[order(pa$WDPA_PID, method = "radix"), , drop = FALSE]
   rownames(pa) <- NULL
-  list(set = pa, steps = steps)
+  list(set = pa, steps = steps, removed = removed)
+}
+
+#' PAs for the transect-subset sensitivity runs (A3; user, 2026-11-08).
+#'
+#' In each transect version a PA-year counts only if it has ≥ `min_transects` complete
+#' transects; a PA qualifies in a version with ≥ `min_years` such years with a value of every
+#' metric in `metrics`. `py`: pa_year_long() rows (WDPA_PID, transects, year, n_trnst, metrics).
+#' Returns one row per PA of `py` (ordered by WDPA_PID): ok_<version> for each of `versions`,
+#' and ok_every_version.
+transect_subset_set <- function(py, versions, metrics, min_transects, min_years) {
+  stopifnot(all(c("WDPA_PID", "transects", "n_trnst", metrics) %in% names(py)))
+  ids <- sort(unique(py$WDPA_PID), method = "radix")
+  out <- data.frame(WDPA_PID = ids, stringsAsFactors = FALSE)
+  for (v in versions) {
+    x <- py[py$transects == v & !is.na(py$n_trnst) & py$n_trnst >= min_transects, , drop = FALSE]
+    ok <- rep(TRUE, length(ids))
+    for (m in metrics) {
+      n <- tabulate(match(x$WDPA_PID[!is.na(x[[m]])], ids), nbins = length(ids))
+      ok <- ok & n >= min_years
+    }
+    out[[paste0("ok_", v)]] <- ok
+  }
+  out$ok_every_version <- Reduce(`&`, out[paste0("ok_", versions)])
+  out
 }
 
 #' Establishment-year imputation for STATUS_YR == 0 (Decisions: "Establishment year").

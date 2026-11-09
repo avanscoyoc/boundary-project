@@ -78,6 +78,11 @@ test_that("pa_year_long reshapes the versions and pa_means averages over non-NA 
   expect_equal(r$edge_intensity_mean, 1); expect_equal(r$n_years_edge_intensity, 1)
   r <- pm[pm$WDPA_PID == "2" & pm$transects == "all", ]
   expect_equal(r$edge_extent_mean, 2); expect_equal(r$edge_intensity_mean, 1)
+  # transects as read from pa_year.csv (character, not factor): the same means, versions kept apart
+  pc <- py; pc$transects <- as.character(pc$transects)
+  pmc <- expect_silent(pa_means(pc))
+  expect_equal(pmc[setdiff(names(pmc), "transects")], pm[setdiff(names(pm), "transects")])
+  expect_equal(pmc$transects, as.character(pm$transects))
   py$edge_extent[py$WDPA_PID == "10" & py$transects == "all"] <- NA
   expect_true(is.na(pa_means(py)$edge_extent_mean[1]))
 })
@@ -92,6 +97,45 @@ test_that("analysis_set applies the steps in order and records the counts", {
                     c("n_years_edge_extent", "n_years_edge_intensity"), 5)
   expect_equal(r$set$WDPA_PID, c("c", "f"))
   expect_equal(r$steps$n_left, c(6, 4, 3, 2)); expect_equal(r$steps$n_removed, c(NA, 2, 1, 1))
+})
+
+test_that("analysis_set: sea and lake steps, in order, and the removed PAs with their step", {
+  pa <- data.frame(WDPA_PID = c("a", "b", "c", "d", "e", "f"),
+                   BIOME_NAME = c("Desert", "Desert", "Mangrove", "Tundra", "Tundra", "Desert"),
+                   pct_complete = c(100, 74.9, 10, 75, 100, 100),
+                   water_extent_pct = c(0, 0, 100, 75.1, 75, NA),
+                   gHM_mean = 0.1, n_years_edge_extent = 10, n_years_edge_intensity = 10)
+  r <- analysis_set(pa, "Mangrove", "gHM_mean", c("n_years_edge_extent", "n_years_edge_intensity"), 5,
+                    min_complete = 75, max_water = 75)
+  # c: biome first (also sea and lake); b: sea (< 75); d: lake (> 75); e: exactly 75 kept;
+  # f: missing water is not a lake
+  expect_equal(r$set$WDPA_PID, c("a", "e", "f"))
+  expect_equal(r$steps$n_removed, c(NA, 1, 1, 1, 0, 0))
+  expect_true(grepl("sea", r$steps$step[3])); expect_true(grepl("lakes", r$steps$step[4]))
+  expect_equal(r$removed$WDPA_PID, c("c", "b", "d"))
+  expect_equal(r$removed$step, r$steps$step[2:4])
+  # Without the thresholds the steps are as before
+  r0 <- analysis_set(pa, "Mangrove", "gHM_mean", c("n_years_edge_extent", "n_years_edge_intensity"), 5)
+  expect_equal(nrow(r0$steps), 4); expect_equal(r0$set$WDPA_PID, c("a", "b", "d", "e", "f"))
+})
+
+test_that("transect_subset_set: PA-years need min_transects in the version; PAs min_years in every version", {
+  yrs <- 2003:2008
+  py <- expand.grid(year = yrs, transects = c("all", "nowater"), WDPA_PID = c("p1", "p2", "p3"),
+                    stringsAsFactors = FALSE)
+  py$n_trnst <- 100; py$edge_extent <- 0.5; py$edge_intensity <- 1
+  # p2: nowater has 59 transects in 2 years -> 4 qualifying years (< 5)
+  py$n_trnst[py$WDPA_PID == "p2" & py$transects == "nowater" & py$year %in% 2003:2004] <- 59
+  # p3: intensity missing in 2 nowater years -> 4 years of intensity
+  py$edge_intensity[py$WDPA_PID == "p3" & py$transects == "nowater" & py$year %in% 2005:2006] <- NA
+  r <- transect_subset_set(py, c("all", "nowater"), c("edge_extent", "edge_intensity"), 60, 5)
+  expect_equal(r$WDPA_PID, c("p1", "p2", "p3"))
+  expect_equal(r$ok_all, c(TRUE, TRUE, TRUE))
+  expect_equal(r$ok_nowater, c(TRUE, FALSE, FALSE))
+  expect_equal(r$ok_every_version, c(TRUE, FALSE, FALSE))
+  # exactly min_transects counts
+  py$n_trnst[py$n_trnst == 59] <- 60
+  expect_true(transect_subset_set(py, c("all", "nowater"), c("edge_extent", "edge_intensity"), 60, 5)$ok_every_version[2])
 })
 
 test_that("add_zscores standardises over the rows given, logging where asked", {
@@ -128,7 +172,8 @@ test_that("iucn_group maps categories to the config groups", {
   expect_equal(levels(g), c("strict", "non-strict", "unknown"))
 })
 
-test_that("config covariates match the model formula", {
+test_that("config covariates match the model formula; exclusion settings are set", {
   expect_setequal(names(CFG$covariates), c(MODEL_COVARIATES, MODEL_HMI))
   expect_true(all(CFG$log_covariates %in% names(CFG$covariates)))
+  expect_equal(c(CFG$min_complete_pct, CFG$max_water_pct, CFG$sensitivity$min_transects), c(75, 75, 60))
 })

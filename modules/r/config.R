@@ -43,6 +43,13 @@ CFG <- local({
     min_years = 5L,           # a PA needs ≥ 5 complete years of BOTH metrics (Stats ¶1)
     transects = c("all", "nowater", "nootherpa", "noflags"),      # transect versions (A2); "all" is the main analysis
     exclude_biomes = c("Mangrove", "Rock & Ice"),
+    # PAs whose boundary is dominated by sea or open water (user, 2026-11-08). Sea: transects reaching
+    # into the sea have no MODIS data and are never complete, so a PA needs a median share of
+    # complete transects (04 pct_complete, median over its years) ≥ min_complete_pct, as the 75%
+    # boundary-coverage rule of 02. Lakes and wetlands: a PA needs ≤ max_water_pct of its transects
+    # with JRC water (04 water_extent_pct, the PA's mean over years).
+    min_complete_pct = 75,
+    max_water_pct    = 75,
 
     # Biome order for tables and figures only. Reference levels are set separately (B2).
     biome_order = c("Grassland & Shrubland", "Tropical Forest", "Temperate Forest",
@@ -115,10 +122,24 @@ CFG <- local({
     # Seed of the random PA subset of a pilot run (scripts 06, 08, 09 --pilot N)
     pilot_seed = 1L,
 
+    # ── Validation: displaced transects (14; draft for review) ───────────────
+    # Displaced-copy metrics come from Python scripts 11–13 (results/validation_*.csv).
+    validation = list(
+      pa_years = p("results", "validation_displaced_pa_years.csv"),
+      log      = p("results", "validation_displacement_log.csv"),
+      seed     = 47L,
+      chance_extent = 8 / 15   # edge rate if the five values were exchangeable (no structure)
+    ),
+
     # ── Sensitivity (09) ─────────────────────────────────────────────────────
     sensitivity = list(
-      established_by = 2003L    # PA subset (a): analysed establishment year ≤ 2003
+      established_by = 2003L,   # PA subset (a): analysed establishment year ≤ 2003
                                 # PA subset (b): reported year only (STATUS_YR_imputed == FALSE)
+      # Transect subsets: a PA-year counts in a version only with ≥ min_transects complete
+      # transects (the fewest transects of any PA, methods: 60–8,636), and the comparison set is
+      # the PAs with ≥ min_years such years of both metrics in every version (user, 2026-11-08).
+      min_transects = 60L,
+      seed          = 46L   # bootstrap CIs of the paired differences (S1)
     )
   )
 })
