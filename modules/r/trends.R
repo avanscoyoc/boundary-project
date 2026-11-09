@@ -344,3 +344,34 @@ percent_change <- function(summary, d, slope_cols, base_cols, group, n_span,
   out$pct_hi     <- 100 * summary$ci_hi * n_span / base
   out
 }
+
+# ── Sensitivity (09): agreement of per-PA values between two transect versions ──
+
+#' Cohen's kappa of two classifications of the same PAs (pairs with an NA are left out).
+#' NA when the expected agreement is 1 (both classifications constant and equal).
+cohen_kappa <- function(a, b, levels) {
+  ok <- !is.na(a) & !is.na(b)
+  t <- table(factor(a[ok], levels = levels), factor(b[ok], levels = levels))
+  n <- sum(t)
+  po <- sum(diag(t)) / n
+  pe <- sum(rowSums(t) * colSums(t)) / n^2
+  if (isTRUE(all.equal(pe, 1))) return(NA_real_)
+  (po - pe) / (1 - pe)
+}
+
+#' Agreement of a per-PA quantity under two versions (S1): n, Pearson r, and the paired mean
+#' difference (b − a) / `scale` with a percentile-bootstrap 95% CI over PAs (`R` resamples,
+#' `seed` set first). Pairs with an NA are left out.
+paired_agreement <- function(a, b, scale, R, seed) {
+  stopifnot(length(a) == length(b), length(scale) == 1, scale > 0)
+  ok <- !is.na(a) & !is.na(b)
+  a <- a[ok]; b <- b[ok]
+  dz <- (b - a) / scale
+  set.seed(seed)
+  bt <- boot::boot(dz, function(x, i) mean(x[i]), R = R)
+  # boot.ci prints a note and returns NULL when all replicates are equal: the CI is then that value
+  res <- NULL
+  utils::capture.output(res <- tryCatch(boot::boot.ci(bt, type = "perc"), error = function(e) NULL))
+  ci <- if (is.null(res)) rep(mean(dz), 2) else res$percent[4:5]
+  data.frame(n = length(a), r = stats::cor(a, b), mean_diff_sd = mean(dz), diff_lo = ci[1], diff_hi = ci[2])
+}

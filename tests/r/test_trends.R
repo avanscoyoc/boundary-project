@@ -178,3 +178,22 @@ test_that("percent_change uses the mean PA baseline over PAs with a slope", {
   expect_equal(pc$pct_change, 100 * 0.001 * 22 / c(bA, bAll))
   expect_equal(pc$pct_hi, 100 * 0.002 * 22 / c(bA, bAll))
 })
+
+test_that("cohen_kappa and paired_agreement (sensitivity S1)", {
+  lv <- c("increase", "no_trend", "decrease")
+  a <- c(rep("no_trend", 8), "increase", "decrease")
+  expect_equal(cohen_kappa(a, a, lv), 1)
+  b <- a; b[9] <- "no_trend"
+  # po = 0.9; marginals a: (0.1, 0.8, 0.1), b: (0, 0.9, 0.1) -> pe = 0.72 + 0.01 = 0.73
+  expect_equal(cohen_kappa(a, b, lv), (0.9 - 0.73) / (1 - 0.73))
+  expect_true(is.na(cohen_kappa(rep("no_trend", 5), rep("no_trend", 5), lv)))
+  expect_equal(cohen_kappa(c(a, NA), c(b, "increase"), lv), cohen_kappa(a, b, lv))
+  set.seed(3); x <- rnorm(200)
+  r <- paired_agreement(x, x + 0.5, scale = 2, R = 500, seed = 1)
+  expect_equal(r$n, 200); expect_equal(r$r, 1); expect_equal(r$mean_diff_sd, 0.25)
+  expect_equal(c(r$diff_lo, r$diff_hi), c(0.25, 0.25))
+  y <- x + rnorm(200, 0.1, 0.3)
+  r2 <- paired_agreement(x, y, 1, 1000, 1)
+  expect_true(r2$diff_lo < r2$mean_diff_sd && r2$mean_diff_sd < r2$diff_hi)
+  expect_identical(r2, paired_agreement(x, y, 1, 1000, 1))
+})
