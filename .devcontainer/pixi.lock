@@ -155,6 +155,8 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/r-lubridate-1.9.5-r45h54b55ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/r-magrittr-2.0.5-r45h54b55ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/r-mass-7.3_66-r45h54b55ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/r-matrix-1.7_6-r45h0e4624f_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/r-mgcv-1.9_4-r45h0e4624f_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/r-mime-0.13-r45h54b55ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/r-mvtnorm-1.4_2-r45h11cdb10_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/r-nlme-3.1_170-r45heaba542_0.conda
@@ -429,6 +431,8 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/r-lubridate-1.9.5-r45h0557e7b_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/r-magrittr-2.0.5-r45h0557e7b_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/r-mass-7.3_66-r45hf488e41_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/r-matrix-1.7_6-r45h9301183_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/r-mgcv-1.9_4-r45h8b2cba9_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/r-mime-0.13-r45h0557e7b_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/r-mvtnorm-1.4_2-r45ha2e3c6d_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/r-nlme-3.1_170-r45ha85219e_0.conda
@@ -2619,6 +2623,38 @@ packages:
   run_exports: {}
   size: 1141176
   timestamp: 1784201795136
+- conda: https://conda.anaconda.org/conda-forge/linux-64/r-matrix-1.7_6-r45h0e4624f_0.conda
+  sha256: f9a011394c44b1e5f1a710b45cbf793fcac0753ab3bb4137c5ebb0d70152fd46
+  md5: 4b74bbbc18d62c7c93a84c558372b983
+  depends:
+  - __glibc >=2.17,<3.0.a0
+  - libblas >=3.9.0,<4.0a0
+  - libgcc >=14
+  - liblapack >=3.9.0,<4.0a0
+  - r-base >=4.5,<4.6.0a0
+  - r-lattice
+  license: GPL-2.0-or-later
+  license_family: GPL3
+  run_exports: {}
+  size: 4317135
+  timestamp: 1786437977123
+- conda: https://conda.anaconda.org/conda-forge/linux-64/r-mgcv-1.9_4-r45h0e4624f_0.conda
+  sha256: 83a5233b6162c55f5021dea34464bd64d87f18b7815e738c42d06a046780e594
+  md5: e33882c93c191f5d9a9b346431f02b43
+  depends:
+  - __glibc >=2.17,<3.0.a0
+  - _openmp_mutex >=4.5
+  - libblas >=3.9.0,<4.0a0
+  - libgcc >=14
+  - liblapack >=3.9.0,<4.0a0
+  - r-base >=4.5,<4.6.0a0
+  - r-matrix
+  - r-nlme >=3.1_64
+  license: GPL-2.0-or-later
+  license_family: GPL2
+  run_exports: {}
+  size: 3644492
+  timestamp: 1762539595584
 - conda: https://conda.anaconda.org/conda-forge/linux-64/r-mime-0.13-r45h54b55ab_1.conda
   sha256: 03116d6a8db71492d036c6c052d6cfbf5a98c06da071e42aedb5c740920d6b61
   md5: 26aa2fa52d4caed58336f2b4887916d6
@@ -5439,6 +5475,36 @@ packages:
   run_exports: {}
   size: 1143006
   timestamp: 1784201763856
+- conda: https://conda.anaconda.org/conda-forge/linux-aarch64/r-matrix-1.7_6-r45h9301183_0.conda
+  sha256: d08df54ebb2226beb54dd3e4a3ada97278ee268f4d74eec373e79a708b7cb44e
+  md5: c9525577ceaecf29192d042a3747d441
+  depends:
+  - libblas >=3.9.0,<4.0a0
+  - libgcc >=14
+  - liblapack >=3.9.0,<4.0a0
+  - r-base >=4.5,<4.6.0a0
+  - r-lattice
+  license: GPL-2.0-or-later
+  license_family: GPL3
+  run_exports: {}
+  size: 4506384
+  timestamp: 1786437952104
+- conda: https://conda.anaconda.org/conda-forge/linux-aarch64/r-mgcv-1.9_4-r45h8b2cba9_0.conda
+  sha256: deb54e1594e6cff5fa5c1851b6ba9b8e9ddb663fc2a5bd0a770bd7348fca0740
+  md5: 3f3684540a7cf2f8aba9bd7419b86182
+  depends:
+  - _openmp_mutex >=4.5
+  - libblas >=3.9.0,<4.0a0
+  - libgcc >=14
+  - liblapack >=3.9.0,<4.0a0
+  - r-base >=4.5,<4.6.0a0
+  - r-matrix
+  - r-nlme >=3.1_64
+  license: GPL-2.0-or-later
+  license_family: GPL2
+  run_exports: {}
+  size: 3663168
+  timestamp: 1762539639167
 - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/r-mime-0.13-r45h0557e7b_1.conda
   sha256: 7ebc8c9727a9841e9c0ac408d67dda73618105a6741e6ee2764d3b5838006adc
   md5: a18f44c7e30f17a25dae01a2ebdd64ac

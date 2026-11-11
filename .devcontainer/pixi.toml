@@ -24,6 +24,7 @@ r-scales = "*"
 r-gghalves = "*"
 r-jsonlite = "*"
 r-testthat = "*"
+r-mgcv = "*"                # gam smoother for the residual plots (user, 2026-11-11)
 compilers = "*"             # builds Kendall and zyp (below); conda-forge lacks them for linux-aarch64
 make = "*"
 
