@@ -396,14 +396,13 @@ fig_moran_correlogram <- function(bands, alpha = 0.05) {
     theme_pa(base_size = 10)
 }
 
-#' Diagnostic: residual plots of a fit (03:272-296; loess instead of the old gam smoother). `res`: fitted, resid (normalised residuals),
+#' Diagnostic: residual plots of a fit (03:272-296). `res`: fitted, resid (normalised residuals),
 #' log_area_z, BIOME_NAME — written as a table by the model script.
 fig_residual_diagnostics <- function(res, title, biome_order) {
   aes <- ggplot2::aes
   res$BIOME_NAME <- factor(res$BIOME_NAME, levels = biome_order[biome_order %in% res$BIOME_NAME])
-  # The old plots used a gam smoother (mgcv), which is not in the locked R environment; loess
-  # shows the same thing for a diagnostic (unreported, D4).
-  sm <- ggplot2::geom_smooth(method = "loess", formula = y ~ x, se = FALSE,
+  # gam smoother (mgcv), as the old plots (03:275)
+  sm <- ggplot2::geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE,
                              colour = "red", linewidth = 0.6)
   th <- theme_pa(base_size = 10)
   pA <- ggplot2::ggplot(res, aes(sample = resid)) + ggplot2::stat_qq(alpha = 0.3, size = 0.6) +
