@@ -167,6 +167,15 @@ GEE_ASSET_PREFIX = f'projects/{GEE_PROJECT}/assets/{UPLOAD_PREFIX}'
 GEE_DRIVE_FOLDER = f'{INDEX_NAME}_gradient_{RUN_TAG}'
 
 # =====================================================================
+# Visual inspection of the analysis set (script 05b + scripts/05b_inspection_app.js)
+# =====================================================================
+INSPECTION_INPUT = DATA_DIR / "05_analysis" / "pa_level.csv"     # the analysis PAs (R script 05)
+INSPECTION_DIR = DATA_DIR / "inspection"
+INSPECTION_ZIP = INSPECTION_DIR / f"pas_final_{RUN_TAG}.zip"     # upload as table asset pas_final_{RUN_TAG}
+INSPECTION_CHECKLIST = INSPECTION_DIR / "checklist.csv"         # the reviewer's decisions (read by 05)
+INSPECTION_DECISIONS = ('', 'exclude', 'check')                 # blank = keep
+
+# =====================================================================
 # Validation: displaced-transect null model (scripts 11-13; draft for review)
 # =====================================================================
 # Each sampled PA's full transect set is translated by one random vector (no rotation) in a
