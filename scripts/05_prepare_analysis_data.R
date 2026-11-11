@@ -10,7 +10,8 @@
 # --out DIR writes every output under DIR instead (a dry run; data/ and results/ are untouched).
 #
 # Inputs:  results/pa_edge_metrics_ndvi.csv (04: one row per PA-year)
-#          data/02_pas/pas_selected.gpkg (02: PA polygons)
+#          data/02_pas/pas_selected.gpkg (02: PA polygons; every PA of 02, with its RESOLVE biome)
+#          data/04_transect_years/missing_transects.csv (04: transects with a missing year)
 # Outputs: data/05_analysis/pa_level.csv   one row per analysis PA, ordered by WDPA_PID: attributes,
 #                                          STATUS_YR (imputed where 0) + STATUS_YR_reported,
 #                                          STATUS_YR_imputed, impute_pool; IUCN_group; z-scores;
@@ -18,12 +19,14 @@
 #                                          (unsuffixed = "all"); pct_complete (median share of
 #                                          complete transects); PA-set flags set_* (A3)
 #          data/05_analysis/pa_year.csv    analysis PAs × transect version × year (long, A2)
-#          data/05_analysis/excluded_pas.csv   every PA with metrics that is not analysed, the
+#          data/05_analysis/excluded_pas.csv   every PA of script 02 that is not analysed, the
 #                                          step that removed it, pct_complete, water_extent_pct
 #          data/05_analysis/scaling.csv    n, mean, SD of each z-scored covariate (gHM_mean_z: the
 #                                          HMI back-transform) and of each response's PA means
 #                                          (the SD for the standardised change)
-#          results/analysis_counts.json    counts for the methods and the Phase 4 checks
+#          results/analysis_counts.json    counts for the methods and the Phase 4 checks (final_set:
+#                                          transects, points, area, % of transects kept; missing_data:
+#                                          transect-years without data at all 5 points)
 # Coordinates are written only to data/05_analysis/, never to results/.
 
 source(file.path("modules", "r", "config.R"))
@@ -46,6 +49,8 @@ m <- readr::read_csv(CFG$paths$pa_metrics, guess_max = 1e6, show_col_types = FAL
                      col_types = readr::cols(WDPA_PID = "c", ISO3 = "c", .default = readr::col_guess()))
 m <- as.data.frame(m)
 names(m)[names(m) == "terrain_slope_mean"] <- "terrain_slope"     # A9
+mt <- as.data.frame(readr::read_csv(CFG$paths$missing_transects, show_col_types = FALSE, progress = FALSE,
+                                    col_types = readr::cols(WDPA_PID = "c", .default = readr::col_double())))
 say("04 metrics: %d PA-years, %d PAs", nrow(m), length(unique(m$WDPA_PID)))
 
 # One row per PA. The PA attributes are constant within a PA in 04's table. The covariates are
@@ -71,10 +76,20 @@ pa <- merge(pa_attr, pm[pm$transects == "all", c("WDPA_PID", mean_cols)], by = "
 stopifnot(nrow(pa) == nrow(pa_attr))
 
 # ── 3. Analysis set ──────────────────────────────────────────────────────────
+# Every PA of script 02 enters: a PA without any complete transect-year has no metrics in 04
+# (e.g. Barrow Island, an island whose transects reach into the sea) and enters at 0% complete,
+# so the sea rule removes it (user, 2026-11-11). Biome groups are checked against 04's.
+polys <- sf::st_read(CFG$paths$pas_selected, quiet = TRUE)
+polys$WDPA_PID <- as.character(polys$WDPA_PID)
+pas02 <- sf::st_drop_geometry(polys)[c("WDPA_PID", "NAME", "ISO3", "BIOME_NAME")]
+pa_in <- add_pas_without_metrics(pa, pas02)
+no_metrics <- setdiff(pa_in$WDPA_PID, pa$WDPA_PID)
+say("script 02: %d PAs; %d with metrics; without any complete transect-year: %s", nrow(pas02), nrow(pa),
+    if (length(no_metrics)) paste(no_metrics, collapse = ", ") else "none")
 year_cols <- paste0("n_years_", CFG$responses)
-aset <- analysis_set(pa, CFG$exclude_biomes, unique(c("IUCN_CAT", "STATUS_YR", unname(CFG$covariates))),
+aset <- analysis_set(pa_in, CFG$exclude_biomes, unique(c("IUCN_CAT", "STATUS_YR", unname(CFG$covariates))),
                      year_cols, CFG$min_years, min_complete = CFG$min_complete_pct,
-                     max_water = CFG$max_water_pct)
+                     max_water = CFG$max_water_pct, start_label = "PAs from script 02")
 d <- aset$set
 print(aset$steps, row.names = FALSE)
 
@@ -103,8 +118,6 @@ scaling <- rbind(scaling, resp_sc)
 rownames(scaling) <- NULL
 
 # ── 6. Coordinates: point on surface; jitter only coincident points ──────────
-polys <- sf::st_read(CFG$paths$pas_selected, quiet = TRUE)
-polys$WDPA_PID <- as.character(polys$WDPA_PID)
 xy <- pa_coordinates(polys, d$WDPA_PID, CFG$coords_crs)
 xy <- jitter_duplicates(xy, CFG$spatial$jitter_deg, CFG$spatial$jitter_seed, CFG$spatial$jitter_tries)
 d$lon <- xy$lon; d$lat <- xy$lat
@@ -131,17 +144,21 @@ dir.create(dirname(out$counts), recursive = TRUE, showWarnings = FALSE)
 readr::write_csv(d, file.path(out$dir, "pa_level.csv"), na = "")
 readr::write_csv(py[py$WDPA_PID %in% d$WDPA_PID, ], file.path(out$dir, "pa_year.csv"), na = "")
 readr::write_csv(scaling, file.path(out$dir, "scaling.csv"))
-ex <- merge(aset$removed, pa[c("WDPA_PID", "NAME", "ISO3", "BIOME_NAME", "pct_complete", "water_extent_pct")],
+ex <- merge(aset$removed, pa_in[c("WDPA_PID", "NAME", "ISO3", "BIOME_NAME", "pct_complete", "water_extent_pct")],
             by = "WDPA_PID", sort = FALSE)
 readr::write_csv(ex[order(match(ex$step, aset$steps$step), ex$WDPA_PID, method = "radix"), ],
                  file.path(out$dir, "excluded_pas.csv"), na = "")
 
 g <- d[d$STATUS_YR_imputed, ]
 counts <- list(
-  input = list(pa_years = nrow(m), pas_with_metrics = nrow(pa), years = range(m$year)),
+  input = list(pa_years = nrow(m), pas_from_02 = nrow(pas02), pas_with_metrics = nrow(pa),
+               pas_without_metrics = I(no_metrics), years = range(m$year)),
   analysis_set = aset$steps,
   n_analysis = nrow(d),
-  biome = as.list(table(factor(d$BIOME_NAME, levels = CFG$biome_order))),
+  final_set = final_set_summary(d$WDPA_PID, polys, py, d$AREA_KM2),
+  missing_data = missing_data_summary(d$WDPA_PID, polys$N_TRNST[match(d$WDPA_PID, polys$WDPA_PID)], py, mt,
+                                      d$BIOME_NAME, CFG$years),
+  biome =as.list(table(factor(d$BIOME_NAME, levels = CFG$biome_order))),
   iucn_group = as.list(table(factor(d$IUCN_group, levels = names(CFG$iucn_groups)))),
   imputation = list(
     n_imputed = nrow(g),

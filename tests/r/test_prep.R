@@ -99,6 +99,42 @@ test_that("analysis_set applies the steps in order and records the counts", {
   expect_equal(r$steps$n_left, c(6, 4, 3, 2)); expect_equal(r$steps$n_removed, c(NA, 2, 1, 1))
 })
 
+test_that("biome_group maps RESOLVE biome names to the 8 groups of script 04", {
+  x <- c("Tropical & Subtropical Moist Broadleaf Forests", "Tropical & Subtropical Dry Broadleaf Forests",
+         "Tropical & Subtropical Coniferous Forests", "Temperate Broadleaf & Mixed Forests",
+         "Temperate Conifer Forests", "Mediterranean Forests, Woodlands & Scrub", "Boreal Forests/Taiga",
+         "Tropical & Subtropical Grasslands, Savannas & Shrublands", "Temperate Grasslands, Savannas & Shrublands",
+         "Flooded Grasslands & Savannas", "Montane Grasslands & Shrublands", "Tundra", "Deserts & Xeric Shrublands",
+         "Mangroves", "N/A", "Unknown", "", NA, "Something else")
+  expect_identical(biome_group(x), c(rep("Tropical Forest", 3), rep("Temperate Forest", 3), "Boreal Forest",
+                                     rep("Grassland & Shrubland", 4), "Tundra", "Desert", "Mangrove", "Rock & Ice",
+                                     NA, NA, NA, "Something else"))
+})
+
+test_that("add_pas_without_metrics adds PAs of script 02 without metrics at 0% complete; the sea rule drops them", {
+  pa <- data.frame(WDPA_PID = c("a", "b"), NAME = c("A", "B"), ISO3 = "AAA", BIOME_NAME = c("Desert", "Tundra"),
+                   pct_complete = c(100, 90), water_extent_pct = 0, gHM_mean = 0.1,
+                   n_years_edge_extent = 23, n_years_edge_intensity = 23, stringsAsFactors = FALSE)
+  pas02 <- data.frame(WDPA_PID = c("b", "a", "island", "mangrove"), NAME = c("B", "A", "Isle", "M"), ISO3 = "AAA",
+                      BIOME_NAME = c("Tundra", "Deserts & Xeric Shrublands", "Deserts & Xeric Shrublands", "Mangroves"),
+                      stringsAsFactors = FALSE)
+  out <- add_pas_without_metrics(pa, pas02)
+  expect_equal(out$WDPA_PID, c("a", "b", "island", "mangrove"))
+  expect_equal(out$BIOME_NAME[3:4], c("Desert", "Mangrove"))
+  expect_equal(out$pct_complete, c(100, 90, 0, 0)); expect_true(all(is.na(out$gHM_mean[3:4])))
+  expect_equal(out$NAME[3], "Isle")
+  r <- analysis_set(out, "Mangrove", "gHM_mean", c("n_years_edge_extent", "n_years_edge_intensity"), 5,
+                    min_complete = 75, max_water = 75, start_label = "PAs from script 02")
+  expect_equal(r$set$WDPA_PID, c("a", "b"))
+  expect_equal(r$steps$step[1], "PAs from script 02"); expect_equal(r$steps$n_left[1], 4)
+  expect_equal(r$removed$WDPA_PID, c("mangrove", "island"))         # biome step first, then sea
+  expect_true(grepl("sea", r$removed$step[2]))
+  expect_identical(add_pas_without_metrics(pa, pas02[1:2, ]), pa)    # nothing to add
+  bad <- pas02; bad$BIOME_NAME[1] <- "Tropical & Subtropical Coniferous Forests"
+  expect_error(add_pas_without_metrics(pa, bad), "biome groups differ")
+  expect_error(add_pas_without_metrics(pa, pas02[2:4, ]), "not in pas_selected")
+})
+
 test_that("analysis_set: sea and lake steps, in order, and the removed PAs with their step", {
   pa <- data.frame(WDPA_PID = c("a", "b", "c", "d", "e", "f"),
                    BIOME_NAME = c("Desert", "Desert", "Mangrove", "Tundra", "Tundra", "Desert"),
@@ -170,6 +206,45 @@ test_that("iucn_group maps categories to the config groups", {
   g <- iucn_group(c("Ia", "V", "Not Reported", "II", "xx"), CFG$iucn_groups)
   expect_equal(as.character(g), c("strict", "non-strict", "unknown", "strict", NA))
   expect_equal(levels(g), c("strict", "non-strict", "unknown"))
+})
+
+test_that("final_set_summary counts the given PAs' transects, area and share kept", {
+  polys <- data.frame(WDPA_PID = c("a", "b", "c"), N_TRNST = c(60L, 100L, 300L),
+                      N_TRNST_GEN = c(100L, 100L, 400L))
+  py <- data.frame(WDPA_PID = rep(c("a", "b", "c"), each = 4),
+                   transects = rep(c("all", "all", "nowater", "nowater"), 3),
+                   n_trnst = c(58, 60, 1, 1, 90, NA, 1, 1, 280, 300, 1, 1))
+  s <- final_set_summary(c("c", "a"), polys, py, area = c(500, 200))
+  expect_equal(s[c("pas", "transects", "points", "pa_years")], list(pas = 2L, transects = 360L, points = 1800L, pa_years = 4L))
+  expect_equal(s$transects_per_pa, list(median = 180, min = 60L, max = 300L))
+  expect_equal(s$area_km2, list(median = 350, min = 200, max = 500))
+  expect_equal(s$pct_transects_kept, list(median = 67.5, min = 60, max = 75, pooled = 72))
+  expect_equal(s$complete_transects_per_pa_year, list(median = 170, min = 58, max = 300))
+  expect_error(final_set_summary("zz", polys, py, 1), "not in pas_selected")
+})
+
+test_that("missing_data_summary counts missing transect-years of the given PAs and checks them", {
+  years <- 2003:2005
+  # PA a: 2 transects, one never usable (3 years); PA b: 3 transects, one missing 1 year; PA c: none; z: not in the set
+  py <- data.frame(WDPA_PID = rep(c("a", "b", "c", "z"), each = 3), transects = "all", year = rep(years, 4),
+                   n_trnst = c(1, 1, 1, 3, 2, 3, 4, 4, 4, 0, 0, 0))
+  py <- rbind(py, transform(py, transects = "nowater", n_trnst = 0))       # other versions are ignored
+  mt <- data.frame(WDPA_PID = c("a", "b", "z"), transectID = 1, n_missing_years = c(3, 1, 3), water_any = c(1, 0, 1),
+                   n_missing_point_years = c(3, 2, 3), n_missing_point_years_water = c(3, 0, 3),
+                   miss_pt_m2 = c(0, 1, 0), miss_pt_m1 = 0, miss_pt_0 = 0, miss_pt_1 = c(0, 1, 0), miss_pt_2 = c(3, 0, 3))
+  s <- missing_data_summary(c("a", "b", "c"), c(2, 3, 4), py, mt, c("Desert", "Desert", "Tundra"), years)
+  expect_equal(c(s$transects, s$transect_years, s$missing_transect_years), c(9, 27, 4))
+  expect_equal(s$transects_never_usable$n, 1); expect_equal(s$transects_never_usable$pct_of_missing, 75)
+  expect_equal(s$transects_part_year$n, 1); expect_equal(s$transects_part_year$years_missing$median, 1)
+  expect_equal(s$transects_never_missing, 7)
+  expect_equal(s$pct_missing_point_years_at_water, 60)                     # 3 of 5
+  expect_equal(s$pct_missing_point_years_by_position[["+5 km (exterior)"]], 60)
+  expect_equal(unlist(s$per_year), c(min = 1, max = 2, mean = 4 / 3))
+  expect_equal(s$pas_affected, 2)
+  expect_equal(s$by_biome$PAs_affected, c(2, 0)); expect_equal(s$by_biome$missing_transect_years, c(4, 0))
+  bad <- mt; bad$n_missing_years[2] <- 2
+  expect_error(missing_data_summary(c("a", "b", "c"), c(2, 3, 4), py, bad, c("Desert", "Desert", "Tundra"), years),
+               "differ")
 })
 
 test_that("config covariates match the model formula; exclusion settings are set", {

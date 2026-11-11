@@ -134,13 +134,13 @@ run_results <- function(key) {
   out <- list()
   for (m in metrics) {
     resp <- paste0(CFG$responses[[m]], "_mean")
-    ct <- coef_table(fit_fixed(resp, "add", range_of(m, "main effects"), CFG$ref$mean), m)
+    ct <- coef_table(fit_fixed(resp, "add", range_of(m, "main effects"), CFG$ref), m)
     ct <- ct[ct$term != "(Intercept)", ]
     out[[length(out) + 1]] <- row("Mean model, main effects", m, ct$term, ct$estimate, ct$conf.low, ct$conf.high, ct$p.value)
-    w <- wald_tests(fit_fixed(resp, "full", range_of(m, "interaction"), CFG$ref$mean), m, hypotheses = TRUE)
+    w <- wald_tests(fit_fixed(resp, "full", range_of(m, "interaction"), CFG$ref), m, hypotheses = TRUE)
     out[[length(out) + 1]] <- row("Mean model, HMI interactions (Wald F)", m, w$hypothesis, w$F.value, p = w$p.value)
     ca <- coef_table(fit_fixed(paste0("change_", m, "_z"), "add", range_of(m, CHANGE_MODEL_LABELS[["A"]]),
-                               CFG$ref$change), m)
+                               CFG$ref), m)
     ca <- ca[ca$term != "(Intercept)", ]
     out[[length(out) + 1]] <- row("Change model A", m, ca$term, ca$estimate, ca$conf.low, ca$conf.high, ca$p.value)
   }
@@ -230,7 +230,7 @@ if (is.na(pilot) && file.exists(sx_file)) {
 refit <- NULL
 if (do_refit) {
   say("refit check: noflags, extent, main effects, range optimised from %g km", CFG$spatial$range_start_km)
-  d <- set_model_references(run_data(runs$noflags), CFG$ref$mean, names(CFG$iucn_groups), CFG$biome_order)
+  d <- set_model_references(run_data(runs$noflags), CFG$ref, names(CFG$iucn_groups), CFG$biome_order)
   f <- model_formula(paste0(CFG$responses[["extent"]], "_mean"), "add")
   cs_fix <- spatial_setup(d, value = range_of("extent", "main effects"), fixed = TRUE, cache_dir = CFG$paths$cache_dir)
   cs_opt <- spatial_setup(d, value = CFG$spatial$range_start_km, nugget = CFG$spatial$nugget, cache_dir = CFG$paths$cache_dir)

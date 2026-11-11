@@ -78,7 +78,7 @@ if (file.exists(tab("TableSX_mean_models_main_effects.csv"))) {
              cx_new[cx_new$term %in% keep, c("response", "term", "estimate", "conf.low", "conf.high", "p.value")],
              by = c("response", "term"), suffixes = c("_old", "_new"), sort = FALSE)
   L <- c(L, "### Mean models, main effects: continuous predictors (Fig. 3A, Table SX)", "", md_table(x), "",
-         "Categorical rows are not comparable directly: the old Fig. 3A showed contrasts against non-strict / Boreal, the new one the coefficients against strict / Grassland (D1).", "")
+         "Categorical rows are not comparable directly: the old Fig. 3A showed emmeans contrasts against non-strict / Boreal; the new one shows the coefficients of a fit with non-strict / Boreal as reference (D1), the same quantities.", "")
   w_old <- legacy_table("model_tests_wald_gls.csv"); w_new <- read(tab("TableSY_wald_interactions.csv"))
   x <- merge(w_old[c("hypothesis", "response", "numDF", "denDF", "F.value", "p.value")],
              w_new[c("hypothesis", "response", "numDF", "denDF", "F.value", "p.value")],

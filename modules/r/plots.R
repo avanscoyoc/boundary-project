@@ -27,6 +27,12 @@ IUCN_LEVELS <- c("strict", "non-strict", "unknown")
 IUCN_LABELS <- c("Strict", "Non-strict", "Unknown")
 IUCN_COLORS <- c("Strict" = "#99000d", "Non-strict" = "#e5736b", "Unknown" = "#8c8c8c")
 IUCN_LTYPES <- c("Strict" = "solid", "Non-strict" = "dashed", "Unknown" = "dotted")
+# Fig. 3 interaction panels: fixed axes, the same for every panel of a response (user,
+# 2026-11-09). The old per-panel ranges with 0.01-rounded labels put 0.52/0.55/0.58 on ticks
+# 0.025 apart.
+FIG3_X <- c(0, 0.8)
+FIG3_Y <- list(extent = c(0.5, 0.65), intensity = c(0.5, 1))
+FIG3_Y_STEP <- c(extent = 0.05, intensity = 0.1)
 TERM_LABELS <- c(STATUS_YR_z = "Establishment year", log_area_z = "PA area (log)",
                  gHM_mean_z = "Human modification (HMI)", elevation_mean_z = "Elevation",
                  terrain_slope_z = "Slope", water_extent_pct_z = "Water extent")
@@ -108,11 +114,15 @@ fig3a_rows <- function(coef, response_sd, biome_order, contrasts = NULL, ref = N
 
 #' The Fig. 3 interaction panels to show (B3): one per response and factor whose interaction
 #' with HMI is supported (marginal Wald p < alpha), as the methods interpret the HMI slopes only
-#' there. `wald`: the H2/H3 rows of the interaction models (TableSY_wald_interactions). Returns
-#' factor ("IUCN_group" or "BIOME_NAME"), response, p.value: IUCN panels first, then biome, each
-#' in the order of `responses`.
+#' there. `wald`: the H2/H3 rows of the interaction models (TableSY_wald_interactions). If
+#' `sens` is given (the "Mean model, HMI interactions (Wald F)" rows of
+#' TableS_sensitivity_models: run, metric, term, p.value), an interaction must also have
+#' p < alpha in every sensitivity run (user, 2026-11-09: only interactions that pass all tests
+#' are drawn; 2026-11-11: script 10 uses the main analysis only, `sens` is kept for the sensitivity
+#' write-up). Returns factor ("IUCN_group" or "BIOME_NAME"), response, p.value, and with `sens`
+#' n_runs and p_max_sensitivity: IUCN panels first, then biome, each in the order of `responses`.
 fig3_panels <- function(wald, alpha = 0.05,
-                        responses = intersect(names(RESPONSE_LABELS), wald$response)) {
+                        responses = intersect(names(RESPONSE_LABELS), wald$response), sens = NULL) {
   out <- do.call(rbind, lapply(c(IUCN_group = "IUCN", BIOME_NAME = "BIOME"), function(pat) {
     do.call(rbind, lapply(responses, function(r) {
       w <- wald[wald$response == r & grepl(":", wald$term) & grepl(pat, wald$term), ]
@@ -122,7 +132,17 @@ fig3_panels <- function(wald, alpha = 0.05,
   }))
   out <- cbind(factor = ifelse(grepl("IUCN", out$term), "IUCN_group", "BIOME_NAME"),
                out[c("response", "p.value")], stringsAsFactors = FALSE)
-  out <- out[out$p.value < alpha, , drop = FALSE]
+  keep <- out$p.value < alpha
+  if (!is.null(sens)) {
+    sens <- sens[sens$run != "main", , drop = FALSE]
+    pat <- ifelse(out$factor == "IUCN_group", "IUCN", "BIOME")
+    ps <- lapply(seq_len(nrow(out)), function(i) sens$p.value[sens$metric == out$response[i] & grepl(pat[i], sens$term)])
+    stopifnot(all(lengths(ps) > 0), !anyNA(unlist(ps)))
+    out$n_runs <- lengths(ps)
+    out$p_max_sensitivity <- vapply(ps, max, 0)
+    keep <- keep & out$p_max_sensitivity < alpha
+  }
+  out <- out[keep, , drop = FALSE]
   rownames(out) <- NULL
   out
 }
@@ -182,9 +202,7 @@ fig3 <- function(rows_a, pred_iucn, pred_biome, slopes_iucn, slopes_biome, wald,
       ggplot2::scale_color_manual(values = IUCN_COLORS, name = NULL) +
       ggplot2::scale_fill_manual(values = IUCN_COLORS, guide = "none") +
       ggplot2::scale_linetype_manual(values = IUCN_LTYPES, name = NULL) +
-      ggplot2::scale_x_continuous(breaks = seq(0, 1, 0.2), expand = ggplot2::expansion(mult = c(0.02, 0.42))) +
-      ggplot2::scale_y_continuous(labels = scales::label_number(accuracy = 0.01),
-                                  expand = ggplot2::expansion(mult = c(0.05, 0.22))) +
+      fig3_axes(pe, resp) +
       ggplot2::labs(x = "Human modification index", y = RESPONSE_LABELS[[resp]]) +
       theme_pa() + ggplot2::theme(legend.position = "none") + theme_fig3
   }
@@ -197,7 +215,6 @@ fig3 <- function(rows_a, pred_iucn, pred_biome, slopes_iucn, slopes_biome, wald,
                                                              big.mark = ",", trim = TRUE), ")"), bo)
     pb <- pred_biome
     pb$biome <- factor(pb$BIOME_NAME, levels = bo)
-    xr_all <- range(pb$gHM_mean)
     d <- pb[pb$response == resp, ]
     st <- slopes_biome[slopes_biome$response == resp, ]
     ends <- do.call(rbind, lapply(split(d, d$biome, drop = TRUE), function(x) x[which.max(x$gHM_mean), ]))
@@ -207,14 +224,12 @@ fig3 <- function(rows_a, pred_iucn, pred_biome, slopes_iucn, slopes_biome, wald,
       ggplot2::geom_line(linewidth = 1) +
       ggplot2::geom_text(data = ends, aes(label = star), hjust = -0.25, vjust = 0.75, size = 5,
                          family = PLOT_FAMILY, show.legend = FALSE) +
-      ggplot2::annotate("text", x = xr_all[1] + 0.12 * diff(xr_all), y = Inf, hjust = 0, vjust = 1.5,
+      ggplot2::annotate("text", x = FIG3_X[1] + 0.35 * diff(FIG3_X), y = Inf, hjust = 0, vjust = 1.5,   # clear of Tundra
                         size = annot, family = PLOT_FAMILY,
                         label = paste0("HMI × biome\n", .wald_label(wald, resp, "BIOME"))) +
       ggplot2::scale_color_manual(values = BIOME_COLORS, labels = biome_lab, name = NULL) +
       ggplot2::scale_fill_manual(values = BIOME_COLORS, guide = "none") +
-      ggplot2::scale_x_continuous(breaks = seq(0, 1, 0.2), expand = ggplot2::expansion(mult = c(0.02, 0.18))) +
-      ggplot2::scale_y_continuous(labels = scales::label_number(accuracy = 0.01),
-                                  expand = ggplot2::expansion(mult = c(0.05, 0.32))) +
+      fig3_axes(d, resp) +
       ggplot2::guides(color = ggplot2::guide_legend(ncol = 3, byrow = TRUE)) +
       ggplot2::labs(x = "Human modification index", y = RESPONSE_LABELS[[resp]]) +
       theme_pa() + theme_fig3
@@ -222,9 +237,10 @@ fig3 <- function(rows_a, pred_iucn, pred_biome, slopes_iucn, slopes_biome, wald,
 
   # Right column: the panels in order; the last biome panel carries the biome legend.
   last_biome <- utils::tail(which(panels$factor == "BIOME_NAME"), 1)
+  margin_r <- ggplot2::theme(plot.margin = ggplot2::margin(5.5, 22, 5.5, 5.5))   # room for the line-end labels
   right <- lapply(seq_len(nrow(panels)), function(i) {
-    if (panels$factor[i] == "IUCN_group") return(iucn_panel(panels$response[i]))
-    p <- biome_panel(panels$response[i])
+    if (panels$factor[i] == "IUCN_group") return(iucn_panel(panels$response[i]) + margin_r)
+    p <- biome_panel(panels$response[i]) + margin_r
     if (length(last_biome) && i == last_biome) {
       p + ggplot2::theme(legend.position = "bottom", legend.margin = ggplot2::margin(0, 0, 0, 0),
                          legend.key.width = grid::unit(1.2, "lines"), legend.spacing.x = grid::unit(2, "pt"),
@@ -244,6 +260,20 @@ fig3 <- function(rows_a, pred_iucn, pred_biome, slopes_iucn, slopes_biome, wald,
     patchwork::plot_layout(design = design, guides = "collect", widths = widths, heights = heights) &
     ggplot2::theme(legend.box = "horizontal", legend.box.spacing = grid::unit(0.2, "lines"),
                    legend.justification = "center")
+}
+
+#' Axes of a Fig. 3 interaction panel: HMI over FIG3_X, the response over FIG3_Y[[resp]], with
+#' ggplot's default 5% padding. Warns if a line or CI bound of `d` falls outside the drawn area
+#' (it would be cut off).
+fig3_axes <- function(d, resp) {
+  yl <- FIG3_Y[[resp]]
+  pad <- function(l) l + c(-1, 1) * 0.05 * diff(l)
+  out <- d$conf.low < pad(yl)[1] | d$conf.high > pad(yl)[2] | d$gHM_mean < pad(FIG3_X)[1] | d$gHM_mean > pad(FIG3_X)[2]
+  if (any(out)) warning(sprintf("Fig. 3 (%s): %d of %d predicted points or CI bounds fall outside the fixed axes and are cut off",
+                                resp, sum(out), length(out)), call. = FALSE)
+  list(ggplot2::scale_x_continuous(breaks = seq(FIG3_X[1], FIG3_X[2], 0.2)),
+       ggplot2::scale_y_continuous(breaks = seq(yl[1], yl[2], FIG3_Y_STEP[[resp]])),
+       ggplot2::coord_cartesian(xlim = FIG3_X, ylim = yl, clip = "off"))   # line-end labels may pass 0.8
 }
 
 #' Height (in) for fig3() with k interaction panels: the old 3-panel figure is 12.5 in; panel A

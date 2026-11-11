@@ -1,9 +1,9 @@
 # 10_figures.R: the figures, from the tables written by 06–08 (A7: nothing is fitted here).
 #
 #   Fig. 3   A: main-effects coefficients of the mean models in response SDs, against the
-#            reference levels of config ref$mean; right: one panel per supported HMI interaction
-#            (Wald p < 0.05; B3), chosen by fig3_panels(). The panels shown are listed in
-#            fig3_panels.csv (for the caption).
+#            reference levels of config ref; right: one panel per supported HMI interaction
+#            of the main analysis (Wald p < 0.05; B3; user, 2026-11-11: main run only), chosen by
+#            fig3_panels(). The panels shown are listed in fig3_panels.csv (for the caption).
 #   Fig. 4A  standardised change by biome and for all PAs (bootstrap means and 95% CIs); biome
 #            order from config biome_order.
 #   S fig    per-PA change in edge extent vs edge intensity, with Pearson r (D2).
@@ -65,8 +65,8 @@ t3 <- need("tables/TableSX_mean_models_main_effects.csv", "tables/mean_models_re
            "tables/TableSY_wald_interactions.csv")
 if (!is.null(t3)) {
   rows <- fig3a_rows(t3$TableSX_mean_models_main_effects, t3$mean_models_response_sd, CFG$biome_order,
-                     ref = CFG$ref$mean)
-  panels <- fig3_panels(t3$TableSY_wald_interactions)
+                     ref = CFG$ref)
+  panels <- fig3_panels(t3$TableSY_wald_interactions)   # main analysis only (user, 2026-11-11)
   readr::write_csv(panels, file.path(out$figures, "fig3_panels.csv"))
   say("Fig. 3 panels (supported interactions): %s",
       if (nrow(panels)) paste(panels$factor, panels$response, collapse = "; ") else "none")

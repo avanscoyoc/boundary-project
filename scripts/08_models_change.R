@@ -6,7 +6,7 @@
 #   B  precision-weighted: varFixed(~ v), v = se² + τ², τ² from A by the method of moments
 #      (Table SZ, sensitivity);
 #   non-spatial analogue of A → diagnostics (AICc, Moran's I; D4).
-# Reference levels: config ref$change (non-strict / Boreal Forest, D1), fitted directly, so the
+# Reference levels: config ref (non-strict / Boreal Forest, D1), fitted directly, so the
 # categorical rows of Table SZ are the coefficients of the fit.
 #
 # Run from the repository root (after 07):
@@ -61,11 +61,11 @@ if (!is.na(pilot)) {   # the same rows as 06 --pilot N (same seed and row count)
   set.seed(CFG$pilot_seed)
   d <- d[sort(sample.int(nrow(d), min(pilot, nrow(d)))), ]
 }
-d <- set_model_references(d, CFG$ref$change, names(CFG$iucn_groups), CFG$biome_order)
+d <- set_model_references(d, CFG$ref, names(CFG$iucn_groups), CFG$biome_order)
 rownames(d) <- NULL
 say("08: %d PAs%s; reference levels %s / %s; %d cores", nrow(d),
     if (!is.na(pilot)) sprintf(" (pilot, seed %d)", CFG$pilot_seed) else "",
-    CFG$ref$change$iucn, CFG$ref$change$biome, cores)
+    CFG$ref$iucn, CFG$ref$biome, cores)
 
 # ── 2. Fits (A, non-spatial A, B per metric; the metrics in parallel) ────────
 cs <- spatial_setup(d, value = CFG$spatial$range_start_km, nugget = CFG$spatial$nugget,
@@ -86,7 +86,7 @@ w <- suppressWarnings(moran_weights(d, CFG$spatial$k_nn, CFG$spatial$bands_km[1:
 tabs <- lapply(stats::setNames(metrics, metrics), function(m) {
   cm <- fit_one(m)   # loads the cached fits
   say("%s: tables", m)
-  tb <- change_model_tables(cm, resp[[m]][["response"]], m, CFG$ref$change, moran = w,
+  tb <- change_model_tables(cm, resp[[m]][["response"]], m, CFG$ref, moran = w,
                             moran_settings = list(nsim = CFG$spatial$moran_nsim, seed = CFG$spatial$moran_seed))
   tb$sz <- table_sz(tb$coef, tb$contrasts)
   rg <- function(x) stats::coef(x$modelStruct$corStruct, unconstrained = FALSE)[["range"]]

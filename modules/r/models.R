@@ -31,7 +31,7 @@ set_reference <- function(x, ref, order) {
 }
 
 #' Model factors of one model family (D1): IUCN_group and BIOME_NAME with the family's
-#' reference levels first. `ref` = list(iucn, biome) (config ref$mean or ref$change);
+#' reference levels first. `ref` = list(iucn, biome) (config ref);
 #' `iucn_levels`, `biome_order` = the other levels' order. A different reference refits the same
 #' model reparametrised: the categorical coefficients are then the contrasts against `ref`.
 set_model_references <- function(d, ref, iucn_levels, biome_order) {

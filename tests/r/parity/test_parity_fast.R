@@ -425,15 +425,15 @@ test_that("change model A at its saved range reproduces the old 02b tables", {
 # ── Phase 3, D1: the change models fitted with their own reference levels ──────
 # The old run fitted the change models with strict / Grassland as the reference and reported
 # emmeans contrasts against non-strict / Boreal. The new 08 fits them with non-strict / Boreal
-# as the reference (config ref$change), the same model reparametrised. Model A refitted that way
+# as the reference (config ref), the same model reparametrised. Model A refitted that way
 # at its saved range: the categorical coefficients equal the old contrasts, and the continuous
 # coefficients the old ones. (The coefficient CIs use df = N − p, the emmeans contrasts N − p − 1,
 # as the fixed range counts as a covariance parameter, so the CIs and p are recomputed at the
 # old df: the df is then the only difference.)
 test_that("change model A with the change reference levels reproduces the old contrasts", {
   skip_if_no_legacy()
-  expect_identical(CFG$ref$change, legacy()$settings$ref_contrast)
-  d <- set_model_references(legacy_change_data(), CFG$ref$change, names(CFG$iucn_groups),
+  expect_identical(CFG$ref, legacy()$settings$ref_contrast)
+  d <- set_model_references(legacy_change_data(), CFG$ref, names(CFG$iucn_groups),
                             CFG$biome_order)
   rng <- legacy_change_ranges()
   cdir <- file.path(CFG$paths$parity_dir, "cache")
@@ -444,8 +444,8 @@ test_that("change model A with the change reference levels reproduces the old co
   }
   oc <- model_a(legacy_table("trend_drivers_contrasts_trend_gls.csv"))
   ob <- model_a(legacy_table("trend_drivers_coef_trend_gls.csv"))
-  f_c <- "trend_drivers_contrasts_trend_gls.csv (A refitted, ref$change)"
-  f_b <- "trend_drivers_coef_trend_gls.csv (A refitted, ref$change)"
+  f_c <- "trend_drivers_contrasts_trend_gls.csv (A refitted, config ref)"
+  f_b <- "trend_drivers_coef_trend_gls.csv (A refitted, config ref)"
   cols <- c(estimate = "estimate", std.error = "SE", statistic = "t.ratio", p.value = "p.value",
             conf.low = "lower.CL", conf.high = "upper.CL")
   for (r in names(LEGACY_CHANGE)) {

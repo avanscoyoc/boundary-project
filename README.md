@@ -195,14 +195,14 @@ Computes the gradient magnitude of each annual median NDVI composite (MOD13A1, 2
 ```bash
 python scripts/04_compute_edge_metrics.py
 ```
-Processes one asset at a time: checks that every exported point arrived exactly once, builds one row per complete transect-year, computes PA-year metrics for the four transect subsets, merges PA attributes, and adds per-PA trends. See [Outputs](#outputs).
+Processes one asset at a time: checks that every exported point arrived exactly once, builds one row per complete transect-year, computes PA-year metrics for the four transect subsets, merges PA attributes, and adds per-PA trends. It also lists the transects with a missing value in any year (`data/04_transect_years/missing_transects.csv`), which script 05 summarises for the analysis set in `analysis_counts.json`. See [Outputs](#outputs).
 
 ## Statistical Analysis (R)
 
 Scripts 05–10 implement the Statistical Analyses of the methods in R (4.5.3, installed in the container with pixi; packages pinned in `.devcontainer/pixi.lock`). Settings are in [modules/r/config.R](modules/r/config.R); the functions are in `modules/r/`, and each script writes its own tables, which the figure script reads.
 
 - **05** builds the analysis set from `results/pa_edge_metrics_ndvi.csv`: drops the Mangrove and Rock & Ice biomes, PAs whose boundary is dominated by sea (fewer than 75% of transects complete in a typical year) or by open water (more than 75% of transects with surface water), and PAs missing a covariate or with fewer than 5 years of either metric (4,396 PAs; `excluded_pas.csv` lists the rest with the reason). It imputes missing establishment years (median of 1,000 draws from the country's known years), z-scores the covariates, and computes point-on-surface coordinates.
-- **06** fits spatial GLS (exponential correlation in great-circle distance, REML) of mean edge extent and intensity: main-effects and HMI-interaction models (reference levels strict / Grassland & Shrubland).
+- **06** fits spatial GLS (exponential correlation in great-circle distance, REML) of mean edge extent and intensity: main-effects and HMI-interaction models (reference levels non-strict / Boreal Forest, as for every model).
 - **07** computes per-PA OLS trends with Benjamini–Hochberg classes (Yue–Pilon as a check), standardised change, bootstrap biome means and the biome GLS comparison.
 - **08** fits spatial GLS of standardised change (reference non-strict / Boreal Forest), unweighted and precision-weighted.
 - **09** repeats the headline results on the transect subsets (PA-years with at least 60 complete transects, same PAs as all transects) and on PAs established by 2003 and PAs with a reported year, with the spatial range fixed at the main estimates.
@@ -214,7 +214,7 @@ Scripts 06, 08 and 09 take `--pilot N` (a random subset of PAs, for a quick chec
 
 ## Validation (displaced transects; in development)
 
-Scripts 11–14 test whether boundary edges exceed the contrast of the background landscape: each sampled PA's transect set is translated by a random vector (no rotation, ≥ 50 km, staying in the PA's biome, on land with data, crossing no PA boundary), sampled like the original transects, measured with the same functions, and compared with the PA (paired, by biome). Script 11 (local) writes upload zips; script 12 samples them in Earth Engine; script 13 accepts one displacement per PA and computes its edge metrics; script 14 (R) compares. Settings: `VALIDATION_*` in `modules/config.py`.
+Scripts 11–14 test whether boundary edges exceed the contrast of the background landscape: each sampled PA's transect set is translated by a random vector (no rotation; distance between one and two times the PA's size, at least 50 km; at most 10% of transects with a PA boundary within 2.5 km of their centre point), and the copy must pass the same rules as an analysed PA (biome of the PA polygon moved by the same vector, by largest area as in script 01; the sea, lake and five-year rules of script 05), sampled like the original transects, measured with the same functions, and compared with the PA (paired, by biome). Script 11 (local) writes upload zips of the displaced points and the displaced PA polygons; script 12 samples the points in Earth Engine and gives each polygon its biome; script 13 computes the edge metrics of every candidate and accepts per PA the first that passes; script 14 (R) compares. Settings: `VALIDATION_*` in `modules/config.py`.
 
 ## Configuration
 

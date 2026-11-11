@@ -26,6 +26,7 @@ CFG <- local({
     paths = list(
       pa_metrics   = p("results", "pa_edge_metrics_ndvi.csv"),   # script 04: one row per PA-year
       pas_selected = p("data", "02_pas", "pas_selected.gpkg"),    # script 02: PA polygons (EPSG:4326)
+      missing_transects = p("data", "04_transect_years", "missing_transects.csv"),   # script 04: transects with missing years
       analysis_dir = p("data", "05_analysis"),                    # script 05 outputs
       cache_dir    = p("data", "05_analysis", "cache"),           # distance set-ups and fitted models
       tables       = p("results", "tables"),
@@ -45,9 +46,12 @@ CFG <- local({
     exclude_biomes = c("Mangrove", "Rock & Ice"),
     # PAs whose boundary is dominated by sea or open water (user, 2026-11-08). Sea: transects reaching
     # into the sea have no MODIS data and are never complete, so a PA needs a median share of
-    # complete transects (04 pct_complete, median over its years) ≥ min_complete_pct, as the 75%
-    # boundary-coverage rule of 02. Lakes and wetlands: a PA needs ≤ max_water_pct of its transects
-    # with JRC water (04 water_extent_pct, the PA's mean over years).
+    # complete transects (04 pct_complete, median over its years) ≥ min_complete_pct; a PA of 02
+    # with no complete transect in any year counts as 0% (05, `add_pas_without_metrics()`). This is
+    # about data, not geometry: it is separate from 02's coverage rule (the longest stretch of
+    # boundary without transects ≤ 25% of the perimeter, MAX_GAP_PCT_LIMIT). Lakes and wetlands:
+    # a PA needs ≤ max_water_pct of its transects with JRC water (04 water_extent_pct, the PA's
+    # mean over years).
     min_complete_pct = 75,
     max_water_pct    = 75,
 
@@ -62,11 +66,9 @@ CFG <- local({
       "unknown"    = c("Not Applicable", "Not Assigned", "Not Reported")
     ),
 
-    # ── Reference levels (D1), one pair per model family ─────────────────────
-    ref = list(
-      mean   = list(iucn = "strict",     biome = "Grassland & Shrubland"),   # 06; Fig. 3A, Table SX
-      change = list(iucn = "non-strict", biome = "Boreal Forest")            # 08; Table SZ
-    ),
+    # ── Reference levels (D1): one pair for every model (user, 2026-11-10) ───
+    # 06, 08, 09; Fig. 3A and Tables SX, SY, SZ. As the collaborator's Fig. 3A contrasts.
+    ref = list(iucn = "non-strict", biome = "Boreal Forest"),
 
     # ── Trends (Stats ¶4–5) ──────────────────────────────────────────────────
     trend = list(

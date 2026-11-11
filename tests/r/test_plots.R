@@ -58,6 +58,14 @@ test_that("fig3_panels keeps the supported interactions; fig3 builds with 0 to 4
                    c("IUCN_group extent", "BIOME_NAME extent", "BIOME_NAME intensity"))
   expect_equal(nrow(fig3_panels(wald, alpha = 1e-6)), 0)
   expect_error(fig3_panels(wald[-1, ]))           # each response needs both interaction rows
+  # with sensitivity runs: an interaction must have p < alpha in every run
+  sens <- data.frame(run = rep(c("main", "a", "b"), each = 4), metric = rep(c("extent", "extent", "intensity", "intensity"), 3),
+                     term = rep(c("H2: gHM x IUCN", "H3: gHM x BIOME"), 6),
+                     p.value = c(0.001, 4e-5, 0.27, 1e-4,  0.01, 0.2, 0.3, 1e-3,  0.02, 0.01, 0.3, 0.04))
+  ps <- fig3_panels(wald, sens = sens)
+  expect_identical(paste(ps$factor, ps$response), c("IUCN_group extent", "BIOME_NAME intensity"))
+  expect_equal(ps$p_max_sensitivity, c(0.02, 0.04))
+  expect_equal(ps$n_runs, c(2, 2))
 
   bo <- CFG$biome_order
   coef <- data.frame(response = rep(c("extent", "intensity"), each = 13),
@@ -69,7 +77,7 @@ test_that("fig3_panels keeps the supported interactions; fig3 builds with 0 to 4
   pi <- expand.grid(gHM_mean = g, IUCN_group = IUCN_LEVELS, response = c("extent", "intensity"), stringsAsFactors = FALSE)
   pb <- expand.grid(gHM_mean = g, BIOME_NAME = bo, response = c("extent", "intensity"), stringsAsFactors = FALSE)
   for (x in c("pi", "pb")) {
-    y <- get(x); y$predicted <- 0.5 + 0.1 * y$gHM_mean; y$conf.low <- y$predicted - 0.01; y$conf.high <- y$predicted + 0.01
+    y <- get(x); y$predicted <- 0.55 + 0.1 * y$gHM_mean; y$conf.low <- y$predicted - 0.01; y$conf.high <- y$predicted + 0.01
     assign(x, y)
   }
   si <- expand.grid(IUCN_group = IUCN_LEVELS, response = c("extent", "intensity"), stringsAsFactors = FALSE); si$p.value <- 0.01
@@ -80,4 +88,8 @@ test_that("fig3_panels keeps the supported interactions; fig3 builds with 0 to 4
     expect_true(builds(fig3(rows, pi, pb, si, sb, wald, bo, pn)), info = nrow(pn))
   }
   expect_equal(fig3_height(3), 12.5)
+  # fixed axes: a CI bound beyond the drawn area warns
+  hi <- pi[pi$response == "extent", ]; hi$conf.high[1] <- 0.7
+  expect_warning(fig3_axes(hi, "extent"), "outside the fixed axes")
+  expect_silent(fig3_axes(pi[pi$response == "extent", ], "extent"))
 })

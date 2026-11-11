@@ -10,7 +10,7 @@
 #                        for both factors and both responses; 10_figures.R shows a panel only
 #                        where its interaction is supported, B3);
 #   non-spatial interaction model → diagnostics only (AICc, Moran's I; D4).
-# Reference levels: config ref$mean (strict / Grassland & Shrubland, D1), so the categorical
+# Reference levels: config ref (non-strict / Boreal Forest, D1), so the categorical
 # coefficients of the main-effects model are the Fig. 3A contrasts.
 #
 # Run from the repository root:
@@ -69,11 +69,11 @@ if (!is.na(pilot)) {
   set.seed(CFG$pilot_seed)
   d <- d[sort(sample.int(nrow(d), min(pilot, nrow(d)))), ]
 }
-d <- set_model_references(d, CFG$ref$mean, names(CFG$iucn_groups), CFG$biome_order)
+d <- set_model_references(d, CFG$ref, names(CFG$iucn_groups), CFG$biome_order)
 rownames(d) <- NULL
 say("06: %d PAs%s; reference levels %s / %s; %d cores", nrow(d),
     if (!is.na(pilot)) sprintf(" (pilot, seed %d)", CFG$pilot_seed) else "",
-    CFG$ref$mean$iucn, CFG$ref$mean$biome, cores)
+    CFG$ref$iucn, CFG$ref$biome, cores)
 
 # ── 2. Fits (spatial fits in parallel; each child writes its fit to the cache) ─
 cs <- spatial_setup(d, value = CFG$spatial$range_start_km, nugget = CFG$spatial$nugget,
