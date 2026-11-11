@@ -566,19 +566,28 @@ residual_table <- function(m, data, label) {
 }
 
 #' S figure (validation; draft): paired difference PA − displaced copy per biome and for all PAs,
-#' mean with 95% bootstrap CI, one panel per metric. `summ`: paired_null_summary() output.
-fig_validation <- function(summ, biome_order, pooled_label = "All PAs") {
+#' mean with 95% bootstrap CI, one panel per metric. As Fig. 3A (user, 2026-11-11): filled
+#' symbol where the paired Wilcoxon signed-rank test has p < `alpha` (biomes: Holm-adjusted
+#' across biomes within the metric; all PAs: a single test, unadjusted), open otherwise; circle =
+#' edge extent, triangle = edge intensity (FIG3_SHAPES). All PAs = the equal-weight pooled row
+#' (user, 2026-11-11: the conservative number). `summ`: paired_null_summary() output; rows other
+#' than `pooled_label` and the biomes (the table's PA-weighted row) are not drawn.
+fig_validation <- function(summ, biome_order, pooled_label = "All PAs", alpha = 0.05) {
   aes <- ggplot2::aes
   lv <- c(pooled_label, biome_order[biome_order %in% summ$BIOME_NAME])
   s <- summ[summ$BIOME_NAME %in% lv, ]
+  p_test <- ifelse(s$BIOME_NAME == pooled_label, s$p_wilcoxon, s$p_wilcoxon_holm)
+  s$fillkey <- ifelse(!is.na(p_test) & p_test < alpha, as.character(s$metric), "ns")
   s$BIOME_NAME <- factor(s$BIOME_NAME, levels = rev(lv))
   s$label <- sprintf("n = %d", s$n)
-  ggplot2::ggplot(s, aes(x = mean_diff, y = BIOME_NAME, colour = metric)) +
+  ggplot2::ggplot(s, aes(x = mean_diff, y = BIOME_NAME, colour = metric, shape = metric, fill = fillkey)) +
     ggplot2::geom_vline(xintercept = 0, linetype = "dashed", colour = "grey50") +
     ggplot2::geom_errorbar(aes(xmin = ci_lo, xmax = ci_hi), orientation = "y", width = 0.2) +
-    ggplot2::geom_point(size = 2.5) +
+    ggplot2::geom_point(size = 2.5, stroke = 0.9) +
     ggplot2::geom_text(aes(label = label), nudge_y = 0.3, size = 3, colour = "grey30", family = PLOT_FAMILY) +
     ggplot2::scale_colour_manual(values = FIG4_COLORS, guide = "none") +
+    ggplot2::scale_fill_manual(values = c(FIG4_COLORS, ns = "white"), guide = "none") +
+    ggplot2::scale_shape_manual(values = FIG3_SHAPES, guide = "none") +
     ggplot2::facet_wrap(~ metric, scales = "free_x") +
     ggplot2::labs(x = "PA \u2212 displaced copy (mean, 95% CI)", y = NULL) +
     theme_pa(base_size = 11)

@@ -5,7 +5,11 @@
 # yearly edge metrics, PAs with ≥ min_years of both metrics. Paired difference PA − copy, per
 # biome and for all PAs: mean with a percentile-bootstrap 95% CI (10,000 resamples of PAs within
 # the biome), median, share of PAs above their copy, and a paired Wilcoxon signed-rank test
-# (Holm-adjusted across biomes within a metric). Differences are also given in response SDs
+# (Holm-adjusted across biomes within a metric). All PAs (user, 2026-11-11): the sampled PAs
+# pooled, each biome weighted equally (the figure: the conservative number), and in the table also
+# "All PAs, PA-weighted": each biome weighted by its share of the analysis set (pa_level.csv),
+# with a within-biome bootstrap CI, weighted median and share, and a design-based t test
+# (p_stratified_t). Differences are also given in response SDs
 # (the analysis set's SD of PA means). The chance rate of edge extent (8/15, five exchangeable
 # values) is a reference line.
 #
@@ -56,18 +60,23 @@ for (m in metrics) {
 p <- p[order(match(p$BIOME_NAME, CFG$biome_order), p$WDPA_PID, method = "radix"), ]
 say("14: %d validation PAs with a displaced copy (%d in the log as selected)", nrow(p), sum(log$status == "selected"))
 
+n_pop <- c(table(pa$BIOME_NAME))                     # PAs per biome in the analysis set (weights)
+w_label <- paste0(CFG$pooled_label, ", PA-weighted")
 summ <- paired_null_summary(p, stats::setNames(paste0("diff_", metrics), labels), "BIOME_NAME", CFG$biome_order,
-                            CFG$boot$R, CFG$validation$seed, CFG$pooled_label)
+                            CFG$boot$R, CFG$validation$seed, CFG$pooled_label, n_pop = n_pop, weighted_label = w_label)
 sd_resp <- stats::setNames(vapply(metrics, function(m) scaling$sd[scaling$variable == paste0(CFG$responses[[m]], "_mean")],
                                   numeric(1)), labels)
 for (col in c("mean_diff", "ci_lo", "ci_hi")) summ[[paste0(col, "_sd")]] <- summ[[col]] / sd_resp[summ$metric]
-lev <- do.call(rbind, lapply(c(CFG$biome_order, CFG$pooled_label), function(b) {
-  r <- if (b == CFG$pooled_label) p else p[p$BIOME_NAME %in% b, ]
+lev <- do.call(rbind, lapply(c(CFG$biome_order, CFG$pooled_label, w_label), function(b) {
+  r <- if (b %in% c(CFG$pooled_label, w_label)) p else p[p$BIOME_NAME %in% b, ]
   if (!nrow(r)) return(NULL)
+  avg <- if (b == w_label) {
+    w <- pooled_weights(r$BIOME_NAME, n_pop); function(x) stats::weighted.mean(x, w)
+  } else mean
   do.call(rbind, lapply(metrics, function(m) {
     col <- paste0(CFG$responses[[m]], "_mean")
-    data.frame(metric = labels[[m]], BIOME_NAME = b, mean_pa = mean(r[[col]]),
-               mean_displaced = mean(r[[paste0(col, "_displaced")]]), stringsAsFactors = FALSE)
+    data.frame(metric = labels[[m]], BIOME_NAME = b, mean_pa = avg(r[[col]]),
+               mean_displaced = avg(r[[paste0(col, "_displaced")]]), stringsAsFactors = FALSE)
   }))
 }))
 summ <- merge(summ, lev, by = c("metric", "BIOME_NAME"), sort = FALSE)
@@ -83,7 +92,13 @@ fig <- fig_validation(summ, CFG$biome_order, CFG$pooled_label)
 ggplot2::ggsave(file.path(out$figures, "figS_validation.pdf"), fig, width = 9, height = 4.5, device = grDevices::cairo_pdf)
 ggplot2::ggsave(file.path(out$figures, "figS_validation.png"), fig, width = 9, height = 4.5, dpi = 300)
 for (i in which(summ$BIOME_NAME == CFG$pooled_label)) {
-  say("%s, all PAs: PA − copy %.3f (%.3f, %.3f) = %.2f SD; %.0f%% of PAs above their copy",
-      summ$metric[i], summ$mean_diff[i], summ$ci_lo[i], summ$ci_hi[i], summ$mean_diff_sd[i], 100 * summ$share_positive[i])
+  say("%s, all PAs (equal weight per biome; figure): PA − copy %.3f (%.3f, %.3f) = %.2f SD; %.0f%% of PAs above their copy; p = %.2g (Wilcoxon)",
+      summ$metric[i], summ$mean_diff[i], summ$ci_lo[i], summ$ci_hi[i], summ$mean_diff_sd[i], 100 * summ$share_positive[i],
+      summ$p_wilcoxon[i])
+}
+for (i in which(summ$BIOME_NAME == w_label)) {
+  say("%s, all PAs (PA-weighted; table): PA − copy %.3f (%.3f, %.3f) = %.2f SD; %.0f%% of PAs above their copy; p = %.2g (stratified t)",
+      summ$metric[i], summ$mean_diff[i], summ$ci_lo[i], summ$ci_hi[i], summ$mean_diff_sd[i], 100 * summ$share_positive[i],
+      summ$p_stratified_t[i])
 }
 say("wrote %s, %s, %s", out$tables, out$diagnostics, out$figures)

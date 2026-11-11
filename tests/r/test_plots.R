@@ -145,3 +145,24 @@ test_that("fig2_layers: one row per analysis PA (WDPA_PID order) and the case PA
   sf::st_write(ml$cases, f, driver = "KML", quiet = TRUE)
   expect_identical(sf::st_read(f, quiet = TRUE)$Name, "C, X · Desert")
 })
+
+test_that("fig_validation: filled where the Wilcoxon (Holm for biomes, raw for all PAs) has p < 0.05", {
+  s <- data.frame(metric = rep(c("Edge extent", "Edge intensity"), each = 3),
+                  BIOME_NAME = rep(c("Desert", "Tundra", "All PAs"), 2), n = c(40, 40, 80),
+                  mean_diff = 0.05, ci_lo = 0.01, ci_hi = 0.09,
+                  p_wilcoxon = c(0.001, 0.03, 0.01, 0.2, 0.001, 0.04),
+                  p_wilcoxon_holm = c(0.002, 0.06, NA, 0.2, 0.002, NA), stringsAsFactors = FALSE)
+  f <- fig_validation(s, c("Desert", "Tundra"))
+  # Tundra extent: raw p 0.03 but Holm 0.06 → open; all PAs use the raw p (no Holm)
+  expect_identical(f$data$fillkey, c("Edge extent", "ns", "Edge extent", "ns", "Edge intensity", "Edge intensity"))
+  b <- ggplot2::ggplot_build(f)$data[[3]]
+  expect_equal(sum(b$fill == "white"), 2)
+  expect_true(all(b$fill %in% c(unname(FIG4_COLORS), "white")))
+  expect_setequal(unique(b$shape), unname(FIG3_SHAPES))
+  expect_true(builds(f))
+  # the table's PA-weighted row is not drawn
+  s2 <- rbind(s, transform(s[s$BIOME_NAME == "All PAs", ], BIOME_NAME = "All PAs, PA-weighted", mean_diff = 1))
+  f2 <- fig_validation(s2, c("Desert", "Tundra"))
+  expect_equal(nrow(f2$data), 6)
+  expect_equal(f2$data$mean_diff, rep(0.05, 6))
+})
