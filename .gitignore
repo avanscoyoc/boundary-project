@@ -1,7 +1,7 @@
 __pycache__
 .DS_Store
 .pixi
-
+.claude
 data
 results
 old_data
