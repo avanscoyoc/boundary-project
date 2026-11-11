@@ -2,10 +2,13 @@
 # return ggplot/patchwork objects; nothing is fitted or read here (A7).
 #
 # Ported from PA_New_Analysis/scripts/00_setup.R (58-86: colours, theme), 06_fig3_model.R
-# (Fig. 3) and 07_fig4_trend.R (1-230: Fig. 4A). Fig. 4B (case studies) is deferred (extras/).
+# (Fig. 3), 07_fig4_trend.R (Fig. 4A, 4B and the combined Fig. 4) and 04_2_spatial_prep.R
+# (Fig. 2 map layers; the map itself is styled outside the repo).
 # Changes from the old scripts (layout only, same content):
 #   - positions that the old code hard-coded (Fig. 3A separators, Fig. 4A separator) are
 #     computed from the rows present;
+#   - Fig. 4B shows its fixed y range with coord_cartesian(), so no value is dropped and the
+#     dashed trend lines are fitted on every year (B5);
 #   - the font family is set explicitly (Helvetica → Liberation Sans in the container), so PNGs
 #     match the PDFs (Phase 1 found DejaVu Sans clipping the Fig. 3 legend).
 
@@ -33,6 +36,11 @@ IUCN_LTYPES <- c("Strict" = "solid", "Non-strict" = "dashed", "Unknown" = "dotte
 FIG3_X <- c(0, 0.8)
 FIG3_Y <- list(extent = c(0.5, 0.65), intensity = c(0.5, 1))
 FIG3_Y_STEP <- c(extent = 0.05, intensity = 0.1)
+# Fig. 4B: edge extent axis (left), as the old figure (07:283-284); edge intensity (right) is
+# rescaled so that its range over the case PAs spans extent's.
+FIG4B_Y <- c(0.30, 0.98)
+FIG4B_Y_BREAKS <- c(0.30, 0.60, 0.90)
+FIG4B_X_BREAKS <- c(2003, 2010, 2017, 2025)
 TERM_LABELS <- c(STATUS_YR_z = "Establishment year", log_area_z = "PA area (log)",
                  gHM_mean_z = "Human modification (HMI)", elevation_mean_z = "Elevation",
                  terrain_slope_z = "Slope", water_extent_pct_z = "Water extent")
@@ -347,6 +355,134 @@ fig4a <- function(summary, reps, biome_order, pooled_label, pooled_display = "Al
                    legend.direction = "horizontal", legend.background = ggplot2::element_blank(),
                    legend.key = ggplot2::element_blank(), legend.key.size = grid::unit(0.35, "cm"),
                    legend.text = ggplot2::element_text(size = 10))
+}
+
+# ── Fig. 4B: case-study PAs (old 07:207-409) ─────────────────────────────────
+
+# Long table of the case series with intensity rescaled onto the extent axis (07:237-271): the
+# scaling uses all case PAs, also for the single-PA panels. Returns the table and the back-
+# transform of the secondary axis.
+.fig4b_long <- function(series, ylim) {
+  id <- series[c("panel", "WDPA_PID", "label", "year")]
+  l <- rbind(data.frame(id, metric = "Edge extent", value = series$edge_extent),
+             data.frame(id, metric = "Edge intensity", value = series$edge_intensity))
+  l$metric <- factor(l$metric, levels = names(FIG4_COLORS))
+  l$label <- factor(l$label, levels = unique(series$label[order(series$panel)]))
+  ext <- range(l$value[l$metric == "Edge extent"], na.rm = TRUE)
+  int <- range(l$value[l$metric == "Edge intensity"], na.rm = TRUE)
+  fac <- diff(ext) / diff(int)
+  off <- ext[1] - int[1] * fac
+  l$value_scaled <- ifelse(l$metric == "Edge intensity", l$value * fac + off, l$value)
+  out <- l$value_scaled < ylim[1] | l$value_scaled > ylim[2]
+  if (any(out, na.rm = TRUE))
+    warning(sprintf("Fig. 4B: %d values outside the y range %.2f-%.2f (extent %.3f-%.3f); they are cut off at the panel edge (widen FIG4B_Y)",
+                    sum(out, na.rm = TRUE), ylim[1], ylim[2], ext[1], ext[2]), call. = FALSE)
+  list(data = l, back = function(x) (x - off) / fac)
+}
+
+.fig4b_layers <- function(back, ylim, line_width) {
+  list(
+    ggplot2::geom_line(linewidth = line_width, alpha = 0.8),
+    ggplot2::geom_smooth(method = "lm", formula = y ~ x, se = FALSE, linetype = "dashed", linewidth = 0.6),
+    ggplot2::scale_y_continuous(name = "Edge extent", breaks = FIG4B_Y_BREAKS,
+                                labels = scales::percent_format(accuracy = 1),
+                                sec.axis = ggplot2::sec_axis(transform = back, name = "Edge intensity",
+                                                             labels = scales::number_format(accuracy = 0.01))),
+    ggplot2::coord_cartesian(ylim = ylim),   # B5: keeps every value (limits = would drop them)
+    ggplot2::scale_color_manual(values = FIG4_COLORS, name = NULL),
+    ggplot2::scale_x_continuous(breaks = FIG4B_X_BREAKS)
+  )
+}
+
+#' Fig. 4B time series: annual edge extent (left axis) and edge intensity (right axis) of the
+#' case-study PAs, one panel per PA in panel order, with dashed OLS lines (the per-PA trends of
+#' 07). `series`: case_series() table (panel, WDPA_PID, label, year, edge_extent, edge_intensity).
+fig4b_series <- function(series, ylim = FIG4B_Y) {
+  s <- .fig4b_long(series, ylim)
+  ggplot2::ggplot(s$data, ggplot2::aes(year, value_scaled, color = metric)) +
+    .fig4b_layers(s$back, ylim, 0.8) +
+    ggplot2::facet_wrap(~label, ncol = 1, scales = "fixed") +
+    ggplot2::labs(x = "Year") +
+    theme_pa(base_size = 12) +
+    ggplot2::theme(strip.text = ggplot2::element_text(size = 8.5, face = "bold", hjust = 0),
+                   strip.background = ggplot2::element_blank(),
+                   axis.text.x = ggplot2::element_text(angle = 30, hjust = 1),
+                   legend.position = "none")
+}
+
+#' Fig. 4B image placeholders (07:305-348): grey boxes for the first- and last-year satellite
+#' images of each case PA, added in the layout. `labels`: panel titles in panel order.
+fig4b_placeholders <- function(labels, years = c(2003, 2025)) {
+  n <- length(labels)
+  d <- data.frame(row = rep(seq_len(n), each = 2), col = rep(c(1, 2), times = n),
+                  year = rep(as.character(years), times = n),
+                  case = factor(rep(labels, each = 2), levels = labels), stringsAsFactors = FALSE)
+  d$label <- paste(paste0("Google Earth\n", d$year, "\n"), d$case)
+  ggplot2::ggplot(d, ggplot2::aes(x = col, y = row)) +
+    ggplot2::geom_tile(fill = "#e0e0e0", color = "white", linewidth = 1, width = 0.95, height = 0.9) +
+    ggplot2::geom_text(ggplot2::aes(label = label), size = 3, color = "grey50", fontface = "italic",
+                       family = PLOT_FAMILY) +
+    ggplot2::scale_y_reverse() +
+    ggplot2::scale_x_continuous(breaks = c(1, 2), labels = as.character(years)) +
+    ggplot2::facet_wrap(~case, ncol = 1, scales = "free_y") +
+    ggplot2::labs(x = NULL, y = NULL) +
+    ggplot2::theme_void(base_family = PLOT_FAMILY) +
+    ggplot2::theme(strip.text = ggplot2::element_blank(),
+                   axis.text.x = ggplot2::element_text(size = 9, color = "grey40", face = "bold"),
+                   panel.spacing = grid::unit(0.5, "lines"))
+}
+
+#' Fig. 4B (07:350-352): image placeholders (left, 2/3) beside the time series (right, 1/3).
+fig4b <- function(series, ylim = FIG4B_Y, years = c(2003, 2025)) {
+  labels <- unique(series$label[order(series$panel)])
+  # wrap_plots(), not `+`: the operator needs patchwork loaded before the call
+  patchwork::wrap_plots(fig4b_placeholders(labels, years), fig4b_series(series, ylim), widths = c(2, 1))
+}
+
+#' Fig. 4 (07:354-356): panel A (fig4a()) over panel B (fig4b()); no automatic panel tags.
+fig4 <- function(p4a, p4b) {
+  patchwork::wrap_plots(p4a, p4b, ncol = 1, heights = c(1, 2.5))
+}
+
+#' One case PA's time series on its own (07:369-409), with the axis scaling of the full figure.
+fig4b_single <- function(series, pid, ylim = FIG4B_Y) {
+  s <- .fig4b_long(series, ylim)
+  x <- s$data[s$data$WDPA_PID == pid, ]
+  stopifnot(nrow(x) > 0)
+  ggplot2::ggplot(x, ggplot2::aes(year, value_scaled, color = metric)) +
+    .fig4b_layers(s$back, ylim, 0.9) +
+    ggplot2::labs(x = "Year", title = as.character(x$label[1])) +
+    theme_pa(base_size = 11) +
+    ggplot2::theme(legend.position = "bottom", plot.title = ggplot2::element_text(size = 9, face = "bold"))
+}
+
+# ── Fig. 2 map layers (old 04_2_spatial_prep.R) ──────────────────────────────
+
+#' The analysis-set polygons with PA means, trends and standardised change (one row per PA,
+#' WDPA_PID order), and the case-study PAs with their panel titles as `Name` (KML placemarks).
+#' `polys`: sf of the PA polygons (script 02); `pa`: pa_level (05); `trends`: pa_trends (07);
+#' `cases`: config case_studies.
+fig2_layers <- function(polys, pa, trends, cases) {
+  stopifnot(!anyDuplicated(pa$WDPA_PID), all(pa$WDPA_PID %in% polys$WDPA_PID),
+            all(pa$WDPA_PID %in% trends$WDPA_PID), all(cases$WDPA_PID %in% pa$WDPA_PID))
+  pa <- pa[order(pa$WDPA_PID), ]
+  tcols <- c(outer(c("slope_", "p_fdr_", "trend_"), c("extent", "intensity"), paste0))
+  tcols <- c(tcols[1:3], "change_extent_z", tcols[4:6], "change_intensity_z")
+  a <- data.frame(pa[c("WDPA_PID", "NAME", "ISO3", "BIOME_NAME", "IUCN_CAT", "IUCN_group", "STATUS_YR",
+                       "AREA_KM2", "edge_extent_mean", "edge_intensity_mean")],
+                  trends[match(pa$WDPA_PID, trends$WDPA_PID), tcols], stringsAsFactors = FALSE)
+  a$trend_combined <- paste0("extent_", a$trend_extent, "_intensity_", a$trend_intensity)   # 04_2:68-71
+  rownames(a) <- NULL
+  layer <- sf::st_sf(a, geometry = sf::st_geometry(polys)[match(a$WDPA_PID, polys$WDPA_PID)])
+  k <- match(cases$WDPA_PID, layer$WDPA_PID)
+  cs <- layer[k, c("WDPA_PID", "NAME", "ISO3", "BIOME_NAME", "edge_extent_mean", "edge_intensity_mean",
+                   "trend_extent", "trend_intensity")]
+  # NAME → PA_NAME: GDAL matches field names without case, so NAME would replace the KML Name
+  cs <- sf::st_drop_geometry(cs) |> (\(x) { names(x)[names(x) == "NAME"] <- "PA_NAME"; x })()
+  cs <- sf::st_sf(data.frame(Name = cases$label, cs, stringsAsFactors = FALSE),
+                  geometry = sf::st_geometry(layer)[k])
+  rownames(cs) <- NULL
+  list(pas = layer, cases = cs)
 }
 
 #' S figure (D2): per-PA change in edge extent vs edge intensity (response SD per record), one

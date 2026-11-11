@@ -10,8 +10,10 @@
 #   percentile-bootstrap means of change per biome and for all PAs (Fig. 4A), area-weighted means
 #   and Sen-slope means (Table SV); seeds and run order as the old run (config boot$seeds);
 #   GLS of change on biome with biome-specific variances, Holm-adjusted pairwise contrasts and
-#   letters (Table SW); % change over the record (diagnostic).
-# Main analysis only: transect version "all", the 4,590-PA analysis set. The other versions and
+#   letters (Table SW); % change over the record (diagnostic);
+#   the Fig. 4B case-study PAs (config case_studies): their annual series, trends and % change
+#   of their own mean (old 07:207-235 and 11:58-81).
+# Main analysis only: transect version "all", the analysis set of 05. The other versions and
 # PA subsets are 09's.
 #
 # Run from the repository root (about a minute):
@@ -27,6 +29,8 @@
 #          <tables>/TableSV_slope_correlation.csv
 #          <tables>/TableSW_biome_{omnibus,contrasts,letters}.csv
 #          <tables>/fig4a_change_summary.csv, fig4a_boot_replicates.csv
+#          <tables>/fig4b_case_series.csv (one row per case PA × year), fig4b_case_pas.csv (one
+#                         row per case PA: trends, change over the record, % of its own mean)
 #          <diagnostics>/trend_{class_counts,yuepilon_agreement,yuepilon_crosstab,
 #                         percent_change_biome}.csv, biome_change_gls_{means,sigma}.csv
 
@@ -59,6 +63,10 @@ metrics <- names(CFG$responses)                                   # extent, inte
 labels  <- RESPONSE_LABELS[metrics]                                # Edge extent, Edge intensity
 cols <- function(prefix) stats::setNames(paste0(prefix, metrics), labels)
 say("07: %d PAs, %d PA-years (transects: all)", nrow(pa), nrow(py))
+cases <- CFG$case_studies
+gone <- setdiff(cases$WDPA_PID, pa$WDPA_PID)
+if (length(gone)) stop("Fig. 4B case-study PAs not in the analysis set: ", paste(gone, collapse = ", "),
+                       " (update config case_studies)")
 
 # ── 2. Per-PA trends and standardised change ─────────────────────────────────
 d <- pa[c("WDPA_PID", "BIOME_NAME", "AREA_KM2", paste0(CFG$responses, "_mean"))]
@@ -78,6 +86,16 @@ for (m in metrics) {
 }
 k <- unlist(k)
 rownames(d) <- NULL
+
+# Fig. 4B case studies
+case_pas <- case_summary(cbind(d, pa[match(d$WDPA_PID, pa$WDPA_PID), c("NAME", "ISO3")]), cases,
+                         CFG$responses, CFG$n_span)
+case_ser <- case_series(py, cases, CFG$responses)
+got <- paste(case_pas$trend_extent, case_pas$trend_intensity, sep = "/")
+for (i in seq_len(nrow(cases))) say("Fig. 4B panel %d: %s (%s): %s%s", i, cases$label[i], cases$WDPA_PID[i], got[i],
+                                    if (got[i] == cases$expect[i]) "" else paste0("  ← expected ", cases$expect[i]))
+if (any(got != cases$expect))
+  warning("Fig. 4B: case-study trend classes differ from config case_studies$expect (see above)", call. = FALSE)
 
 # ── 3. Bootstraps (old seeds and run order; slopes, reported in change units) ─
 run <- function(cl, seed, ...) boot_means(d, cl, "BIOME_NAME", CFG$biome_order, CFG$boot$R, seed,
@@ -149,6 +167,8 @@ w_csv(gstack("pairs"), out$tables, "TableSW_biome_contrasts.csv")
 w_csv(gstack("letters"), out$tables, "TableSW_biome_letters.csv")
 w_csv(main, out$tables, "fig4a_change_summary.csv")
 w_csv(reps, out$tables, "fig4a_boot_replicates.csv")
+w_csv(case_ser, out$tables, "fig4b_case_series.csv")
+w_csv(case_pas, out$tables, "fig4b_case_pas.csv")
 w_csv(cc, out$diagnostics, "trend_class_counts.csv")
 w_csv(ag$agreement, out$diagnostics, "trend_yuepilon_agreement.csv")
 w_csv(ag$crosstab, out$diagnostics, "trend_yuepilon_crosstab.csv")

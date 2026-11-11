@@ -93,3 +93,55 @@ test_that("fig3_panels keeps the supported interactions; fig3 builds with 0 to 4
   expect_warning(fig3_axes(hi, "extent"), "outside the fixed axes")
   expect_silent(fig3_axes(pi[pi$response == "extent", ], "extent"))
 })
+
+test_that("Fig. 4B: placeholders + series, combined Fig. 4, single panels; values kept (B5)", {
+  set.seed(2)
+  cases <- data.frame(WDPA_PID = c("p1", "p2"), label = c("One, X · Grassland", "Two, Y · Trop. For."), stringsAsFactors = FALSE)
+  py <- expand.grid(WDPA_PID = cases$WDPA_PID, year = 2003:2025, stringsAsFactors = FALSE)
+  py$edge_extent <- 0.6 + 0.005 * (py$year - 2003) * ifelse(py$WDPA_PID == "p1", 1, -1) + rnorm(nrow(py), 0, 0.02)
+  py$edge_intensity <- 1 + 0.01 * (py$year - 2003) + rnorm(nrow(py), 0, 0.05)
+  s <- case_series(py, cases, c(extent = "edge_extent", intensity = "edge_intensity"))
+  expect_silent(p <- fig4b_series(s))
+  # coord_cartesian, not scale limits: every value reaches the plot and the trend lines
+  b <- ggplot2::ggplot_build(p)
+  expect_equal(sum(!is.na(b$data[[1]]$y)), 2 * nrow(s))
+  expect_equal(levels(p$data$label), cases$label)
+  # the secondary axis maps the rescaled intensity back exactly
+  l <- .fig4b_long(s, FIG4B_Y)
+  int <- l$data$metric == "Edge intensity"
+  expect_equal(l$back(l$data$value_scaled[int]), l$data$value[int])
+  expect_equal(range(l$data$value_scaled[int]), range(s$edge_extent))
+  expect_true(builds(fig4b(s)))
+  sm <- data.frame(metric = rep(names(FIG4_COLORS), 2), BIOME_NAME = rep(c("All PAs", "Desert"), each = 2), n = 10,
+                   mean_change_z = 0.1, ci_lo_z = 0.05, ci_hi_z = 0.15)
+  reps <- data.frame(metric = rep(sm$metric, each = 20), BIOME_NAME = rep(sm$BIOME_NAME, each = 20), change_z = rnorm(80, 0.1, 0.02))
+  expect_true(builds(fig4(fig4a(sm, reps, "Desert", "All PAs"), fig4b(s))))
+  expect_true(builds(fig4b_single(s, "p2")))
+  expect_error(fig4b_single(s, "nope"))
+  hi <- s; hi$edge_extent[1] <- 0.99
+  expect_warning(fig4b_series(hi), "outside the y range")
+})
+
+test_that("fig2_layers: one row per analysis PA (WDPA_PID order) and the case PAs", {
+  sq <- function(x) sf::st_polygon(list(rbind(c(x, 0), c(x + 1, 0), c(x + 1, 1), c(x, 1), c(x, 0))))
+  polys <- sf::st_sf(WDPA_PID = c("3", "1", "2", "9"), geometry = sf::st_sfc(sq(3), sq(1), sq(2), sq(9), crs = 4326))
+  pa <- data.frame(WDPA_PID = c("2", "1", "3"), NAME = c("B", "A", "C"), ISO3 = "XXX", BIOME_NAME = "Desert",
+                   IUCN_CAT = "II", IUCN_group = "strict", STATUS_YR = 1990, AREA_KM2 = 1,
+                   edge_extent_mean = c(0.2, 0.1, 0.3), edge_intensity_mean = 1, stringsAsFactors = FALSE)
+  tr <- data.frame(WDPA_PID = c("1", "2", "3"), slope_extent = c(0.01, 0.02, 0.03), p_fdr_extent = 0.01,
+                   trend_extent = "increase", change_extent_z = 1, slope_intensity = 0, p_fdr_intensity = 0.5,
+                   trend_intensity = "no_trend", change_intensity_z = 0, stringsAsFactors = FALSE)
+  cases <- data.frame(WDPA_PID = "3", label = "C, X · Desert", stringsAsFactors = FALSE)
+  ml <- fig2_layers(polys, pa, tr, cases)
+  expect_identical(ml$pas$WDPA_PID, c("1", "2", "3"))
+  expect_equal(ml$pas$slope_extent, c(0.01, 0.02, 0.03))
+  expect_equal(ml$pas$edge_extent_mean, c(0.1, 0.2, 0.3))
+  expect_true(all(sf::st_equals(ml$pas, polys[match(ml$pas$WDPA_PID, polys$WDPA_PID), ], sparse = FALSE)[cbind(1:3, 1:3)]))
+  expect_identical(ml$pas$trend_combined[1], "extent_increase_intensity_no_trend")
+  expect_identical(ml$cases$Name, "C, X · Desert")
+  expect_identical(ml$cases$WDPA_PID, "3"); expect_identical(ml$cases$PA_NAME, "C")
+  expect_error(fig2_layers(polys[-1, ], pa, tr, cases))
+  f <- tempfile(fileext = ".kml")
+  sf::st_write(ml$cases, f, driver = "KML", quiet = TRUE)
+  expect_identical(sf::st_read(f, quiet = TRUE)$Name, "C, X · Desert")
+})

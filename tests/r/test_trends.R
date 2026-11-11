@@ -197,3 +197,26 @@ test_that("cohen_kappa and paired_agreement (sensitivity S1)", {
   expect_true(r2$diff_lo < r2$mean_diff_sd && r2$mean_diff_sd < r2$diff_hi)
   expect_identical(r2, paired_agreement(x, y, 1, 1000, 1))
 })
+
+test_that("case_series and case_summary: panel order, % of the PA's own mean", {
+  cases <- data.frame(WDPA_PID = c("b", "a"), label = c("B, X · Grassland", "A, Y · Desert"), stringsAsFactors = FALSE)
+  py <- expand.grid(WDPA_PID = c("a", "b", "c"), year = 2003:2005, stringsAsFactors = FALSE)
+  py$edge_extent <- seq_len(nrow(py)) / 10; py$edge_intensity <- seq_len(nrow(py))
+  s <- case_series(py, cases, c(extent = "edge_extent", intensity = "edge_intensity"))
+  expect_identical(s$WDPA_PID, rep(c("b", "a"), each = 3))
+  expect_identical(s$panel, rep(1:2, each = 3))
+  expect_identical(s$year, rep(2003:2005, 2))
+  expect_equal(s$edge_extent[s$WDPA_PID == "a" & s$year == 2004], py$edge_extent[py$WDPA_PID == "a" & py$year == 2004])
+  expect_identical(names(s), c("panel", "WDPA_PID", "label", "year", "edge_extent", "edge_intensity"))
+  expect_error(case_series(py, rbind(cases, data.frame(WDPA_PID = "z", label = "Z")), c(extent = "edge_extent")))
+
+  d <- data.frame(WDPA_PID = c("a", "b", "c"), NAME = c("A", "B", "C"), edge_extent_mean = c(0.5, 0.8, 0.6),
+                  slope_extent = c(0.01, -0.004, 0), p_fdr_extent = 0.01, trend_extent = c("increase", "decrease", "no_trend"),
+                  change_extent_z = c(1, -0.4, 0), stringsAsFactors = FALSE)
+  cs <- case_summary(d, cases, c(extent = "edge_extent"), n_span = 22)
+  expect_identical(cs$WDPA_PID, c("b", "a")); expect_identical(cs$NAME, c("B", "A")); expect_identical(cs$panel, 1:2)
+  expect_equal(cs$change_extent, c(-0.004, 0.01) * 22)
+  expect_equal(cs$pct_change_extent, 100 * c(-0.004 * 22 / 0.8, 0.01 * 22 / 0.5))   # old 11:71-74
+  expect_identical(cs$trend_extent, c("decrease", "increase"))
+  expect_error(case_summary(d[-1, ], cases, c(extent = "edge_extent"), 22))
+})

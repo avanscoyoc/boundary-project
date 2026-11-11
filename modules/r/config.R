@@ -34,6 +34,9 @@ CFG <- local({
       diagnostics  = p("results", "diagnostics"),                 # outputs not reported in the paper (D4)
       counts       = p("results", "analysis_counts.json"),
       session_info = p("results", "R_sessionInfo.txt"),
+      # Fig. 2 map layers (script 10): WDPA polygons may not be redistributed, so they stay
+      # under data/, like the coordinates
+      map_layers   = p("data", "10_map_layers"),
       parity_dir   = p("data", "parity"),
       legacy_root  = p("PA_New_Analysis")                         # collaborator's project (read-only)
     ),
@@ -104,6 +107,20 @@ CFG <- local({
       seeds = c(biome = 42L, weighted = 43L, sen = 44L, pooled = 45L)
     ),
     pooled_label = "All PAs",   # the all-PAs row of the biome summaries (old tables: "All biomes")
+
+    # ── Fig. 4B case studies (07 tables, 10 figures and the KML; user, 2026-11-11) ─
+    # One PA per panel, top to bottom. `label`: panel title; `expect`: the trend classes
+    # (extent/intensity) the panel illustrates (07 warns if they differ). Kept from the old
+    # figure where the v2 classes match; Sissili (28556) was merged into the Pô-Nazinga-Sissili
+    # complex by script 02, and Gougoun (6950, now no trend) is replaced.
+    case_studies = data.frame(
+      WDPA_PID = c("555705201", "36531", "34032", "19667"),
+      label    = c("Pô-Nazinga-Sissili, Burkina Faso · Grassland",
+                   "Zala, Nigeria · Grassland",   # user, 2026-11-11 ("for now")
+                   "Igarapé Ribeirão, Brazil · Trop. For.",
+                   "Namtok Chat Trakan, Thailand · Trop. For."),
+      expect   = c("increase/increase", "decrease/decrease", "increase/increase", "no_trend/no_trend"),
+      stringsAsFactors = FALSE),
 
     # ── Spatial GLS (Stats ¶2–3, ¶6) ─────────────────────────────────────────
     spatial = list(

@@ -12,4 +12,11 @@ test_that("config settings are consistent", {
   expect_identical(CFG$transects[1], "all")
   expect_setequal(names(CFG$boot$seeds), c("biome", "weighted", "sen", "pooled"))
   expect_length(CFG$trend$levels, 3)
+
+  cs <- CFG$case_studies
+  expect_identical(names(cs), c("WDPA_PID", "label", "expect"))
+  expect_false(anyDuplicated(cs$WDPA_PID) > 0)
+  ok <- c(outer(CFG$trend$levels, CFG$trend$levels, paste, sep = "/"))
+  expect_true(all(cs$expect %in% ok))
+  expect_false(anyNA(cs))
 })

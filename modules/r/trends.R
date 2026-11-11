@@ -345,6 +345,46 @@ percent_change <- function(summary, d, slope_cols, base_cols, group, n_span,
   out
 }
 
+# ── Fig. 4B case studies (config case_studies) ───────────────────────────────
+
+#' Annual series of the case-study PAs, in panel order (old 07_fig4_trend.R:224-235).
+#' `py`: PA-year table of one transect version (WDPA_PID, year, the response columns);
+#' `cases`: data frame WDPA_PID, label (config case_studies); `responses`: c(extent = "edge_extent", ...).
+case_series <- function(py, cases, responses) {
+  stopifnot(!anyDuplicated(cases$WDPA_PID), all(cases$WDPA_PID %in% py$WDPA_PID))
+  x <- py[py$WDPA_PID %in% cases$WDPA_PID, c("WDPA_PID", "year", unname(responses))]
+  x$panel <- match(x$WDPA_PID, cases$WDPA_PID)
+  x$label <- cases$label[x$panel]
+  x <- x[order(x$panel, x$year), c("panel", "WDPA_PID", "label", "year", unname(responses))]
+  rownames(x) <- NULL
+  x
+}
+
+#' Case-study PAs: trends, and the change over the record in metric units (slope × n_span) and
+#' as % of the PA's own mean (old 11_trend_percent_change.R:58-81), in panel order.
+#' `d`: one row per PA with WDPA_PID, <response>_mean, slope_<m>, p_fdr_<m>, trend_<m>,
+#' change_<m>_z (NAME, ISO3, BIOME_NAME kept when present); `cases`, `responses`: as case_series().
+case_summary <- function(d, cases, responses, n_span) {
+  i <- match(cases$WDPA_PID, d$WDPA_PID)
+  stopifnot(!anyNA(i))
+  out <- data.frame(panel = seq_len(nrow(cases)), WDPA_PID = cases$WDPA_PID, label = cases$label,
+                    d[i, intersect(c("NAME", "ISO3", "BIOME_NAME"), names(d)), drop = FALSE],
+                    stringsAsFactors = FALSE)
+  for (m in names(responses)) {
+    base  <- d[[paste0(responses[[m]], "_mean")]][i]
+    slope <- d[[paste0("slope_", m)]][i]
+    out[[paste0("mean_", m)]]       <- base
+    out[[paste0("slope_", m)]]      <- slope
+    out[[paste0("p_fdr_", m)]]      <- d[[paste0("p_fdr_", m)]][i]
+    out[[paste0("trend_", m)]]      <- d[[paste0("trend_", m)]][i]
+    out[[paste0("change_", m)]]     <- slope * n_span
+    out[[paste0("pct_change_", m)]] <- 100 * slope * n_span / base
+    out[[paste0("change_", m, "_z")]] <- d[[paste0("change_", m, "_z")]][i]
+  }
+  rownames(out) <- NULL
+  out
+}
+
 # ── Sensitivity (09): agreement of per-PA values between two transect versions ──
 
 #' Cohen's kappa of two classifications of the same PAs (pairs with an NA are left out).
