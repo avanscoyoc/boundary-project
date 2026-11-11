@@ -26,6 +26,7 @@ TRANSECTS_DIR = DATA_DIR / "02_transects"           # script 02 Part 2: transect
 UPLOAD_DIR = TRANSECTS_DIR / "upload"               # zipped shapefiles to upload to Earth Engine
 GEE_CSV_DIR = DATA_DIR / "03_gee"                   # script 03 CSVs (download from Drive)
 TRANSECT_YEARS_DIR = DATA_DIR / "04_transect_years" # script 04: one row per transect-year
+MISSING_TRANSECTS = TRANSECT_YEARS_DIR / "missing_transects.csv"   # script 04: transects with missing years
 
 RESULTS_DIR = PROJECT_ROOT / "results"              # final outputs only
 
@@ -182,8 +183,12 @@ VALIDATION_RESERVE = 25            # extra PAs drawn per biome, used in draw ord
 VALIDATION_N_CANDIDATES = 5        # displacements per PA passing the local checks, sent to Earth
                                    # Engine; the first that passes the imagery checks is accepted
 VALIDATION_MAX_ATTEMPTS = 200      # [N] vectors drawn per PA for the local checks
-VALIDATION_MIN_DIST_KM = 50        # [50 km] minimum displacement (and more than the PA's extent)
-VALIDATION_DIST_SPAN_KM = 100      # distance drawn uniformly in [minimum, minimum + span]
+VALIDATION_MIN_DIST_KM = 50        # [50 km] PA size d = the larger of this and the PA's footprint
+                                   # (bounding-box diagonal of its transects: the copy cannot overlap)
+VALIDATION_DIST_MULT = 2           # [2] distance drawn uniformly in [d, mult × d] (user, 2026-11-11)
+VALIDATION_MAX_BOUNDARY_SHARE = 0.10   # [10%] a vector passes if at most this share of displaced
+                                   # transects has a PA boundary between points -1 and 1 (within
+                                   # one TRANSECT_SPACING, 2.5 km, of the centre point) (user, 2026-11-11)
 VALIDATION_SEED = 20261108
 
 VALIDATION_UPLOAD_PREFIX = f'displaced_points_{RUN_TAG}_'
@@ -191,6 +196,19 @@ VALIDATION_ASSET_PREFIX = f'projects/{GEE_PROJECT}/assets/{VALIDATION_UPLOAD_PRE
 VALIDATION_DRIVE_FOLDER = f'{INDEX_NAME}_gradient_displaced_{RUN_TAG}'
 VALIDATION_PA_METRICS = RESULTS_DIR / "validation_displaced_pa_years.csv"   # script 13
 VALIDATION_LOG = RESULTS_DIR / "validation_displacement_log.csv"           # script 13
+VALIDATION_CHECKS = RESULTS_DIR / "validation_candidate_checks.csv"        # script 13
+
+# The displaced copy must pass the analysis-set rules of R script 05 (user, 2026-11-11). The
+# values are those of modules/r/config.R (min_complete_pct, max_water_pct, min_years);
+# tests/test_validation.py checks that they agree.
+VALIDATION_MIN_COMPLETE_PCT = 75   # sea rule: median over years of the % of transects complete
+VALIDATION_MAX_WATER_PCT = 75      # lake rule: mean over years of the % of transects with water
+VALIDATION_MIN_YEARS = 5           # years with both edge metrics
+# Biome of the copy as of the PA (script 01): RESOLVE ecoregion with the largest area of the PA
+# polygon displaced by the same vector, grouped as in script 04
+VALIDATION_POLY_UPLOAD_PREFIX = f'displaced_polygons_{RUN_TAG}_'
+VALIDATION_POLY_ASSET_PREFIX = f'projects/{GEE_PROJECT}/assets/{VALIDATION_POLY_UPLOAD_PREFIX}'
+VALIDATION_BIOME_EXPORT = f'displaced_polygons_biome_{RUN_TAG}'   # script 12 export, same Drive folder
 
 
 def get_num_chunks():

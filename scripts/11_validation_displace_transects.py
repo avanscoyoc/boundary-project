@@ -5,22 +5,27 @@ For a stratified random sample of analysis PAs (VALIDATION_N_PER_BIOME per biome
 VALIDATION_RESERVE reserves drawn in order), translates each PA's full transect set by random
 vectors (no rotation) in a local azimuthal equidistant projection, and keeps up to
 VALIDATION_N_CANDIDATES displacements that pass the checks needing no imagery:
-- distance >= max(VALIDATION_MIN_DIST_KM, the PA's footprint), so the copy cannot overlap
-  the PA; drawn uniformly in [minimum, minimum + VALIDATION_DIST_SPAN_KM];
-- no displaced transect crosses the boundary of any PA of the 6,570-PA WDPA set
-  (pas_selected + pas_removed), the PA itself included.
-The imagery checks (every point in the PA's biome and with gradient data in every year) need
-Earth Engine: script 12 samples the candidates, script 13 accepts per PA the first passing
-candidate and replaces PAs without one by the biome's reserves.
+- PA size d = max(VALIDATION_MIN_DIST_KM, the PA's footprint), so the copy cannot overlap
+  the PA; distance drawn uniformly in [d, VALIDATION_DIST_MULT × d];
+- at most VALIDATION_MAX_BOUNDARY_SHARE of the displaced transects have the boundary of a PA
+  of the 6,570-PA WDPA set (pas_selected + pas_removed, the PA itself included) in their
+  centre zone (points -1 to 1, within 2.5 km of the centre point); the share is recorded.
+The checks needing imagery are those of the analysis set (R script 05) applied to the copy:
+biome (of the PA polygon moved by the same vector, largest-area ecoregion as script 01), sea,
+lake and years. Script 12 samples the candidates and the moved polygons' biome, script 13
+accepts per PA the first passing candidate and replaces PAs without one by the biome's reserves.
 
 Inputs:  data/05_analysis/pa_level.csv (the analysis PAs, R script 05),
          data/02_transects/transect_points.parquet, data/02_pas/pas_{selected,removed}.gpkg
 Outputs: data/11_validation/sample.csv            sampled PAs: biome, draw order, transects,
                                                   attempts, candidates, minimum distance
-         data/11_validation/candidates.csv        one row per candidate displacement
+         data/11_validation/candidates.csv        one row per candidate displacement, with the
+                                                  share of transects near a PA boundary
          data/11_validation/candidate_points.parquet  displaced points of every candidate
          data/11_validation/upload/displaced_points_{RUN_TAG}_NNN.zip  for Earth Engine
-             (field WDPA_PID = "<WDPA_PID>#<candidate>", as the key of script 13)
+         data/11_validation/upload/displaced_polygons_{RUN_TAG}_NNN.zip  the PA polygon moved by
+             each candidate's vector (its biome, script 12, as script 01 for the PA)
+             (both: field WDPA_PID = "<WDPA_PID>#<candidate>", as the key of script 13)
 
 Usage:
     python scripts/11_validation_displace_transects.py [--n-per-biome N] [--reserve R] [--out DIR]
@@ -42,7 +47,7 @@ import shapely
 from modules import config
 from modules.preprocessing import write_upload_zip
 from modules.validation import (sample_pas, candidate_displacements, aeqd_transformers, footprint_m,
-                                CANDIDATE_SEP)
+                                displacement_centre, displace_polygon, write_polygon_zip, CANDIDATE_SEP)
 
 
 def arg(name, default, cast):
@@ -54,6 +59,7 @@ RESERVE = arg('--reserve', config.VALIDATION_RESERVE, int)
 OUT_DIR = arg('--out', config.VALIDATION_DIR, Path)
 UPLOAD_DIR = OUT_DIR / 'upload'
 POINTS_PER_ZIP = 1_000_000
+POLY_VERTICES_PER_ZIP = 2_500_000
 
 print("=" * 80)
 print("SCRIPT 11: Validation - displaced transects (local checks)")
@@ -87,29 +93,44 @@ def boundaries_near(lon_min, lat_min, lon_max, lat_max):
     return shapely.STRtree(np.concatenate(geoms) if geoms else np.array([], dtype=object))
 
 
+# PA polygons (script 02, the outlines the transects were built on), moved with each candidate
+polys = pyogrio.read_dataframe(config.PAS_SELECTED, columns=['WDPA_PID'])
+polys['WDPA_PID'] = polys['WDPA_PID'].astype(str)
+if polys.crs is not None and polys.crs.to_epsg() != 4326:
+    polys = polys.to_crs(4326)
+poly_of = dict(zip(polys['WDPA_PID'], polys.geometry))
+missing = sorted(set(sample['WDPA_PID']) - set(poly_of))
+if missing:
+    raise ValueError(f"{len(missing)} sampled PAs have no polygon in pas_selected, e.g. {missing[:3]}")
+
 # 3. Candidate displacements, PA by PA in sample order (one random stream)
 rng = np.random.default_rng(config.VALIDATION_SEED + 1)
-d_min, d_span = 1000 * config.VALIDATION_MIN_DIST_KM, 1000 * config.VALIDATION_DIST_SPAN_KM
-rows, cand_rows, cand_points = [], [], []
+d_min, mult = 1000 * config.VALIDATION_MIN_DIST_KM, config.VALIDATION_DIST_MULT
+rows, cand_rows, cand_points, cand_polys = [], [], [], []
 for i, s in enumerate(sample.itertuples(index=False), start=1):
     p = by_pa[s.WDPA_PID]
     # search box: the PA's points plus the largest possible shift
     fwd, _ = aeqd_transformers(p['lon'].mean(), p['lat'].mean())
-    reach = max(d_min, footprint_m(*fwd.transform(p['lon'].to_numpy(), p['lat'].to_numpy()))) + d_span
+    reach = mult * max(d_min, footprint_m(*fwd.transform(p['lon'].to_numpy(), p['lat'].to_numpy())))
     dlat = reach / 111_000 + 0.1
     dlon = min(180.0, reach / (111_000 * max(np.cos(np.deg2rad(p['lat'].abs().max() + dlat)), 0.05)) + 0.1)
     tree = boundaries_near(p['lon'].min() - dlon, max(-90, p['lat'].min() - dlat),
                            p['lon'].max() + dlon, min(90, p['lat'].max() + dlat))
     cands, attempts, d_used = candidate_displacements(p, tree, rng, config.VALIDATION_N_CANDIDATES,
-                                                      config.VALIDATION_MAX_ATTEMPTS, d_min, d_span)
+                                                      config.VALIDATION_MAX_ATTEMPTS, d_min, mult,
+                                                      config.VALIDATION_MAX_BOUNDARY_SHARE)
     rows.append({'WDPA_PID': s.WDPA_PID, 'BIOME_NAME': s.BIOME_NAME, 'draw': s.draw,
                  'reserve': s.draw > N_PER_BIOME, 'n_transects': p['transectID'].nunique(),
                  'attempts': attempts, 'n_candidates': len(cands), 'min_dist_km': d_used / 1000})
     for c in cands:
         cand_rows.append({'WDPA_PID': s.WDPA_PID, **{k: c[k] for k in ('candidate', 'attempt', 'bearing')},
-                          'dist_km': c['dist_m'] / 1000, 'dx_m': c['dx'], 'dy_m': c['dy']})
+                          'dist_km': c['dist_m'] / 1000, 'dx_m': c['dx'], 'dy_m': c['dy'],
+                          'boundary_share': c['boundary_share']})
         cp = c['points'].assign(WDPA_PID=s.WDPA_PID, candidate=c['candidate'])
         cand_points.append(cp[['WDPA_PID', 'candidate', 'transectID', 'pointID', 'lon', 'lat']])
+        lon0, lat0 = displacement_centre(p)
+        cand_polys.append((s.WDPA_PID, c['candidate'],
+                           displace_polygon(poly_of[s.WDPA_PID], lon0, lat0, c['dx'], c['dy'])))
     if i % 50 == 0 or i == len(sample):
         print(f"  {i:,} of {len(sample):,} PAs")
 
@@ -134,6 +155,24 @@ for z in range(n_zip):
     write_upload_zip(upload[points['WDPA_PID'].isin(pids)],
                      UPLOAD_DIR / f'{config.VALIDATION_UPLOAD_PREFIX}{z:03d}.zip')
 
+# Displaced PA polygons (script 12 takes each one's biome as script 01 did for the PA), in zips of
+# whole PAs; invalid outlines after the move are repaired
+pg = pd.DataFrame(cand_polys, columns=['WDPA_PID', 'candidate', 'geometry'])
+geoms = pg['geometry'].to_numpy()
+bad = ~shapely.is_valid(geoms)
+if bad.any():
+    geoms[bad] = shapely.make_valid(geoms[bad])
+pg['geometry'] = geoms
+for old in UPLOAD_DIR.glob(f'{config.VALIDATION_POLY_UPLOAD_PREFIX}*.zip'):
+    old.unlink()
+nv = pd.Series(shapely.get_num_coordinates(geoms), index=pg.index).groupby(pg['WDPA_PID'], sort=False).sum()
+poly_zip_of = (nv.cumsum() - 1) // POLY_VERTICES_PER_ZIP
+n_poly_zip = int(poly_zip_of.max()) + 1 if len(poly_zip_of) else 0
+for z in range(n_poly_zip):
+    sel = pg[pg['WDPA_PID'].isin(set(poly_zip_of.index[poly_zip_of.to_numpy() == z]))]
+    write_polygon_zip(sel['WDPA_PID'] + CANDIDATE_SEP + sel['candidate'].astype(str), sel['geometry'],
+                      UPLOAD_DIR / f'{config.VALIDATION_POLY_UPLOAD_PREFIX}{z:03d}.zip')
+
 # 5. Summary
 summ = sample_out.groupby('BIOME_NAME').agg(drawn=('WDPA_PID', 'size'),
                                             with_candidate=('n_candidates', lambda x: int((x > 0).sum())),
@@ -142,6 +181,8 @@ summ = sample_out.groupby('BIOME_NAME').agg(drawn=('WDPA_PID', 'size'),
 print("\nBy biome:")
 print(summ.to_string())
 print(f"\nCandidate points: {len(points):,} in {n_zip} upload file(s) in {UPLOAD_DIR}")
+print(f"Displaced PA polygons: {len(pg):,} ({int(nv.sum()):,} vertices; {int(bad.sum())} repaired) "
+      f"in {n_poly_zip} upload file(s)")
 print(f"Wrote {OUT_DIR / 'sample.csv'}, candidates.csv, candidate_points.parquet")
-print("\nNEXT (manual): upload each zip as an Earth Engine table asset named "
-      f"{config.VALIDATION_ASSET_PREFIX}NNN, then run script 12.")
+print("\nNEXT (manual): upload each zip as an Earth Engine table asset of the same name "
+      f"({config.VALIDATION_ASSET_PREFIX}NNN and {config.VALIDATION_POLY_ASSET_PREFIX}NNN), then run script 12.")
