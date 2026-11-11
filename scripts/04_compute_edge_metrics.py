@@ -22,6 +22,8 @@ Download all CSVs from the Google Drive folder (see script 03 output) into data/
 
 OUTPUT:
 - data/04_transect_years/ndvi_NNN.parquet  (one per asset)
+- data/04_transect_years/missing_transects.csv  (transects with a missing value in any year;
+  R script 05 counts them for the analysis set)
 - results/pa_edge_metrics_ndvi.csv           (FINAL: one row per PA-year)
 - results/pipeline_counts.json               (section '04_ndvi')
 """
@@ -41,7 +43,7 @@ from modules import config
 from modules.counts import update_counts
 from modules.analysis import (
     find_asset_csvs, read_asset_csvs, build_transect_years, pa_year_metrics,
-    recategorize_biome, add_trends,
+    recategorize_biome, add_trends, missing_transects,
 )
 
 t_start = time.time()
@@ -84,7 +86,7 @@ config.TRANSECT_YEARS_DIR.mkdir(parents=True, exist_ok=True)
 for old in config.TRANSECT_YEARS_DIR.glob(f'{config.INDEX_NAME}_*.parquet'):
     old.unlink()
 
-metrics = []
+metrics, missing = [], []
 completeness = {'points_expected': len(points), 'points_received': 0, 'points_missing': 0,
                 'points_unexpected': 0}
 per_year = {y: 0 for y in years}
@@ -109,6 +111,7 @@ for asset, files in asset_csvs.items():
 
     ty.to_parquet(config.TRANSECT_YEARS_DIR / f'{config.INDEX_NAME}_{asset}.parquet', index=False)
     metrics.append(pa_year_metrics(ty))
+    missing.append(missing_transects(df, years))
     print(f"  asset {asset}: {len(files)} CSVs, {len(df):,} points, "
           f"{int(check.get('left_only', 0)):,} missing, {len(ty):,} transect-years")
     del df, ty, expected, check, flags
@@ -132,6 +135,7 @@ pa = add_trends(pa.sort_values(['WDPA_PID', 'year']).reset_index(drop=True))
 
 config.RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 pa.to_csv(config.PA_METRICS, index=False)
+pd.concat(missing, ignore_index=True).to_csv(config.MISSING_TRANSECTS, index=False)
 
 flag_counts = points.loc[points['pointID'] == 0, 'in_other_pa'].value_counts().to_dict()
 update_counts(config.PIPELINE_COUNTS, '04_ndvi', {

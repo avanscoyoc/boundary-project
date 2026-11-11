@@ -193,6 +193,49 @@ def build_transect_years(df, years, flags=None):
     return ty, counts
 
 
+def missing_transects(df, years):
+    """
+    Transects with no value at one or more of their 5 points in at least one year: the
+    transect-years that build_transect_years drops. Written by script 04 for the missing-data
+    counts of R script 05 (which keeps the PAs of the analysis set).
+
+    Parameters
+    ----------
+    df : DataFrame
+        Output of read_asset_csvs. Transects without all 5 points in the export are skipped
+        (build_transect_years counts them).
+    years : sequence of int
+        Years in the order of the CSV columns.
+
+    Returns
+    -------
+    DataFrame
+        One row per such transect: WDPA_PID, transectID, n_missing_years (years with a missing
+        value), water_any (1 if any point lies within the JRC maximum water extent),
+        n_missing_point_years, n_missing_point_years_water (at a point with water), and the
+        missing point-years per position: miss_pt_m2, miss_pt_m1, miss_pt_0, miss_pt_1, miss_pt_2.
+    """
+    key = ['WDPA_PID', 'transectID', 'pointID']
+    df = df.sort_values(key, kind='stable')
+    n_points = df.groupby(['WDPA_PID', 'transectID'], sort=False)['pointID'].transform('size')
+    df = df[n_points.to_numpy() == len(POINT_IDS)]
+    n_tr = len(df) // len(POINT_IDS)
+    year_cols = [str(y) for y in years]
+    miss = np.isnan(df[year_cols].to_numpy(dtype='float32')).reshape(n_tr, len(POINT_IDS), len(years))
+    water = (df['max_extent'].to_numpy() == 1).reshape(n_tr, len(POINT_IDS))
+    n_years = miss.any(axis=1).sum(axis=1)
+    sel = n_years > 0
+    out = df.iloc[::len(POINT_IDS)][['WDPA_PID', 'transectID']].reset_index(drop=True)[sel].reset_index(drop=True)
+    out['n_missing_years'] = n_years[sel].astype('int16')
+    out['water_any'] = water.any(axis=1)[sel].astype('int8')
+    out['n_missing_point_years'] = miss.sum(axis=(1, 2))[sel].astype('int32')
+    out['n_missing_point_years_water'] = (miss & water[:, :, None]).sum(axis=(1, 2))[sel].astype('int32')
+    by_pos = miss.sum(axis=2)[sel]
+    for j, col in enumerate(PT_COLS):
+        out[f'miss_{col}'] = by_pos[:, j].astype('int16')
+    return out
+
+
 def _grouped_cohens_d(edge_rows, keys):
     """Cohen's d (pt_0 vs each position) per group, same formula as cohens_d()."""
     g = edge_rows.groupby(keys, sort=False)
