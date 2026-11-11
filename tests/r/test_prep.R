@@ -252,3 +252,24 @@ test_that("config covariates match the model formula; exclusion settings are set
   expect_true(all(CFG$log_covariates %in% names(CFG$covariates)))
   expect_equal(c(CFG$min_complete_pct, CFG$max_water_pct, CFG$sensitivity$min_transects), c(75, 75, 60))
 })
+
+test_that("apply_inspection: removes 'exclude' as the last step; stops on 'check', typos, a stale list", {
+  aset <- list(set = data.frame(WDPA_PID = c("1", "2", "3", "4"), x = 1:4, stringsAsFactors = FALSE),
+               steps = data.frame(step = c("start", "rule"), n_removed = c(NA, 1L), n_left = c(5L, 4L)),
+               removed = data.frame(WDPA_PID = "9", step = "rule", stringsAsFactors = FALSE))
+  cl <- data.frame(order = 1:4, WDPA_PID = c("3", "1", "4", "2"), decision = c("", " Exclude", "keep", NA),
+                   note = "", stringsAsFactors = FALSE)
+  r <- apply_inspection(aset, cl)
+  expect_identical(r$set$WDPA_PID, c("2", "3", "4"))
+  expect_equal(r$set$x, 2:4)
+  expect_identical(utils::tail(r$steps$step, 1), "removed after visual inspection")
+  expect_equal(utils::tail(r$steps$n_removed, 1), 1L); expect_equal(utils::tail(r$steps$n_left, 1), 3L)
+  expect_identical(r$removed$WDPA_PID, c("9", "1"))
+  none <- apply_inspection(aset, transform(cl, decision = ""))
+  expect_identical(none$set, aset$set)
+  expect_equal(utils::tail(none$steps$n_removed, 1), 0L)
+  expect_error(apply_inspection(aset, transform(cl, decision = c("", "check", "", ""))), "still marked 'check'.*#2 1")
+  expect_error(apply_inspection(aset, transform(cl, decision = c("", "exlude", "", ""))), "other than blank")
+  expect_error(apply_inspection(aset, cl[-1, ]), "does not list the analysis set")
+  expect_error(apply_inspection(aset, rbind(cl, cl[1, ])), "twice")
+})

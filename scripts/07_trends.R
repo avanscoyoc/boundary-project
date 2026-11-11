@@ -12,7 +12,8 @@
 #   GLS of change on biome with biome-specific variances, Holm-adjusted pairwise contrasts and
 #   letters (Table SW); % change over the record (diagnostic);
 #   the Fig. 4B case-study PAs (config case_studies): their annual series, trends and % change
-#   of their own mean (old 07:207-235 and 11:58-81).
+#   of their own mean (old 07:207-235 and 11:58-81);
+#   lag-1 autocorrelation of each PA's OLS trend residuals (diagnostic; Finish plan Step 5).
 # Main analysis only: transect version "all", the analysis set of 05. The other versions and
 # PA subsets are 09's.
 #
@@ -32,7 +33,9 @@
 #          <tables>/fig4b_case_series.csv (one row per case PA × year), fig4b_case_pas.csv (one
 #                         row per case PA: trends, change over the record, % of its own mean)
 #          <diagnostics>/trend_{class_counts,yuepilon_agreement,yuepilon_crosstab,
-#                         percent_change_biome}.csv, biome_change_gls_{means,sigma}.csv
+#                         percent_change_biome}.csv, biome_change_gls_{means,sigma}.csv,
+#                         trend_residual_autocorrelation{,_summary}.csv (per PA; per biome and
+#                         all PAs)
 
 source(file.path("modules", "r", "config.R"))
 for (f in setdiff(list.files(file.path("modules", "r"), "\\.R$", full.names = TRUE),
@@ -96,6 +99,20 @@ for (i in seq_len(nrow(cases))) say("Fig. 4B panel %d: %s (%s): %s%s", i, cases$
                                     if (got[i] == cases$expect[i]) "" else paste0("  ← expected ", cases$expect[i]))
 if (any(got != cases$expect))
   warning("Fig. 4B: case-study trend classes differ from config case_studies$expect (see above)", call. = FALSE)
+
+# Lag-1 autocorrelation of the trend residuals (diagnostic)
+ac <- do.call(rbind, lapply(metrics, function(m) {
+  a <- residual_autocorrelation(py, CFG$responses[[m]], CFG$min_years)
+  stopifnot(setequal(a$WDPA_PID, d$WDPA_PID))
+  data.frame(metric = labels[[m]], BIOME_NAME = d$BIOME_NAME[match(a$WDPA_PID, d$WDPA_PID)], a,
+             stringsAsFactors = FALSE)
+}))
+ac <- ac[order(ac$metric, ac$WDPA_PID), ]
+rownames(ac) <- NULL
+ac_sum <- autocorrelation_summary(ac, "BIOME_NAME", CFG$biome_order, CFG$pooled_label)
+for (i in which(ac_sum$BIOME_NAME == CFG$pooled_label))
+  say("%s residual lag-1 autocorrelation: median %.2f (IQR %.2f to %.2f); %.1f%% of PAs above +1.96/sqrt(n)",
+      ac_sum$metric[i], ac_sum$median_r1[i], ac_sum$q25_r1[i], ac_sum$q75_r1[i], ac_sum$pct_positive_above_bound[i])
 
 # ── 3. Bootstraps (old seeds and run order; slopes, reported in change units) ─
 run <- function(cl, seed, ...) boot_means(d, cl, "BIOME_NAME", CFG$biome_order, CFG$boot$R, seed,
@@ -175,6 +192,8 @@ w_csv(ag$crosstab, out$diagnostics, "trend_yuepilon_crosstab.csv")
 w_csv(pct, out$diagnostics, "trend_percent_change_biome.csv")
 w_csv(gstack("means"), out$diagnostics, "biome_change_gls_means.csv")
 w_csv(gstack("sigma"), out$diagnostics, "biome_change_gls_sigma.csv")
+w_csv(ac, out$diagnostics, "trend_residual_autocorrelation.csv")
+w_csv(ac_sum, out$diagnostics, "trend_residual_autocorrelation_summary.csv")
 
 om <- gstack("omnibus")
 for (i in seq_len(nrow(om))) say("%s biome GLS: F(%d, %d) = %.2f, p = %.3g", om$metric[i], om$numDF[i],

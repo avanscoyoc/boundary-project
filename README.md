@@ -12,11 +12,12 @@ This project analyzes change in vegetation contrast at protected area (PA) bound
 03_sample_satellite_imagery.py  → sample NDVI gradients in Earth Engine → download CSVs from Drive
 04_compute_edge_metrics.py      → transect-years, PA-year metrics, trends → final CSV
 05_prepare_analysis_data.R      → analysis set, imputed establishment years, z-scores (R)
+05b_inspection_export.py + .js  → visual inspection of the analysis set in an Earth Engine app (optional)
 06_models_mean.R                → spatial GLS of mean edge extent and intensity → Tables SX, SY
-07_trends.R                     → per-PA trends, standardised change, biome comparison → Tables SV, SW
+07_trends.R                     → per-PA trends, standardised change, biome comparison, case studies → Tables SV, SW
 08_models_change.R              → spatial GLS of change → Table SZ
 09_sensitivity.R                → transect subsets and PA subsets → sensitivity tables
-10_figures.R                    → Fig. 3, Fig. 4A, supplementary and diagnostic figures
+10_figures.R                    → Fig. 3, Fig. 4, supplementary and diagnostic figures, Fig. 2 map layers
 11–14 (validation, in development) → displaced-transect null model
 ```
 
@@ -46,7 +47,8 @@ Rscript scripts/07_trends.R
 Rscript scripts/08_models_change.R
 Rscript scripts/09_sensitivity.R
 Rscript scripts/10_figures.R
-# → results/tables/, results/figures/, results/diagnostics/, results/analysis_counts.json
+# → results/tables/, results/figures/, results/diagnostics/, results/analysis_counts.json,
+#   data/10_map_layers/ (Fig. 2 layers; WDPA polygons, so kept out of results/)
 ```
 
 > **Reproducing the exact published analysis:** Script 01 reads a date-stamped WDPA release
@@ -63,6 +65,8 @@ boundary-project/
 │   ├── 03_sample_satellite_imagery.py
 │   ├── 04_compute_edge_metrics.py
 │   ├── 05_prepare_analysis_data.R      # R: statistical analysis
+│   ├── 05b_inspection_export.py        # visual inspection: upload file + checklist
+│   ├── 05b_inspection_app.js           #   Earth Engine app (paste into the Code Editor)
 │   ├── 06_models_mean.R
 │   ├── 07_trends.R
 │   ├── 08_models_change.R
@@ -89,6 +93,8 @@ boundary-project/
 │   ├── 04_transect_years/       # ndvi_NNN.parquet, one row per transect-year
 │   ├── 05_analysis/             # pa_level.csv, pa_year.csv, pa_trends.csv, scaling.csv,
 │   │                            #   excluded_pas.csv, cache/ (fitted models; coordinates stay here)
+│   ├── inspection/              # pas_final_v2.zip (upload to Earth Engine), checklist.csv (05b)
+│   ├── 10_map_layers/           # pa_map_layers.gpkg, case_study_pas.kml (Fig. 2; script 10)
 │   ├── 11_validation/           # displaced-transect sample and candidates; upload/ for Earth Engine
 │   └── 12_gee_validation/       # displaced-point CSVs                (download after script 12)
 └── results/
@@ -96,7 +102,7 @@ boundary-project/
     ├── pipeline_counts.json     # PA and transect counts at every step (for the methods)
     ├── analysis_counts.json     # analysis-set counts, imputation, PA sets (script 05)
     ├── tables/                  # supplementary tables and figure source tables (scripts 06–09)
-    ├── figures/                 # Fig. 3, Fig. 4A and supplementary figures (script 10)
+    ├── figures/                 # Fig. 3, Fig. 4 (and 4A, 4B case panels), supplementary figures (script 10)
     ├── diagnostics/             # unreported checks: spatial ranges, Moran's I, residuals, …
     └── R_sessionInfo.txt        # R and package versions of the last figure run
 ```
@@ -201,16 +207,24 @@ Processes one asset at a time: checks that every exported point arrived exactly 
 
 Scripts 05–10 implement the Statistical Analyses of the methods in R (4.5.3, installed in the container with pixi; packages pinned in `.devcontainer/pixi.lock`). Settings are in [modules/r/config.R](modules/r/config.R); the functions are in `modules/r/`, and each script writes its own tables, which the figure script reads.
 
-- **05** builds the analysis set from `results/pa_edge_metrics_ndvi.csv`: drops the Mangrove and Rock & Ice biomes, PAs whose boundary is dominated by sea (fewer than 75% of transects complete in a typical year) or by open water (more than 75% of transects with surface water), and PAs missing a covariate or with fewer than 5 years of either metric (4,396 PAs; `excluded_pas.csv` lists the rest with the reason). It imputes missing establishment years (median of 1,000 draws from the country's known years), z-scores the covariates, and computes point-on-surface coordinates.
+- **05** builds the analysis set from `results/pa_edge_metrics_ndvi.csv`: drops the Mangrove and Rock & Ice biomes, PAs whose boundary is dominated by sea (fewer than 75% of transects complete in a typical year) or by open water (more than 75% of transects with surface water), and PAs missing a covariate or with fewer than 5 years of either metric (4,396 PAs; `excluded_pas.csv` lists the rest with the reason), and, once the visual inspection is finished (`inspection$apply = TRUE`), the PAs marked `exclude` in the checklist. It imputes missing establishment years (median of 1,000 draws from the country's known years), z-scores the covariates, and computes point-on-surface coordinates.
 - **06** fits spatial GLS (exponential correlation in great-circle distance, REML) of mean edge extent and intensity: main-effects and HMI-interaction models (reference levels non-strict / Boreal Forest, as for every model).
-- **07** computes per-PA OLS trends with Benjamini–Hochberg classes (Yue–Pilon as a check), standardised change, bootstrap biome means and the biome GLS comparison.
+- **07** computes per-PA OLS trends with Benjamini–Hochberg classes (Yue–Pilon as a check), standardised change, bootstrap biome means and the biome GLS comparison; the lag-1 autocorrelation of each PA's trend residuals (a diagnostic); and the series and % change of the Fig. 4B case-study PAs (`case_studies` in the config).
 - **08** fits spatial GLS of standardised change (reference non-strict / Boreal Forest), unweighted and precision-weighted.
 - **09** repeats the headline results on the transect subsets (PA-years with at least 60 complete transects, same PAs as all transects) and on PAs established by 2003 and PAs with a reported year, with the spatial range fixed at the main estimates.
-- **10** draws the figures; Fig. 3 shows an interaction panel only where its Wald test is significant.
+- **10** draws the figures; Fig. 3 shows an interaction panel only where its Wald test is significant. Fig. 4 is panel A (change by biome) over panel B (the case-study series beside grey placeholders for the 2003 and 2025 satellite images, added in the layout). It also writes the Fig. 2 map layers (a GeoPackage of the analysed PAs with their means, trends and change, and a KML of the case studies), which are styled outside the repository.
 
 Scripts 06, 08 and 09 take `--pilot N` (a random subset of PAs, for a quick check) and `--cores K`. At full size each spatial fit takes about an hour and about 1.5 GB of memory, so run 06, 08 and 09 in the background and one at a time on a machine with 8 GB. Fits are cached in `data/05_analysis/cache/` by content, so a rerun only refits what changed.
 
 **Tests.** `Rscript -e 'testthat::test_dir("tests/r")'` runs the unit tests and, when the collaborator's original project is present in `PA_New_Analysis/`, the parity tests that check the R functions reproduce the original analysis on its data (`data/parity/parity_report.csv`).
+
+## Visual inspection (script 05b)
+
+Every analysed PA can be checked on satellite imagery before the final runs:
+1. `python scripts/05b_inspection_export.py` writes `data/inspection/pas_final_v2.zip` (the analysed PAs in review order: biome, country, name) and `data/inspection/checklist.csv` (one row per PA; it never overwrites a checklist that has entries).
+2. Upload the zip as the Earth Engine table asset `pas_final_v2`, then paste `scripts/05b_inspection_app.js` into the Code Editor and run it (or publish it as an app). It shows one PA at a time with its outline, its transect points (interior, boundary, exterior) and an info panel; the page address keeps your place.
+3. Record decisions in the checklist (`decision`: blank = keep, `exclude`, or `check` while undecided; `note`). The app number is the checklist's `order`.
+4. When done, set `inspection$apply = TRUE` in `modules/r/config.R` and rerun 05 → 07 → 06 → 08 → 09 → 10 (and script 11 for the validation sample). Script 05 removes the excluded PAs as its last counted step and stops if any PA is still marked `check`.
 
 ## Validation (displaced transects; in development)
 

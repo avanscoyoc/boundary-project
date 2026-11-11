@@ -75,6 +75,55 @@ bh_classes <- function(estimate, p, fdr, levels) {
   list(p_fdr = p_fdr, class = cls)
 }
 
+#' Lag-1 autocorrelation of each PA's OLS trend residuals (Finish plan Step 5: a check of the
+#' independence behind the per-PA OLS p-values; Yue–Pilon is the robustness check).
+#'
+#' r1 = Σ e_t e_{t−1} / Σ e_t², the usual ACF estimator, with the sum over pairs of consecutive
+#' years only (a missing year breaks a pair). `bound` = 1.96 / √n_years, the approximate 95%
+#' limit for white noise. Same PAs as ols_trends() (≥ min_years); first-appearance order.
+#' Returns WDPA_PID, n_years, n_pairs, r1, bound.
+residual_autocorrelation <- function(d, response, min_years) {
+  stopifnot(all(c("WDPA_PID", "year", response) %in% names(d)))
+  ok <- !is.na(d[[response]])
+  y <- d[[response]][ok]; x <- as.numeric(d$year[ok])
+  g <- .group_index(d$WDPA_PID[ok])
+  rows <- split(seq_along(y), factor(g$index, levels = seq_along(g$levels)))
+  res <- vapply(rows, function(i) {
+    n <- length(i)
+    if (n < min_years) return(c(n, NA_real_, NA_real_))
+    o <- i[order(x[i])]
+    e <- stats::lm.fit(cbind(1, x[o]), y[o])$residuals
+    pair <- diff(x[o]) == 1
+    ss <- sum(e^2)
+    c(n, sum(pair), if (ss > 0) sum(e[-1][pair] * e[-n][pair]) / ss else NA_real_)
+  }, numeric(3))
+  keep <- res[1, ] >= min_years
+  data.frame(WDPA_PID = g$levels[keep], n_years = as.integer(res[1, keep]), n_pairs = as.integer(res[2, keep]),
+             r1 = res[3, keep], bound = 1.96 / sqrt(res[1, keep]), stringsAsFactors = FALSE)
+}
+
+#' Summary of residual_autocorrelation() per metric, for all PAs and per group: n, median and
+#' quartiles of r1, % of PAs with r1 > bound (positive autocorrelation) and with |r1| > bound.
+#' `ac`: metric, <group>, r1, bound.
+autocorrelation_summary <- function(ac, group, group_order, pooled_label = "All PAs") {
+  one <- function(x, m, gname) {
+    r <- x$r1; ok <- !is.na(r); b <- x$bound[ok]; r <- r[ok]
+    q <- stats::quantile(r, c(0.25, 0.5, 0.75), names = FALSE)
+    out <- data.frame(metric = m, g = gname, n = length(r), median_r1 = q[2], q25_r1 = q[1], q75_r1 = q[3],
+                      pct_positive_above_bound = 100 * mean(r > b), pct_abs_above_bound = 100 * mean(abs(r) > b),
+                      stringsAsFactors = FALSE)
+    names(out)[2] <- group
+    out
+  }
+  out <- do.call(rbind, lapply(unique(ac$metric), function(m) {
+    x <- ac[ac$metric == m, ]
+    gs <- group_order[group_order %in% x[[group]]]
+    do.call(rbind, c(list(one(x, m, pooled_label)), lapply(gs, function(s) one(x[x[[group]] == s, ], m, s))))
+  }))
+  rownames(out) <- NULL
+  out
+}
+
 #' Yue–Pilon trend per PA: Sen slope and the Mann–Kendall p-value after pre-whitening
 #' (zyp::zyp.trend.vector, method "yuepilon"), as 02:442-450.
 #'

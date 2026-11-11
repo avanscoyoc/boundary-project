@@ -220,3 +220,34 @@ test_that("case_series and case_summary: panel order, % of the PA's own mean", {
   expect_identical(cs$trend_extent, c("decrease", "increase"))
   expect_error(case_summary(d[-1, ], cases, c(extent = "edge_extent"), 22))
 })
+
+test_that("residual_autocorrelation: OLS residuals, consecutive-year pairs, min_years; summary", {
+  set.seed(5)
+  yrs <- 2003:2025
+  e_ar <- as.numeric(stats::arima.sim(list(ar = 0.8), length(yrs)))
+  d <- rbind(data.frame(WDPA_PID = "ar", year = yrs, y = 0.5 + 0.01 * (yrs - 2003) + 0.05 * e_ar),
+             data.frame(WDPA_PID = "alt", year = yrs, y = 0.3 + 0.02 * rep(c(1, -1), length.out = length(yrs))),
+             data.frame(WDPA_PID = "gap", year = c(2003:2010, 2012:2020), y = rnorm(17)),
+             data.frame(WDPA_PID = "short", year = 2003:2006, y = rnorm(4)))
+  d <- d[sample(nrow(d)), ]                                  # order must not matter
+  a <- residual_autocorrelation(d, "y", min_years = 5)
+  expect_setequal(a$WDPA_PID, c("ar", "alt", "gap"))         # "short" has < 5 years
+  ref <- function(pid) {                                     # by hand, from lm
+    x <- d[d$WDPA_PID == pid, ]; x <- x[order(x$year), ]
+    e <- stats::residuals(stats::lm(y ~ year, x)); k <- which(diff(x$year) == 1)
+    sum(e[k + 1] * e[k]) / sum(e^2)
+  }
+  for (p in a$WDPA_PID) expect_equal(a$r1[a$WDPA_PID == p], ref(p), info = p)
+  expect_equal(a$n_pairs[a$WDPA_PID == "gap"], 15L)          # 16 differences, one gap
+  expect_true(a$r1[a$WDPA_PID == "ar"] > 0.3)
+  expect_true(a$r1[a$WDPA_PID == "alt"] < -0.8)
+  expect_equal(a$bound[a$WDPA_PID == "ar"], 1.96 / sqrt(23))
+
+  ac <- data.frame(metric = "m", BIOME_NAME = c("A", "A", "B", "B"), r1 = c(0.5, 0.1, -0.6, NA), bound = 0.4)
+  s <- autocorrelation_summary(ac, "BIOME_NAME", c("B", "A"), "All")
+  expect_identical(s$BIOME_NAME, c("All", "B", "A"))
+  expect_equal(s$n, c(3, 1, 2))
+  expect_equal(s$pct_positive_above_bound, c(100 / 3, 0, 50))
+  expect_equal(s$pct_abs_above_bound, c(200 / 3, 100, 50))
+  expect_equal(s$median_r1[1], 0.1)
+})

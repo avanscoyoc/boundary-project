@@ -96,6 +96,41 @@ analysis_set <- function(pa, exclude_biomes, covariates, year_cols, min_years,
   list(set = pa, steps = steps, removed = removed)
 }
 
+#' The visual-inspection step (Finish plan Step 3): removes the PAs marked "exclude" in the
+#' reviewer's checklist (written by script 05b from this analysis set) from an analysis_set()
+#' result, as its last counted step.
+#'
+#' `checklist`: data frame with WDPA_PID and decision (and optionally order, used in messages).
+#' Decisions are compared trimmed and in lower case; blank and "keep" keep the PA. Stops if a
+#' PA is still marked "check", if any other value appears, or if the checklist does not list
+#' exactly the PAs of the set (e.g. a checklist written from an older set).
+apply_inspection <- function(aset, checklist, label = "removed after visual inspection") {
+  stopifnot(all(c("WDPA_PID", "decision") %in% names(checklist)))
+  pid <- as.character(checklist$WDPA_PID)
+  dec <- tolower(trimws(ifelse(is.na(checklist$decision), "", as.character(checklist$decision))))
+  where <- function(i) {
+    o <- if ("order" %in% names(checklist)) paste0("#", checklist$order[i], " ") else ""
+    paste0(o, pid[i], collapse = ", ")
+  }
+  if (anyDuplicated(pid)) stop("checklist lists a PA twice: ", paste(unique(pid[duplicated(pid)]), collapse = ", "))
+  if (any(dec == "check")) stop(sum(dec == "check"), " PAs are still marked 'check' in the checklist: ",
+                                where(which(dec == "check")))
+  bad <- !dec %in% c("", "keep", "exclude")
+  if (any(bad)) stop("checklist decisions other than blank / keep / exclude (",
+                     paste(unique(checklist$decision[bad]), collapse = ", "), "): ", where(which(bad)))
+  miss <- setdiff(aset$set$WDPA_PID, pid); extra <- setdiff(pid, aset$set$WDPA_PID)
+  if (length(miss) || length(extra))
+    stop("the checklist does not list the analysis set (", length(miss), " PAs missing, ", length(extra),
+         " not in the set); was it written by script 05b from this set?")
+  drop <- aset$set$WDPA_PID %in% pid[dec == "exclude"]
+  aset$steps <- rbind(aset$steps, data.frame(step = label, n_removed = sum(drop), n_left = sum(!drop)))
+  if (any(drop)) aset$removed <- rbind(aset$removed, data.frame(WDPA_PID = aset$set$WDPA_PID[drop], step = label,
+                                                                stringsAsFactors = FALSE))
+  aset$set <- aset$set[!drop, , drop = FALSE]
+  rownames(aset$set) <- NULL
+  aset
+}
+
 #' PAs for the transect-subset sensitivity runs (A3; user, 2026-11-08).
 #'
 #' In each transect version a PA-year counts only if it has ≥ `min_transects` complete

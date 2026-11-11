@@ -57,6 +57,11 @@ CFG <- local({
     # mean over years).
     min_complete_pct = 75,
     max_water_pct    = 75,
+    # Visual inspection (Finish plan Step 3; checklist written by script 05b). Set apply = TRUE
+    # when the review is finished: 05 then removes the PAs marked "exclude" as its last counted
+    # step ("removed after visual inspection") and stops on any PA still marked "check".
+    # FALSE: the checklist is not read and the set is unchanged.
+    inspection = list(checklist = p("data", "inspection", "checklist.csv"), apply = FALSE),
 
     # Biome order for tables and figures only. Reference levels are set separately (B2).
     biome_order = c("Grassland & Shrubland", "Tropical Forest", "Temperate Forest",
