@@ -20,7 +20,7 @@
  */
 
 // --- Settings ---------------------------------------------------------------
-var ASSET_ROOT = 'projects/dse-staff/assets/';
+var ASSET_ROOT = 'projects/YOUR-PROJECT-ID/assets/';   // your Earth Engine project's assets
 var PAS_ASSET = ASSET_ROOT + 'pas_final';                    // script 05b
 var POINTS_PREFIX = ASSET_ROOT + 'transect_points_';         // script 02 (+ NNN)
 var SEA_CUTOFF = 75;    // script 05: removed if median % complete transects < 75
