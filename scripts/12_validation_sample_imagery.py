@@ -1,5 +1,5 @@
 """
-Script 12: Validation, part 2 - sample the displaced transects (draft for review)
+Script 12: Validation, part 2 - sample the displaced transects
 
 Samples exactly what script 03 samples (NDVI gradient magnitude 2003-2025 on the native
 MODIS grid, JRC max_extent, gHM, elevation, terrain slope), plus the RESOLVE Ecoregions 2017

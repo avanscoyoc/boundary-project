@@ -1,12 +1,12 @@
-# Per-PA trends (Stats ¶4–5): OLS slope on year, Benjamini–Hochberg classes, and the
-# Yue–Pilon (pre-whitened Sen / Mann–Kendall) robustness check.
+# Per-PA trends: OLS slope on year, Benjamini–Hochberg classes, and the Yue–Pilon
+# (pre-whitened Sen / Mann–Kendall) robustness check.
 #
 # Input is long PA-year data: one row per PA and year, with `WDPA_PID`, `year` and the
 # response column. One call handles one series (one metric, one transect version), so the
-# sensitivity runs are a loop over the same functions (A1, A2).
+# sensitivity runs are a loop over the same functions.
 #
-# Ported from PA_New_Analysis/scripts/02_trend_analysis.R (63-128, 437-470). The OLS is computed
-# from per-PA sums instead of one lm() per PA (A6); slope, SE, t and p are the same as lm().
+# Follows the earlier R implementation of this analysis (not in this repository). The OLS is
+# computed from per-PA sums instead of one lm() per PA; slope, SE, t and p are the same as lm().
 
 # Group index in first-appearance order. rowsum() sorts character groups by the locale, which
 # would make the row order depend on the environment.
@@ -18,7 +18,7 @@
 #' Per-PA OLS of `response` on year.
 #'
 #' Rows with a missing response are dropped. PAs with fewer than `min_years` remaining years
-#' are left out (as 02:68). Returns one row per PA, in first-appearance order:
+#' are left out. Returns one row per PA, in first-appearance order:
 #' WDPA_PID, n_years, slope, se, stat (t), p_value (two-sided, df = n_years − 2).
 ols_trends <- function(d, response, min_years) {
   stopifnot(all(c("WDPA_PID", "year", response) %in% names(d)), min_years >= 3)
@@ -75,8 +75,8 @@ bh_classes <- function(estimate, p, fdr, levels) {
   list(p_fdr = p_fdr, class = cls)
 }
 
-#' Lag-1 autocorrelation of each PA's OLS trend residuals (Finish plan Step 5: a check of the
-#' independence behind the per-PA OLS p-values; Yue–Pilon is the robustness check).
+#' Lag-1 autocorrelation of each PA's OLS trend residuals: a check of the independence behind
+#' the per-PA OLS p-values (Yue–Pilon is the robustness check).
 #'
 #' r1 = Σ e_t e_{t−1} / Σ e_t², the usual ACF estimator, with the sum over pairs of consecutive
 #' years only (a missing year breaks a pair). `bound` = 1.96 / √n_years, the approximate 95%
@@ -125,7 +125,7 @@ autocorrelation_summary <- function(ac, group, group_order, pooled_label = "All 
 }
 
 #' Yue–Pilon trend per PA: Sen slope and the Mann–Kendall p-value after pre-whitening
-#' (zyp::zyp.trend.vector, method "yuepilon"), as 02:442-450.
+#' (zyp::zyp.trend.vector, method "yuepilon").
 #'
 #' Rows with a missing response are dropped; PAs with fewer than `min_years` years are left
 #' out. A series for which zyp fails gets NA. Returns WDPA_PID, sen, p (first-appearance order).
@@ -172,14 +172,12 @@ pa_trends <- function(d, response, suffix, min_years, fdr, levels) {
   out
 }
 
-# ── Step 3: standardised change, bootstraps, biome GLS, correlation, % change ──
-# Ported from PA_New_Analysis/scripts/02_trend_analysis.R (135-150, 185-435, 494-534),
-# 10_TableSV_trend_supp.R (35-79) and 11_trend_percent_change.R (31-52).
+# ── Standardised change, bootstraps, biome GLS, correlation, % change ────────
 # Input is one row per PA. `cols` arguments are named character vectors, metric label → column,
 # e.g. c("Edge extent" = "slope_extent", "Edge intensity" = "slope_intensity"); outputs carry
 # the label in a `metric` column and the group in a column named by `group`.
 
-#' Standardised change over the record (Stats ¶5): slope × n_span / sd, in response SDs per
+#' Standardised change over the record: slope × n_span / sd, in response SDs per
 #' record. The SE is rescaled the same way (used by the precision weights of the change models).
 standardised_change <- function(slope, se, n_span, sd) {
   stopifnot(length(sd) == 1, is.finite(sd), sd > 0)
@@ -187,7 +185,7 @@ standardised_change <- function(slope, se, n_span, sd) {
   list(change = slope * k, se_change = se * k, k = k)
 }
 
-#' Percentile-bootstrap means by group (Stats ¶5), with boot::boot and boot.ci(type = "perc").
+#' Percentile-bootstrap means by group, with boot::boot and boot.ci(type = "perc").
 #'
 #' PAs are resampled within each group (same n as the group), R times. With `weights` (a column
 #' name) the statistic is the weighted mean, resampling (value, weight) pairs; a failed
@@ -198,7 +196,7 @@ standardised_change <- function(slope, se, n_span, sd) {
 #'   pooled = "only":   for each metric, all PAs as one group (`pooled_label`);
 #'   pooled = "append": as "none", then for each metric the pooled group.
 #' "append" leaves the group results identical to "none", so a pooled row can be added to a
-#' block without changing the old by-group CIs. Within a group, rows keep their order in `d`
+#' block without changing the by-group CIs. Within a group, rows keep their order in `d`
 #' (the resampled indices refer to it).
 #'
 #' Returns list(summary, reps). summary: metric, <group>, n, mean, ci_lo, ci_hi (rows in run
@@ -249,11 +247,11 @@ boot_means <- function(d, cols, group, levels, R, seed, weights = NULL,
   out
 }
 
-#' Do the groups differ in mean change? (Stats ¶5) Non-spatial GLS of `response` on `group`
+#' Do the groups differ in mean change? Non-spatial GLS of `response` on `group`
 #' with a separate residual variance per group (varIdent), REML; emmeans with mode "df.error".
 #'
 #' Returns list(omnibus, means, pairs, letters, sigma):
-#'   omnibus  marginal Wald F for the group term (denDF = N − p, as the old table);
+#'   omnibus  marginal Wald F for the group term (denDF = N − p);
 #'   means    estimated group means with 95% CIs;
 #'   pairs    all pairwise contrasts, Holm-adjusted p (Bonferroni-simultaneous CIs);
 #'   letters  compact letter display at `alpha` from the Holm p-values (multcompView);
@@ -298,7 +296,7 @@ biome_gls <- function(d, response, group, levels, max_iter = 200L, alpha = 0.05)
        letters = rename_g(letters), sigma = rename_g(sigma))
 }
 
-#' Correlation of two per-PA slopes (D2): Pearson with its 95% CI, and Spearman
+#' Correlation of two per-PA slopes: Pearson with its 95% CI, and Spearman
 #' (exact = FALSE) as a check; all PAs (`pooled_label`) and by group in `levels` order.
 #' PAs missing either slope are left out.
 slope_correlation <- function(d, x, y, group, levels, pooled_label = "All PAs") {
@@ -337,7 +335,7 @@ class_counts <- function(d, cols, group, levels, class_levels, pooled_label = "A
   out
 }
 
-#' Agreement of the OLS + BH classes with the Yue–Pilon classes (Stats ¶4 robustness check).
+#' Agreement of the OLS + BH classes with the Yue–Pilon classes (robustness check).
 #' `pairs` is a named list, metric label → c(ols column, Yue–Pilon column).
 #' Returns list(agreement, crosstab):
 #'   agreement  metric, <group>, n, n_concordant, pct_concordant and the % increase / decrease
@@ -396,7 +394,7 @@ percent_change <- function(summary, d, slope_cols, base_cols, group, n_span,
 
 # ── Fig. 4B case studies (config case_studies) ───────────────────────────────
 
-#' Annual series of the case-study PAs, in panel order (old 07_fig4_trend.R:224-235).
+#' Annual series of the case-study PAs, in panel order.
 #' `py`: PA-year table of one transect version (WDPA_PID, year, the response columns);
 #' `cases`: data frame WDPA_PID, label (config case_studies); `responses`: c(extent = "edge_extent", ...).
 case_series <- function(py, cases, responses) {
@@ -410,7 +408,7 @@ case_series <- function(py, cases, responses) {
 }
 
 #' Case-study PAs: trends, and the change over the record in metric units (slope × n_span) and
-#' as % of the PA's own mean (old 11_trend_percent_change.R:58-81), in panel order.
+#' as % of the PA's own mean, in panel order.
 #' `d`: one row per PA with WDPA_PID, <response>_mean, slope_<m>, p_fdr_<m>, trend_<m>,
 #' change_<m>_z (NAME, ISO3, BIOME_NAME kept when present); `cases`, `responses`: as case_series().
 case_summary <- function(d, cases, responses, n_span) {
@@ -448,7 +446,7 @@ cohen_kappa <- function(a, b, levels) {
   (po - pe) / (1 - pe)
 }
 
-#' Agreement of a per-PA quantity under two versions (S1): n, Pearson r, and the paired mean
+#' Agreement of a per-PA quantity under two versions: n, Pearson r, and the paired mean
 #' difference (b − a) / `scale` with a percentile-bootstrap 95% CI over PAs (`R` resamples,
 #' `seed` set first). Pairs with an NA are left out.
 paired_agreement <- function(a, b, scale, R, seed) {

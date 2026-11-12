@@ -1,14 +1,14 @@
-# Validation (methods: Validation; draft for review): each sampled PA against its displaced copy.
-# Ported from PA_New_Analysis/scripts/09_null_transects.R (sections 4 and 6): PA means of the
+# Validation (Methods: Validation): each sampled PA against its displaced copy.
+# Follows the earlier R implementation of this analysis (not in this repository): PA means of the
 # copy's yearly metrics (as for a PA), paired differences PA − copy, and per biome and for all PAs
 # the mean difference with a percentile-bootstrap CI (resampling PAs within the biome), the median,
 # the share of PAs above their copy, and a paired Wilcoxon signed-rank test (Holm across biomes
 # within a metric). All PAs: the sampled PAs pooled (equal weight per biome; the figure), and the
-# PA-weighted (stratified) estimate, biomes weighted by their share of the analysis set (user,
-# 2026-11-11; table only). The displaced metrics come from Python script 13.
+# PA-weighted (stratified) estimate, biomes weighted by their share of the analysis set (table
+# only). The displaced metrics come from Python script 13.
 
 #' PA means of the displaced copies: `py`: WDPA_PID, year and the metric columns (script 13).
-#' PAs with fewer than `min_years` years of any metric are left out (as for the PAs, Stats ¶1).
+#' PAs with fewer than `min_years` years of any metric are left out (as for the PAs).
 #' Returns WDPA_PID, <metric>_mean, n_years_<metric>.
 null_pa_means <- function(py, metrics, min_years) {
   py$transects <- factor("displaced")
@@ -43,7 +43,7 @@ weighted_median <- function(x, w) {
 #' median difference, the share of PAs with a positive difference, the Wilcoxon signed-rank p
 #' (normal approximation) and, for the groups, its Holm adjustment across groups within a metric.
 #'
-#' With `n_pop` (PAs per group in the analysis set; user, 2026-11-11) a `weighted_label` row per
+#' With `n_pop` (PAs per group in the analysis set) a `weighted_label` row per
 #' metric is appended: the PA-weighted (stratified) estimate, each group weighted by its share of
 #' the population (pooled_weights()): weighted mean, a percentile-bootstrap CI resampling PAs
 #' within groups (boot strata; `R`, `seed`), weighted median and share positive, and

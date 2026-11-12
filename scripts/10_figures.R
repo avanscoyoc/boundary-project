@@ -1,19 +1,19 @@
-# 10_figures.R: the figures, from the tables written by 06–08 (A7: nothing is fitted here).
+# 10_figures.R: the figures, from the tables written by 06–08 (nothing is fitted here).
 #
 #   Fig. 3   A: main-effects coefficients of the mean models in response SDs, against the
 #            reference levels of config ref; right: one panel per supported HMI interaction
-#            of the main analysis (Wald p < 0.05; B3; user, 2026-11-11: main run only), chosen by
-#            fig3_panels(). The panels shown are listed in fig3_panels.csv (for the caption).
+#            of the main analysis (Wald p < 0.05), chosen by fig3_panels(). The panels shown are
+#            listed in fig3_panels.csv (for the caption).
 #   Fig. 4A  standardised change by biome and for all PAs (bootstrap means and 95% CIs); biome
 #            order from config biome_order.
 #   Fig. 4   panel A over panel B: grey placeholders for the 2003 and 2025 satellite images
 #            (added in the layout) beside the annual series of the case-study PAs (config
-#            case_studies, tables from 07); plus one small figure per case PA (as the old 07).
+#            case_studies, tables from 07); plus one small figure per case PA.
 #   Fig. 2 map layers (styled outside the repo): the analysis-set polygons with PA means,
 #            trends and standardised change (GeoPackage), and the case-study PAs (KML). WDPA
 #            polygons may not be redistributed, so they are written under data/, not results/.
-#   S fig    per-PA change in edge extent vs edge intensity, with Pearson r (D2).
-#   Diagnostics (D4): Moran's I correlogram of the mean-model residuals; residual plots of the
+#   S fig    per-PA change in edge extent vs edge intensity, with Pearson r.
+#   Diagnostics: Moran's I correlogram of the mean-model residuals; residual plots of the
 #            spatial fits.
 # A figure is skipped (with a message) when its input tables are missing, e.g. before 08 has run.
 #
@@ -79,7 +79,7 @@ t3 <- need("tables/TableSX_mean_models_main_effects.csv", "tables/mean_models_re
 if (!is.null(t3)) {
   rows <- fig3a_rows(t3$TableSX_mean_models_main_effects, t3$mean_models_response_sd, CFG$biome_order,
                      ref = CFG$ref)
-  panels <- fig3_panels(t3$TableSY_wald_interactions)   # main analysis only (user, 2026-11-11)
+  panels <- fig3_panels(t3$TableSY_wald_interactions)   # main analysis only
   readr::write_csv(panels, file.path(out$figures, "fig3_panels.csv"))
   say("Fig. 3 panels (supported interactions): %s",
       if (nrow(panels)) paste(panels$factor, panels$response, collapse = "; ") else "none")
@@ -93,12 +93,12 @@ t4 <- need("tables/fig4a_change_summary.csv", "tables/fig4a_boot_replicates.csv"
 if (!is.null(t4)) {
   p4 <- fig4a(t4$fig4a_change_summary, t4$fig4a_boot_replicates, CFG$biome_order,
               pooled_label = CFG$pooled_label)
-  save_both(p4, "fig4a_trends", 10, 10.7 / 3.5 + 0.3)   # the old Fig. 4 panel A size
+  save_both(p4, "fig4a_trends", 10, 10.7 / 3.5 + 0.3)   # the size of panel A in Fig. 4
 }
 t4b <- need("tables/fig4b_case_series.csv")
 if (!is.null(t4b)) {
   cs <- t4b$fig4b_case_series
-  if (!is.null(t4)) save_both(fig4(p4, fig4b(cs, years = range(CFG$years))), "fig4_trends", 10, 10.7)   # old size
+  if (!is.null(t4)) save_both(fig4(p4, fig4b(cs, years = range(CFG$years))), "fig4_trends", 10, 10.7)
   for (pid in unique(cs$WDPA_PID[order(cs$panel)]))
     save_both(fig4b_single(cs, pid), paste0("fig4b_case_", pid), 4, 3.5)
 }
@@ -132,7 +132,7 @@ if (file.exists(trends_file) && file.exists(pa_file)) {
   say("skipped map layers: missing %s or %s", pa_file, trends_file)
 }
 
-# ── Diagnostics (D4) ─────────────────────────────────────────────────────────
+# ── Diagnostics ──────────────────────────────────────────────────────────────
 tm <- need("diagnostics/mean_models_moran_bands.csv")
 if (!is.null(tm)) {
   f <- file.path(out$diagnostics, "fig_moran_correlogram_mean_models.png")

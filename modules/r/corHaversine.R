@@ -1,7 +1,7 @@
 # corHaversine: great-circle (Haversine) spatial correlation structure for nlme::gls / lme.
 #
-# Vendored from PA_New_Analysis/scripts/HaversineLMEfunctions.R (collaborator's commit 04d236c,
-# sha256 736135f0…0c180e), which adapts a widely circulated community helper.
+# Vendored from HaversineLMEfunctions.R of the earlier R implementation of this analysis (not in
+# this repository), which adapts a widely circulated community helper.
 #
 # ONE CHANGE: haversineDist() is vectorised. The original filled an n × n matrix with a double R
 # loop over the scalar haversine() (≈ 1 min at n ≈ 3,900) and returned as.dist() of it. The
@@ -21,7 +21,7 @@
 # ---- Distance functions ----------------------------------------------------
 # Great-circle distance between two points (in radians) using the Haversine
 # formula. Returns distance in km, assuming Earth radius = 6371 km.
-# (Unchanged; no longer used by haversineDist(), kept as the reference for its test.)
+# (Unchanged; not used by haversineDist(), kept as the reference for its test.)
 haversine <- function(x0, x1, y0, y1) {
   a <- sin((y1 - y0) / 2)^2 + cos(y0) * cos(y1) * sin((x1 - x0) / 2)^2
   v <- 2 * asin(min(1, sqrt(a)))

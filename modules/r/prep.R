@@ -1,11 +1,11 @@
-# Analysis data (Stats ¶1, script 05): the long PA-year table, PA means, the analysis set,
+# Analysis data (script 05): the long PA-year table, PA means, the analysis set,
 # establishment-year imputation, z-scores and point-on-surface coordinates.
 #
 # Functions take data frames and explicit settings and read no files; 05 reads the inputs and
 # writes data/05_analysis/. Rows are ordered by WDPA_PID (character, C-locale order: radix sort,
 # independent of the session locale) throughout.
 
-#' Long PA-year table (A2): one row per PA × transect version × year.
+#' Long PA-year table: one row per PA × transect version × year.
 #'
 #' `metrics` is script 04's wide table (one row per PA-year). Version "all" uses the unsuffixed
 #' columns, version v the columns "<col>_<v>". Returns WDPA_PID, transects (factor, levels =
@@ -27,9 +27,9 @@ pa_year_long <- function(metrics, versions, cols = c("n_trnst", "edge_extent", "
   out
 }
 
-#' PA means of the yearly metrics, per PA and transect version (old 01:96-118).
+#' PA means of the yearly metrics, per PA and transect version.
 #'
-#' Each metric's mean is unweighted over that metric's non-NA years (E5), and
+#' Each metric's mean is unweighted over that metric's non-NA years, and
 #' n_years_<metric> counts those years. Returns WDPA_PID, transects, <metric>_mean,
 #' n_years_<metric> for each metric, ordered by WDPA_PID, version.
 pa_means <- function(py, metrics = c("edge_extent", "edge_intensity")) {
@@ -49,7 +49,7 @@ pa_means <- function(py, metrics = c("edge_extent", "edge_intensity")) {
   out
 }
 
-#' The analysis set (Stats ¶1), step by step, from one row per PA with metrics.
+#' The analysis set, step by step, from one row per PA with metrics.
 #'
 #' Steps, in order: drop PAs in `exclude_biomes` (or with no biome); if `min_complete` is given,
 #' drop PAs whose `pct_complete` (median share of complete transects) is below it (boundaries
@@ -96,9 +96,9 @@ analysis_set <- function(pa, exclude_biomes, covariates, year_cols, min_years,
   list(set = pa, steps = steps, removed = removed)
 }
 
-#' The visual-inspection step (Finish plan Step 3): removes the PAs marked "exclude" in the
-#' reviewer's checklist (written by script 05b from this analysis set) from an analysis_set()
-#' result, as its last counted step.
+#' The visual-inspection step: removes the PAs marked "exclude" in the inspection checklist
+#' (written by script 05b from this analysis set) from an analysis_set() result, as its last
+#' counted step.
 #'
 #' `checklist`: data frame with WDPA_PID and decision (and optionally order, used in messages).
 #' Decisions are compared trimmed and in lower case; blank and "keep" keep the PA. Stops if a
@@ -131,7 +131,7 @@ apply_inspection <- function(aset, checklist, label = "removed after visual insp
   aset
 }
 
-#' PAs for the transect-subset sensitivity runs (A3; user, 2026-11-08).
+#' PAs for the transect-subset sensitivity runs.
 #'
 #' In each transect version a PA-year counts only if it has ≥ `min_transects` complete
 #' transects; a PA qualifies in a version with ≥ `min_years` such years with a value of every
@@ -155,7 +155,7 @@ transect_subset_set <- function(py, versions, metrics, min_transects, min_years)
   out
 }
 
-#' Establishment-year imputation for STATUS_YR == 0 (Decisions: "Establishment year").
+#' Establishment-year imputation for STATUS_YR == 0.
 #'
 #' For each target PA with year 0, in the order of `targets`, draw `draws` years with
 #' replacement from the known years (> 0) of the `donors` in the same country; the imputed year
@@ -213,8 +213,8 @@ add_zscores <- function(d, vars, log_vars = character()) {
 
 #' Point-on-surface coordinates (lon, lat in EPSG:4326) of PA polygons, for `pids` in that order.
 #'
-#' The point is computed in `crs_compute` (config coords_crs: Mollweide, the old convention,
-#' 03:94-103) and transformed to EPSG:4326. `polys`: sf with WDPA_PID, one row per PA.
+#' The point is computed in `crs_compute` (config coords_crs: Mollweide) and transformed to
+#' EPSG:4326. `polys`: sf with WDPA_PID, one row per PA.
 pa_coordinates <- function(polys, pids, crs_compute) {
   stopifnot(inherits(polys, "sf"), !anyDuplicated(polys$WDPA_PID))
   i <- match(pids, as.character(polys$WDPA_PID))
@@ -231,7 +231,7 @@ iucn_group <- function(cat, groups) {
   factor(out, levels = names(groups))
 }
 
-#' Transects and size of the final PA set (Methods, the final dataset; user, 2026-11-10).
+#' Transects and size of the final PA set (Methods, the final dataset).
 #'
 #' `polys`: script 02's pas_selected (N_TRNST = transects kept, i.e. the PA's transects in the
 #' point file sent to Earth Engine; N_TRNST_GEN = transects generated before the inner/outer-half
@@ -291,7 +291,7 @@ biome_group <- function(x) {
 #' complete transect-year, so without metrics in 04 (e.g. a small island whose transects reach
 #' into the sea), appended to `pa` (one row per PA with metrics, BIOME_NAME grouped) with
 #' pct_complete = 0 and their grouped biome, so that the analysis set's rules apply to them (the
-#' sea rule removes them unless the biome step does; user, 2026-11-11). Checks that every PA with
+#' sea rule removes them unless the biome step does). Checks that every PA with
 #' metrics is in `pas02` with the same grouped biome. Other columns of the added rows are NA.
 add_pas_without_metrics <- function(pa, pas02) {
   stopifnot(all(c("WDPA_PID", "BIOME_NAME") %in% names(pas02)), !anyDuplicated(pas02$WDPA_PID))
@@ -313,7 +313,7 @@ add_pas_without_metrics <- function(pa, pas02) {
   out
 }
 
-#' Missing data of the analysis set (user, 2026-11-11). A transect-year is missing when any of its
+#' Missing data of the analysis set. A transect-year is missing when any of its
 #' 5 points has no value that year; script 04 leaves it out of that year's metrics.
 #'
 #' `pids`: the analysis PAs; `n_transects`, `biome`: their transects (N_TRNST) and biomes, same

@@ -1,5 +1,5 @@
 """
-Validation: the displaced-transect null model (methods: Validation). Draft for review.
+Validation: the displaced-transect null model (Methods: Validation).
 
 Each sampled PA's full transect set is translated by one random vector, without rotation,
 in a local azimuthal equidistant projection centred on the PA, so the number, spacing,

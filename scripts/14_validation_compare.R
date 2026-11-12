@@ -1,12 +1,12 @@
-# 14_validation_compare.R: validation, part 4 — each PA against its displaced copy (methods:
-# Validation; draft for review).
+# 14_validation_compare.R: validation, part 4 — each PA against its displaced copy (Methods:
+# Validation).
 #
 # The displaced copies (Python scripts 11–13) are measured exactly as the PAs: PA means of the
 # yearly edge metrics, PAs with ≥ min_years of both metrics. Paired difference PA − copy, per
 # biome and for all PAs: mean with a percentile-bootstrap 95% CI (10,000 resamples of PAs within
 # the biome), median, share of PAs above their copy, and a paired Wilcoxon signed-rank test
-# (Holm-adjusted across biomes within a metric). All PAs (user, 2026-11-11): the sampled PAs
-# pooled, each biome weighted equally (the figure: the conservative number), and in the table also
+# (Holm-adjusted across biomes within a metric). All PAs: the sampled PAs pooled, each biome
+# weighted equally (shown in the figure; the conservative estimate), and in the table also
 # "All PAs, PA-weighted": each biome weighted by its share of the analysis set (pa_level.csv),
 # with a within-biome bootstrap CI, weighted median and share, and a design-based t test
 # (p_stratified_t). Differences are also given in response SDs

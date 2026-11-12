@@ -1,8 +1,8 @@
 """
-Script 13: Validation, part 3 - accept displacements and compute edge metrics (draft for review)
+Script 13: Validation, part 3 - accept displacements and compute edge metrics
 
 Each candidate copy (script 11) is measured with script 04's functions and must pass the
-analysis-set rules of R script 05, as the analysed PAs did (user, 2026-11-11):
+analysis-set rules of R script 05, as the analysed PAs did:
 - biome: the PA polygon moved by the same vector has the PA's biome (largest-area RESOLVE
   ecoregion, as script 01; grouped as script 04; from script 12);
 - sea: median over years of the % of transects complete >= VALIDATION_MIN_COMPLETE_PCT;

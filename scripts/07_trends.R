@@ -1,19 +1,20 @@
-# 07_trends.R: per-PA trends and the biome comparison of change (Stats ¶4–5).
+# 07_trends.R: per-PA trends and the biome comparison of change.
 #
 #   per-PA OLS slope of each metric on year, Benjamini–Hochberg across PAs per metric, classes
 #   (increase / no trend / decrease at FDR config trend$fdr); Yue–Pilon (pre-whitened Sen and
 #   Mann–Kendall) as the robustness check, with the class agreement;
 #   Pearson correlation of the extent and intensity slopes, overall and per biome (Spearman as a
-#   check; D2);
+#   check);
 #   standardised change = slope × n_span / SD of the metric's PA means over the analysis set
 #   (scaling.csv from 05), with its SE (for the precision weights of 08);
 #   percentile-bootstrap means of change per biome and for all PAs (Fig. 4A), area-weighted means
-#   and Sen-slope means (Table SV); seeds and run order as the old run (config boot$seeds);
+#   and Sen-slope means (Table SV); seeds and run order as in the earlier R implementation of
+#   this analysis (config boot$seeds);
 #   GLS of change on biome with biome-specific variances, Holm-adjusted pairwise contrasts and
 #   letters (Table SW); % change over the record (diagnostic);
 #   the Fig. 4B case-study PAs (config case_studies): their annual series, trends and % change
-#   of their own mean (old 07:207-235 and 11:58-81);
-#   lag-1 autocorrelation of each PA's OLS trend residuals (diagnostic; Finish plan Step 5).
+#   of their own mean;
+#   lag-1 autocorrelation of each PA's OLS trend residuals (diagnostic).
 # Main analysis only: transect version "all", the analysis set of 05. The other versions and
 # PA subsets are 09's.
 #
@@ -114,7 +115,7 @@ for (i in which(ac_sum$BIOME_NAME == CFG$pooled_label))
   say("%s residual lag-1 autocorrelation: median %.2f (IQR %.2f to %.2f); %.1f%% of PAs above +1.96/sqrt(n)",
       ac_sum$metric[i], ac_sum$median_r1[i], ac_sum$q25_r1[i], ac_sum$q75_r1[i], ac_sum$pct_positive_above_bound[i])
 
-# ── 3. Bootstraps (old seeds and run order; slopes, reported in change units) ─
+# ── 3. Bootstraps (config seeds and run order; slopes, reported in change units) ─
 run <- function(cl, seed, ...) boot_means(d, cl, "BIOME_NAME", CFG$biome_order, CFG$boot$R, seed,
                                           pooled_label = CFG$pooled_label, ...)
 B <- list(

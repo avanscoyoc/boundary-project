@@ -1,4 +1,4 @@
-# 06_models_mean.R: models of mean edge extent and intensity (Stats ¶2–3).
+# 06_models_mean.R: models of mean edge extent and intensity.
 #
 # For each response (the PA mean of the yearly metric), spatial GLS with exponential correlation
 # in great-circle distance (corHaversine, range optimised from config spatial$range_start_km,
@@ -8,9 +8,9 @@
 #                        tests of the two interactions, HMI slopes per IUCN group and biome with
 #                        their contrasts, and the predictions across HMI for Fig. 3B–D (written
 #                        for both factors and both responses; 10_figures.R shows a panel only
-#                        where its interaction is supported, B3);
-#   non-spatial interaction model → diagnostics only (AICc, Moran's I; D4).
-# Reference levels: config ref (non-strict / Boreal Forest, D1), so the categorical
+#                        where its interaction is supported);
+#   non-spatial interaction model → diagnostics only (AICc, Moran's I).
+# Reference levels: config ref (non-strict / Boreal Forest), so the categorical
 # coefficients of the main-effects model are the Fig. 3A contrasts.
 #
 # Run from the repository root:
@@ -19,7 +19,7 @@
 #            data/05_analysis/pilot_N/ unless --out is given.
 # --cores K  spatial fits run in parallel, K at a time (default 2; each needs ~1.5 GB at full size).
 # --out DIR  write tables to DIR/tables and DIR/diagnostics instead of results/.
-# At full size (4,590 PAs) each spatial fit takes about an hour: run in the background, e.g.
+# At full size each spatial fit takes about an hour: run in the background, e.g.
 #   nohup Rscript scripts/06_models_mean.R > data/05_analysis/06_models_mean.log 2>&1 &
 # Fits are cached in data/05_analysis/cache by content (data, formula, settings), so a rerun
 # loads them, and a change in the data or settings refits.

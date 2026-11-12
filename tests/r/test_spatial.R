@@ -1,7 +1,8 @@
 # Unit tests for modules/r/spatial.R and the vectorised distances in modules/r/corHaversine.R.
 
-# The original distance function (PA_New_Analysis/scripts/HaversineLMEfunctions.R:47-57),
-# verbatim, as the reference. It uses the unchanged scalar haversine() from corHaversine.R.
+# The original distance function (HaversineLMEfunctions.R of the earlier R implementation, from
+# which corHaversine.R is vendored), verbatim, as the reference. It uses the unchanged scalar
+# haversine() from corHaversine.R.
 haversineDist_loop <- function(xy, radians = FALSE) {
   if (ncol(xy) > 2) stop("Input must have two columns (longitude and latitude)")
   if (!radians) xy <- xy * pi / 180
@@ -69,7 +70,7 @@ test_that("jitter_duplicates moves only later duplicates, as the old loop", {
   expect_true(all(abs(j$lon - d$lon) <= 1e-4), all(abs(j$lat - d$lat) <= 1e-4))
   expect_false(anyDuplicated(paste(round(j$lon, 6), round(j$lat, 6))) > 0)
   expect_equal(attr(j, "n_jittered"), 3)
-  # The old loop (03:131-141) by hand gives the same coordinates
+  # The earlier implementation's jitter loop, by hand, gives the same coordinates
   o <- d; key <- function(d) paste(round(d$lon, 6), round(d$lat, 6))
   dup <- duplicated(key(o)); set.seed(1); tries <- 0
   while (any(dup) && tries < 10) {

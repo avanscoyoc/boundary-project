@@ -204,7 +204,7 @@ def merge_same_name(gdf, max_hole_area=2250000):
     PAs are grouped by ORIG_NAME + ISO3. Within a group, members that touch or
     overlap (directly or through each other) are dissolved into one polygon:
 
-    - WDPA_PID: the oldest member's (oldest non-zero STATUS_YR), as before
+    - WDPA_PID: the oldest member's (oldest non-zero STATUS_YR)
     - STATUS_YR: the oldest non-zero establishment year among the members
     - all other attributes (designation, IUCN category, ...): the LARGEST
       member's, recorded in 'ATTR_PID'

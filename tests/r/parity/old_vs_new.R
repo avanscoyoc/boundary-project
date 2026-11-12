@@ -1,4 +1,5 @@
-# Old vs new: the collaborator's results (old pipeline, PA_New_Analysis/) beside the v2 results.
+# Old vs new: the results of the legacy analysis (the earlier implementation, PA_New_Analysis/)
+# beside this pipeline's results.
 # Writes data/parity/old_vs_new.md. Run from the repo root (after 05 and 07; the model sections
 # need 06 and 08 and say "pending" until their tables exist):
 #   Rscript tests/r/parity/old_vs_new.R

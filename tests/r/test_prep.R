@@ -150,7 +150,7 @@ test_that("analysis_set: sea and lake steps, in order, and the removed PAs with 
   expect_true(grepl("sea", r$steps$step[3])); expect_true(grepl("lakes", r$steps$step[4]))
   expect_equal(r$removed$WDPA_PID, c("c", "b", "d"))
   expect_equal(r$removed$step, r$steps$step[2:4])
-  # Without the thresholds the steps are as before
+  # Without the thresholds: no sea or lake steps
   r0 <- analysis_set(pa, "Mangrove", "gHM_mean", c("n_years_edge_extent", "n_years_edge_intensity"), 5)
   expect_equal(nrow(r0$steps), 4); expect_equal(r0$set$WDPA_PID, c("a", "b", "d", "e", "f"))
 })

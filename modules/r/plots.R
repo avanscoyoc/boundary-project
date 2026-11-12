@@ -1,16 +1,13 @@
 # Figure builders (10_figures.R). They take TABLES (data frames as written by scripts 06–08) and
-# return ggplot/patchwork objects; nothing is fitted or read here (A7).
+# return ggplot/patchwork objects; nothing is fitted or read here.
 #
-# Ported from PA_New_Analysis/scripts/00_setup.R (58-86: colours, theme), 06_fig3_model.R
-# (Fig. 3), 07_fig4_trend.R (Fig. 4A, 4B and the combined Fig. 4) and 04_2_spatial_prep.R
-# (Fig. 2 map layers; the map itself is styled outside the repo).
-# Changes from the old scripts (layout only, same content):
-#   - positions that the old code hard-coded (Fig. 3A separators, Fig. 4A separator) are
-#     computed from the rows present;
+# Follows the figures of the earlier R implementation of this analysis (not in this repository);
+# the Fig. 2 map itself is styled outside the repository. Layout notes:
+#   - separator positions (Fig. 3A, Fig. 4A) are computed from the rows present;
 #   - Fig. 4B shows its fixed y range with coord_cartesian(), so no value is dropped and the
-#     dashed trend lines are fitted on every year (B5);
+#     dashed trend lines are fitted on every year;
 #   - the font family is set explicitly (Helvetica → Liberation Sans in the container), so PNGs
-#     match the PDFs (Phase 1 found DejaVu Sans clipping the Fig. 3 legend).
+#     match the PDFs (DejaVu Sans clipped the Fig. 3 legend).
 
 PLOT_FAMILY <- "Helvetica"
 
@@ -30,14 +27,12 @@ IUCN_LEVELS <- c("strict", "non-strict", "unknown")
 IUCN_LABELS <- c("Strict", "Non-strict", "Unknown")
 IUCN_COLORS <- c("Strict" = "#99000d", "Non-strict" = "#e5736b", "Unknown" = "#8c8c8c")
 IUCN_LTYPES <- c("Strict" = "solid", "Non-strict" = "dashed", "Unknown" = "dotted")
-# Fig. 3 interaction panels: fixed axes, the same for every panel of a response (user,
-# 2026-11-09). The old per-panel ranges with 0.01-rounded labels put 0.52/0.55/0.58 on ticks
-# 0.025 apart.
+# Fig. 3 interaction panels: fixed axes, the same for every panel of a response.
 FIG3_X <- c(0, 0.8)
 FIG3_Y <- list(extent = c(0.5, 0.65), intensity = c(0.5, 1))
 FIG3_Y_STEP <- c(extent = 0.05, intensity = 0.1)
-# Fig. 4B: edge extent axis (left), as the old figure (07:283-284); edge intensity (right) is
-# rescaled so that its range over the case PAs spans extent's.
+# Fig. 4B: edge extent axis (left); edge intensity (right) is rescaled so that its range over
+# the case PAs spans extent's.
 FIG4B_Y <- c(0.30, 0.98)
 FIG4B_Y_BREAKS <- c(0.30, 0.60, 0.90)
 FIG4B_X_BREAKS <- c(2003, 2010, 2017, 2025)
@@ -68,7 +63,7 @@ p_stars <- function(p, alpha = 0.05) {
   sprintf("F(%d, %d) = %.2f, %s", r$numDF, r$denDF, r$F.value, fmt_p(r$p.value))
 }
 
-#' Rows of Fig. 3A: additive-model effects in response-SD units (06:77-135).
+#' Rows of Fig. 3A: additive-model effects in response-SD units.
 #'
 #' Continuous terms from `coef` (coef_table of the additive models). Categorical rows: from
 #' `contrasts` (ref_contrasts tables: each level vs a reference) if given, otherwise the IUCN_group
@@ -120,14 +115,13 @@ fig3a_rows <- function(coef, response_sd, biome_order, contrasts = NULL, ref = N
   rows
 }
 
-#' The Fig. 3 interaction panels to show (B3): one per response and factor whose interaction
-#' with HMI is supported (marginal Wald p < alpha), as the methods interpret the HMI slopes only
+#' The Fig. 3 interaction panels to show: one per response and factor whose interaction
+#' with HMI is supported (marginal Wald p < alpha), as the Methods interpret the HMI slopes only
 #' there. `wald`: the H2/H3 rows of the interaction models (TableSY_wald_interactions). If
 #' `sens` is given (the "Mean model, HMI interactions (Wald F)" rows of
 #' TableS_sensitivity_models: run, metric, term, p.value), an interaction must also have
-#' p < alpha in every sensitivity run (user, 2026-11-09: only interactions that pass all tests
-#' are drawn; 2026-11-11: script 10 uses the main analysis only, `sens` is kept for the sensitivity
-#' write-up). Returns factor ("IUCN_group" or "BIOME_NAME"), response, p.value, and with `sens`
+#' p < alpha in every sensitivity run (script 10 uses the main analysis only, without `sens`).
+#' Returns factor ("IUCN_group" or "BIOME_NAME"), response, p.value, and with `sens`
 #' n_runs and p_max_sensitivity: IUCN panels first, then biome, each in the order of `responses`.
 fig3_panels <- function(wald, alpha = 0.05,
                         responses = intersect(names(RESPONSE_LABELS), wald$response), sens = NULL) {
@@ -284,11 +278,11 @@ fig3_axes <- function(d, resp) {
        ggplot2::coord_cartesian(xlim = FIG3_X, ylim = yl, clip = "off"))   # line-end labels may pass 0.8
 }
 
-#' Height (in) for fig3() with k interaction panels: the old 3-panel figure is 12.5 in; panel A
-#' needs about 8 in on its own.
+#' Height (in) for fig3() with k interaction panels (12.5 in for 3 panels); panel A needs about
+#' 8 in on its own.
 fig3_height <- function(k) max(8, 3.9 * k + 0.8)
 
-#' Fig. 4A (07:25-230): standardised change by biome and for all PAs — half violin of the
+#' Fig. 4A: standardised change by biome and for all PAs — half violin of the
 #' bootstrap means (left) and mean with 95% percentile CI (right), extent and intensity.
 #'
 #' `summary`: metric, BIOME_NAME, n, mean_change_z, ci_lo_z, ci_hi_z (biome rows and the pooled
@@ -357,10 +351,10 @@ fig4a <- function(summary, reps, biome_order, pooled_label, pooled_display = "Al
                    legend.text = ggplot2::element_text(size = 10))
 }
 
-# ── Fig. 4B: case-study PAs (old 07:207-409) ─────────────────────────────────
+# ── Fig. 4B: case-study PAs ──────────────────────────────────────────────────
 
-# Long table of the case series with intensity rescaled onto the extent axis (07:237-271): the
-# scaling uses all case PAs, also for the single-PA panels. Returns the table and the back-
+# Long table of the case series with intensity rescaled onto the extent axis: the scaling uses
+# all case PAs, also for the single-PA panels. Returns the table and the back-
 # transform of the secondary axis.
 .fig4b_long <- function(series, ylim) {
   id <- series[c("panel", "WDPA_PID", "label", "year")]
@@ -388,7 +382,7 @@ fig4a <- function(summary, reps, biome_order, pooled_label, pooled_display = "Al
                                 labels = scales::percent_format(accuracy = 1),
                                 sec.axis = ggplot2::sec_axis(transform = back, name = "Edge intensity",
                                                              labels = scales::number_format(accuracy = 0.01))),
-    ggplot2::coord_cartesian(ylim = ylim),   # B5: keeps every value (limits = would drop them)
+    ggplot2::coord_cartesian(ylim = ylim),   # keeps every value (limits = would drop them)
     ggplot2::scale_color_manual(values = FIG4_COLORS, name = NULL),
     ggplot2::scale_x_continuous(breaks = FIG4B_X_BREAKS)
   )
@@ -410,7 +404,7 @@ fig4b_series <- function(series, ylim = FIG4B_Y) {
                    legend.position = "none")
 }
 
-#' Fig. 4B image placeholders (07:305-348): grey boxes for the first- and last-year satellite
+#' Fig. 4B image placeholders: grey boxes for the first- and last-year satellite
 #' images of each case PA, added in the layout. `labels`: panel titles in panel order.
 fig4b_placeholders <- function(labels, years = c(2003, 2025)) {
   n <- length(labels)
@@ -432,19 +426,19 @@ fig4b_placeholders <- function(labels, years = c(2003, 2025)) {
                    panel.spacing = grid::unit(0.5, "lines"))
 }
 
-#' Fig. 4B (07:350-352): image placeholders (left, 2/3) beside the time series (right, 1/3).
+#' Fig. 4B: image placeholders (left, 2/3) beside the time series (right, 1/3).
 fig4b <- function(series, ylim = FIG4B_Y, years = c(2003, 2025)) {
   labels <- unique(series$label[order(series$panel)])
   # wrap_plots(), not `+`: the operator needs patchwork loaded before the call
   patchwork::wrap_plots(fig4b_placeholders(labels, years), fig4b_series(series, ylim), widths = c(2, 1))
 }
 
-#' Fig. 4 (07:354-356): panel A (fig4a()) over panel B (fig4b()); no automatic panel tags.
+#' Fig. 4: panel A (fig4a()) over panel B (fig4b()); no automatic panel tags.
 fig4 <- function(p4a, p4b) {
   patchwork::wrap_plots(p4a, p4b, ncol = 1, heights = c(1, 2.5))
 }
 
-#' One case PA's time series on its own (07:369-409), with the axis scaling of the full figure.
+#' One case PA's time series on its own, with the axis scaling of the full figure.
 fig4b_single <- function(series, pid, ylim = FIG4B_Y) {
   s <- .fig4b_long(series, ylim)
   x <- s$data[s$data$WDPA_PID == pid, ]
@@ -456,7 +450,7 @@ fig4b_single <- function(series, pid, ylim = FIG4B_Y) {
     ggplot2::theme(legend.position = "bottom", plot.title = ggplot2::element_text(size = 9, face = "bold"))
 }
 
-# ── Fig. 2 map layers (old 04_2_spatial_prep.R) ──────────────────────────────
+# ── Fig. 2 map layers ────────────────────────────────────────────────────────
 
 #' The analysis-set polygons with PA means, trends and standardised change (one row per PA,
 #' WDPA_PID order), and the case-study PAs with their panel titles as `Name` (KML placemarks).
@@ -471,7 +465,7 @@ fig2_layers <- function(polys, pa, trends, cases) {
   a <- data.frame(pa[c("WDPA_PID", "NAME", "ISO3", "BIOME_NAME", "IUCN_CAT", "IUCN_group", "STATUS_YR",
                        "AREA_KM2", "edge_extent_mean", "edge_intensity_mean")],
                   trends[match(pa$WDPA_PID, trends$WDPA_PID), tcols], stringsAsFactors = FALSE)
-  a$trend_combined <- paste0("extent_", a$trend_extent, "_intensity_", a$trend_intensity)   # 04_2:68-71
+  a$trend_combined <- paste0("extent_", a$trend_extent, "_intensity_", a$trend_intensity)
   rownames(a) <- NULL
   layer <- sf::st_sf(a, geometry = sf::st_geometry(polys)[match(a$WDPA_PID, polys$WDPA_PID)])
   k <- match(cases$WDPA_PID, layer$WDPA_PID)
@@ -485,7 +479,7 @@ fig2_layers <- function(polys, pa, trends, cases) {
   list(pas = layer, cases = cs)
 }
 
-#' S figure (D2): per-PA change in edge extent vs edge intensity (response SD per record), one
+#' S figure: per-PA change in edge extent vs edge intensity (response SD per record), one
 #' panel for all PAs and one per biome, with Pearson r (95% CI) from slope_correlation().
 #' `pa`: BIOME_NAME, change_extent_z, change_intensity_z. `cor_tab`: slope_correlation() output.
 #' (Pearson r is the same on slopes and on standardised change: a linear rescaling.)
@@ -515,7 +509,7 @@ fig_slope_correlation <- function(pa, cor_tab, biome_order, pooled_label = "All 
     theme_pa(base_size = 11)
 }
 
-#' Diagnostic: Moran's I of model residuals by distance band (03:494-509). `bands`:
+#' Diagnostic: Moran's I of model residuals by distance band. `bands`:
 #' moran_residuals()$bands rows (model, mid_km, I, p), several models stacked.
 fig_moran_correlogram <- function(bands, alpha = 0.05) {
   aes <- ggplot2::aes
@@ -532,12 +526,12 @@ fig_moran_correlogram <- function(bands, alpha = 0.05) {
     theme_pa(base_size = 10)
 }
 
-#' Diagnostic: residual plots of a fit (03:272-296). `res`: fitted, resid (normalised residuals),
+#' Diagnostic: residual plots of a fit. `res`: fitted, resid (normalised residuals),
 #' log_area_z, BIOME_NAME — written as a table by the model script.
 fig_residual_diagnostics <- function(res, title, biome_order) {
   aes <- ggplot2::aes
   res$BIOME_NAME <- factor(res$BIOME_NAME, levels = biome_order[biome_order %in% res$BIOME_NAME])
-  # gam smoother (mgcv), as the old plots (03:275)
+  # gam smoother (mgcv)
   sm <- ggplot2::geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE,
                              colour = "red", linewidth = 0.6)
   th <- theme_pa(base_size = 10)
@@ -565,13 +559,13 @@ residual_table <- function(m, data, label) {
              BIOME_NAME = as.character(data$BIOME_NAME), stringsAsFactors = FALSE)
 }
 
-#' S figure (validation; draft): paired difference PA − displaced copy per biome and for all PAs,
-#' mean with 95% bootstrap CI, one panel per metric. As Fig. 3A (user, 2026-11-11): filled
-#' symbol where the paired Wilcoxon signed-rank test has p < `alpha` (biomes: Holm-adjusted
-#' across biomes within the metric; all PAs: a single test, unadjusted), open otherwise; circle =
-#' edge extent, triangle = edge intensity (FIG3_SHAPES). All PAs = the equal-weight pooled row
-#' (user, 2026-11-11: the conservative number). `summ`: paired_null_summary() output; rows other
-#' than `pooled_label` and the biomes (the table's PA-weighted row) are not drawn.
+#' S figure (validation): paired difference PA − displaced copy per biome and for all PAs,
+#' mean with 95% bootstrap CI, one panel per metric. As Fig. 3A: filled symbol where the paired
+#' Wilcoxon signed-rank test has p < `alpha` (biomes: Holm-adjusted across biomes within the
+#' metric; all PAs: a single test, unadjusted), open otherwise; circle = edge extent, triangle =
+#' edge intensity (FIG3_SHAPES). All PAs = the equal-weight pooled row (the conservative
+#' estimate). `summ`: paired_null_summary() output; rows other than `pooled_label` and the
+#' biomes (the table's PA-weighted row) are not drawn.
 fig_validation <- function(summ, biome_order, pooled_label = "All PAs", alpha = 0.05) {
   aes <- ggplot2::aes
   lv <- c(pooled_label, biome_order[biome_order %in% summ$BIOME_NAME])

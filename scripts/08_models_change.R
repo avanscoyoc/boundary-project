@@ -1,12 +1,12 @@
-# 08_models_change.R: models of change in edge extent and intensity (Stats ¶6).
+# 08_models_change.R: models of change in edge extent and intensity.
 #
 # For each metric, the standardised change of each PA (07) on the same predictors as the
 # main-effects mean model, spatial GLS with the same correlation structure and fitting method:
 #   A  primary: unweighted (Table SZ);
 #   B  precision-weighted: varFixed(~ v), v = se² + τ², τ² from A by the method of moments
 #      (Table SZ, sensitivity);
-#   non-spatial analogue of A → diagnostics (AICc, Moran's I; D4).
-# Reference levels: config ref (non-strict / Boreal Forest, D1), fitted directly, so the
+#   non-spatial analogue of A → diagnostics (AICc, Moran's I).
+# Reference levels: config ref (non-strict / Boreal Forest), fitted directly, so the
 # categorical rows of Table SZ are the coefficients of the fit.
 #
 # Run from the repository root (after 07):

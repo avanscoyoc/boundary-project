@@ -1,5 +1,5 @@
-# Parity checks of the change-model tables (02b) against the old outputs/tables/, shared by the
-# fast suite (A at its saved range) and run_parity_full.R (A and B optimised).
+# Parity checks of the change-model tables (legacy 02b) against the old outputs/tables/, shared
+# by the fast suite (A at its saved range) and run_parity_full.R (A and B optimised).
 # `tabs` = named list (extent, intensity) of change_model_tables() results; `models` = which of
 # "A", "B" were tabulated; `optimised` adds the range, its CI (within 0.1% of the CI width,
 # see parity_check_ci_width()) and AICc spatial.

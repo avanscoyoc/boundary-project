@@ -39,7 +39,7 @@ VERSIONS = {
 }
 
 # Earth Engine CSV part names: {prefix}_{asset}_part_{i}[_{retry}].csv
-# (old runs: ..._{asset}_chunk_{i}.csv)
+# (the earlier naming ..._{asset}_chunk_{i}.csv is also accepted)
 _CSV_NAME = re.compile(r'_(\d{3})_(?:part|chunk)_(\d+)(?:_(\d{2}))?\.csv$')
 
 

@@ -55,7 +55,7 @@ parity_check <- function(output, item, new, old, tol = 1e-8, kind = c("rel", "ab
 # (kind "abs"). `new` must be row-matched to `old`; `lo`, `hi` name the CI columns. Used for CIs
 # that rest on a numerical approximation carrying platform noise: the spatial range CI comes from
 # nlme's apVar, a finite-difference Hessian of the REML log-likelihood, whose SE moves by ~0.1%
-# with rounding (PLAN step 6). tol = 1e-3 is 0.1% of the CI width.
+# with rounding. tol = 1e-3 is 0.1% of the CI width.
 parity_check_ci_width <- function(output, new, old, lo, hi, tol, source) {
   w <- old[[hi]] - old[[lo]]
   for (col in c(lo, hi)) {

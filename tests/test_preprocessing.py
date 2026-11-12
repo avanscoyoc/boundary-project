@@ -39,10 +39,11 @@ def pas_frame(rows):
     )
 
 
-# ---------------------------------------------------------------- evenspace (#3)
+# ---------------------------------------------------------------- evenspace
 
 def test_evenspace_points_lie_on_square_boundary():
-    # 4 vertices only: the old off-by-one put points up to 10 km off the boundary here
+    # 4 vertices only: an off-by-one error in the segment lookup would put points up to
+    # 10 km off the boundary here
     sq = Polygon([(0, 0), (10000, 0), (10000, 10000), (0, 10000)])
     pts = evenspace(extract_coords(sq), 500)
     xy = shapely.points(pts['x'], pts['y'])
@@ -51,7 +52,7 @@ def test_evenspace_points_lie_on_square_boundary():
     np.testing.assert_allclose(np.diff(shapely.line_locate_point(ring, xy)), 500, atol=1e-6)
 
 
-# ---------------------------------------------------------------- AEQD distances (#4)
+# ---------------------------------------------------------------- AEQD distances
 
 def test_transects_use_true_distances_at_high_latitude():
     # ~80 km box at 70°N, where Mollweide distances are badly distorted
@@ -73,7 +74,7 @@ def test_transects_use_true_distances_at_high_latitude():
     assert np.median(d[consecutive]) == pytest.approx(500, rel=0.01)
 
 
-# ---------------------------------------------------------------- whole-line check (#7)
+# ---------------------------------------------------------------- whole-line check
 
 def u_shape():
     # 60 x 40 km block with a 4 km wide, 30 km deep notch (Mollweide meters near 0,0)
@@ -117,7 +118,7 @@ def test_narrow_pa_is_skipped_by_inner_buffer():
     assert make_pa_transects(strip, MOLL, 500, 2500, 2, 5500)['status'] == 'empty_inner_buffer'
 
 
-# ---------------------------------------------------------------- overlaps (#15)
+# ---------------------------------------------------------------- overlaps
 
 def test_resolve_overlaps_duplicates_and_nested():
     gdf = pas_frame([
@@ -146,7 +147,7 @@ def test_resolve_overlaps_duplicates_are_transitive():
     assert list(kept['WDPA_PID']) == ['C']
 
 
-# ---------------------------------------------------------------- same name (#8)
+# ---------------------------------------------------------------- same name
 
 def test_merge_same_name_only_touching_same_country():
     gdf = pas_frame([
@@ -179,7 +180,7 @@ def test_merge_takes_attributes_from_largest_and_oldest_year():
     assert (row['DESIG_ENG'], row['IUCN_CAT'], row['ATTR_PID']) == ('National Park', 'II', 'NP')
 
 
-# ---------------------------------------------------------------- shape metric (#14)
+# ---------------------------------------------------------------- shape metric
 
 def test_shape_ratio_is_size_neutral():
     # circles drawn in lon/lat at the equator (1° lon ≈ 1° lat there)

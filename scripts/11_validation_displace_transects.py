@@ -1,5 +1,5 @@
 """
-Script 11: Validation, part 1 - displaced transects (draft for review)
+Script 11: Validation, part 1 - displaced transects
 
 For a stratified random sample of analysis PAs (VALIDATION_N_PER_BIOME per biome, plus
 VALIDATION_RESERVE reserves drawn in order), translates each PA's full transect set by random

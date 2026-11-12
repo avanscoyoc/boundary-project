@@ -58,7 +58,7 @@ test_that("pa_trends names the columns by metric", {
   expect_true(all(tr$trend_extent %in% CFG$trend$levels))
 })
 
-# ── Step 3 ─────────────────────────────────────────────────────────────────────
+# ── Standardised change and the summaries built on the trends ─────────────────
 sim_pa <- function(n = 120, seed = 4) {
   set.seed(seed)
   g <- sample(c("A", "B", "C"), n, replace = TRUE, prob = c(0.5, 0.3, 0.2))
@@ -216,7 +216,7 @@ test_that("case_series and case_summary: panel order, % of the PA's own mean", {
   cs <- case_summary(d, cases, c(extent = "edge_extent"), n_span = 22)
   expect_identical(cs$WDPA_PID, c("b", "a")); expect_identical(cs$NAME, c("B", "A")); expect_identical(cs$panel, 1:2)
   expect_equal(cs$change_extent, c(-0.004, 0.01) * 22)
-  expect_equal(cs$pct_change_extent, 100 * c(-0.004 * 22 / 0.8, 0.01 * 22 / 0.5))   # old 11:71-74
+  expect_equal(cs$pct_change_extent, 100 * c(-0.004 * 22 / 0.8, 0.01 * 22 / 0.5))
   expect_identical(cs$trend_extent, c("decrease", "increase"))
   expect_error(case_summary(d[-1, ], cases, c(extent = "edge_extent"), 22))
 })

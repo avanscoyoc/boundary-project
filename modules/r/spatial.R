@@ -1,13 +1,13 @@
-# Spatial set-up for the GLS models (Stats ¶2–3, ¶6): the corHaversine correlation structure,
-# cached model fits, and Moran's I of residuals (diagnostics, D4).
+# Spatial set-up for the GLS models: the corHaversine correlation structure, cached model fits,
+# and Moran's I of residuals (diagnostics).
 #
-# Ported from PA_New_Analysis/scripts/03_crosssectional_model.R (126-181, 197-216, 246-270) and
-# 02b_trend_drivers.R (108-146, 223-232). Needs modules/r/corHaversine.R in globalenv().
+# Follows the earlier R implementation of this analysis (not in this repository). Needs
+# modules/r/corHaversine.R in globalenv().
 #
 # Row order matters: the correlation structure, the fits and the Moran weights all refer to the
 # rows of the model data in the order given. Build them from the same data frame.
 
-#' Jitter PAs whose coordinates coincide with an earlier PA's (03:131-141).
+#' Jitter PAs whose coordinates coincide with an earlier PA's.
 #'
 #' corHaversine stops on zero distances, so a PA whose (lon, lat), rounded to 6 decimals, equals
 #' an earlier row's is moved by up to ±`jitter_deg` in each coordinate (uniform; lon first, then
@@ -39,7 +39,7 @@ jitter_duplicates <- function(d, jitter_deg, seed, tries = 10L) {
 #'
 #' `value` is the range in km: the optimiser start (fixed = FALSE) or the fixed range
 #' (fixed = TRUE, used by the fast parity tests and the sensitivity refits). With nugget = TRUE
-#' the start is c(value, 0.1) (as 03:164). Initialisation computes the pairwise distances (≈ 1 s)
+#' the start is c(value, 0.1). Initialisation computes the pairwise distances (≈ 1 s)
 #' and nlme's factor of the n × n correlation matrix (≈ 1 min at n ≈ 4,600), so the initialised
 #' object is cached in `cache_dir` (NULL = no cache) under a key that covers the coordinates in
 #' row order and every setting. Attribute "cache_key" holds that key.
@@ -71,7 +71,7 @@ spatial_setup <- function(coords, value, nugget = FALSE, fixed = FALSE, mimic = 
 #' settings, start values and a hash of its distances); the variance function (class, formula,
 #' values); method; max_iter; and the nlme version. Any change gives a new fit.
 #' The formula is written into the stored call, so emmeans and predict see it; always
-#' pass `data =` explicitly to emmeans (B7). `cache_dir = NULL` fits without caching.
+#' pass `data =` explicitly to emmeans. `cache_dir = NULL` fits without caching.
 #' Returns the gls object with attributes "cache_key" and "fit_minutes".
 fit_gls_cached <- function(formula, data, correlation = NULL, weights = NULL, method = "REML",
                            max_iter = 200L, cache_dir = NULL, label = NULL) {
@@ -117,7 +117,7 @@ fit_gls_cached <- function(formula, data, correlation = NULL, weights = NULL, me
   m
 }
 
-#' Spatial weights for Moran's I of residuals (03:246-270): k nearest neighbours (great-circle,
+#' Spatial weights for Moran's I of residuals: k nearest neighbours (great-circle,
 #' row-standardised) and one set per distance band [bands_km[i], bands_km[i+1]] km (NULL where a
 #' band has no links). Build once per PA set; rows as in `coords`.
 moran_weights <- function(coords, k, bands_km) {

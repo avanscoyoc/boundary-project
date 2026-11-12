@@ -1,6 +1,7 @@
 # Full parity run: the spatial GLS refitted with the range OPTIMISED (start 200 km, REML), as the
 # old run did, on the old data, compared with every old model table at tolerance 1e-4
-# (optimiser, BLAS, platform; the collaborator's own non-spatial GLS rerun differed by 2e-5).
+# (optimiser, BLAS, platform; a rerun of the legacy non-spatial GLS differed from its saved
+# tables by 2e-5).
 #
 # Slow (each optimiser step refactors an n × n matrix): run in the background from the repo root,
 #   Rscript tests/r/parity/run_parity_full.R [mean] [change] [--cores 2]
@@ -8,9 +9,9 @@
 # Fits are cached in data/parity/cache, so a rerun only refits what changed. Writes the rows of
 # source "full_mean" / "full_change" to data/parity/parity_report.csv, the new tables to
 # data/parity/full_<part>_tables.rds, and a log to data/parity/run_parity_full.log.
-# Parts: "mean" (03: 4 spatial + 2 non-spatial fits); "change" (02b: per response A spatial,
-# A non-spatial, B spatial precision-weighted; responses = standardised change from the step 2–3
-# functions). No part given = both.
+# Parts: "mean" (legacy 03: 4 spatial + 2 non-spatial fits); "change" (legacy 02b: per response
+# A spatial, A non-spatial, B spatial precision-weighted; responses = standardised change from
+# the new trend functions). No part given = both.
 
 args  <- commandArgs(trailingOnly = TRUE)
 cores <- if (any(args == "--cores")) as.integer(args[which(args == "--cores") + 1]) else 2L
@@ -81,7 +82,7 @@ if ("mean" %in% parts) {
 }
 
 if ("change" %in% parts) {
-  # Responses: standardised change from the new trends (as the fast suite's step 3 block)
+  # Responses: standardised change from the new trends (as legacy_step3() in the fast suite)
   an <- legacy_annual()
   for (m in c("extent", "intensity")) {
     tr <- ols_trends(an, paste0("edge_", m), s$min_years)

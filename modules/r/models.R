@@ -1,12 +1,10 @@
-# Spatial GLS models of PA means (Stats ¶2–3) and their tables; the change models (¶6) reuse the
-# formulas and table builders.
+# Spatial GLS models of PA means and their tables; the change models reuse the formulas and
+# table builders.
 #
-# Ported from PA_New_Analysis/scripts/03_crosssectional_model.R (183-196, 219-244, 316-412,
-# 414-476). Not ported (not in the methods; plan "Not in the methods"): the "Grassland + Tropical
-# vs others" planned contrast (03:366-372), slopes per +0.1 HMI (03:352-362), and the residual
-# diagnostic plots (moved to 10_figures.R).
+# Follows the earlier R implementation of this analysis (not in this repository). The residual
+# diagnostic plots are drawn by 10_figures.R.
 #
-# Functions take the model data and explicit settings and pass `data =` to emmeans (B7).
+# Functions take the model data and explicit settings and pass `data =` to emmeans.
 # Model data: one row per PA, in the row order of the correlation structure, with factors
 # IUCN_group and BIOME_NAME whose FIRST level is the reference (set_reference()).
 
@@ -14,7 +12,7 @@ MODEL_COVARIATES <- c("STATUS_YR_z", "log_area_z", "elevation_mean_z", "terrain_
                       "water_extent_pct_z")
 MODEL_HMI <- "gHM_mean_z"
 
-#' Model formula (03:191-196): controls + HMI + IUCN group + biome ("add"), plus the HMI × IUCN
+#' Model formula: controls + HMI + IUCN group + biome ("add"), plus the HMI × IUCN
 #' and HMI × biome interactions ("full").
 model_formula <- function(response, type = c("add", "full")) {
   type <- match.arg(type)
@@ -23,14 +21,14 @@ model_formula <- function(response, type = c("add", "full")) {
   stats::as.formula(paste(response, "~", rhs))
 }
 
-#' Factor with `ref` as the first (reference) level, the others in `order` (D1, B2).
+#' Factor with `ref` as the first (reference) level, the others in `order`.
 #' Levels absent from x are dropped.
 set_reference <- function(x, ref, order) {
   stopifnot(ref %in% order, all(stats::na.omit(as.character(x)) %in% order))
   droplevels(factor(as.character(x), levels = c(ref, setdiff(order, ref))))
 }
 
-#' Model factors of one model family (D1): IUCN_group and BIOME_NAME with the family's
+#' Model factors of one model family: IUCN_group and BIOME_NAME with the family's
 #' reference levels first. `ref` = list(iucn, biome) (config ref);
 #' `iucn_levels`, `biome_order` = the other levels' order. A different reference refits the same
 #' model reparametrised: the categorical coefficients are then the contrasts against `ref`.
@@ -40,7 +38,7 @@ set_model_references <- function(d, ref, iucn_levels, biome_order) {
   d
 }
 
-#' Fixed-effect table (03:227-235): estimate, SE, t, p and 95% CI (t, df = N − p).
+#' Fixed-effect table: estimate, SE, t, p and 95% CI (t, df = N − p).
 coef_table <- function(m, label) {
   tt <- summary(m)$tTable
   ci <- nlme::intervals(m, which = "coef")$coef
@@ -49,7 +47,7 @@ coef_table <- function(m, label) {
              conf.low = ci[, 1], conf.high = ci[, 3], stringsAsFactors = FALSE, row.names = NULL)
 }
 
-#' Marginal Wald F tests of every term (03:238-244), denDF = N − p. The interaction rows of the
+#' Marginal Wald F tests of every term, denDF = N − p. The interaction rows of the
 #' full model are hypotheses H2 (HMI × IUCN) and H3 (HMI × biome); `hypotheses = TRUE` keeps only
 #' those rows and labels them.
 wald_tests <- function(m, label, hypotheses = FALSE) {
@@ -66,7 +64,7 @@ wald_tests <- function(m, label, hypotheses = FALSE) {
   out
 }
 
-#' HMI slopes within IUCN groups and biomes from the full model (03:316-350, 364), H2/H3.
+#' HMI slopes within IUCN groups and biomes from the full model (H2/H3).
 #'
 #' emtrends with sample-proportional weights over the other factor, mode "df.error". Slopes:
 #' Holm-adjusted p (Bonferroni CIs). Contrasts: IUCN pairwise (Holm); each biome vs the first
@@ -98,7 +96,7 @@ hmi_slopes <- function(m, data, label, tag) {
   )
 }
 
-#' Contrasts of each level of `factor` against `ref` (03:376-389), from emmeans (mode
+#' Contrasts of each level of `factor` against `ref`, from emmeans (mode
 #' "df.error"): unadjusted p, plus p_holm over the contrasts of that factor. These are
 #' coefficient differences of the same fit (no refit).
 ref_contrasts <- function(m, data, factor, ref, label) {
@@ -112,14 +110,14 @@ ref_contrasts <- function(m, data, factor, ref, label) {
         stringsAsFactors = FALSE)
 }
 
-#' AICc of a gls fit (03:220-224). Compare only fits with the same fixed effects (REML).
+#' AICc of a gls fit. Compare only fits with the same fixed effects (REML).
 aicc_gls <- function(m) {
   ll <- stats::logLik(m); k <- attr(ll, "df"); n <- m$dims$N
   -2 * as.numeric(ll) + 2 * k + 2 * k * (k + 1) / (n - k - 1)
 }
 
 #' Spatial parameters of a spatial fit and the AICc comparison with its non-spatial analogue
-#' (03:399-411). The range CI is NA when it cannot be computed (e.g. a fixed range).
+#' The range CI is NA when it cannot be computed (e.g. a fixed range).
 spatial_params <- function(m_sp, m_nosp, label) {
   cs <- m_sp$modelStruct$corStruct
   cpar <- stats::coef(cs, unconstrained = FALSE)
@@ -135,10 +133,10 @@ spatial_params <- function(m_sp, m_nosp, label) {
              delta_AICc_nonspatial_minus_spatial = a_ns - a_sp, stringsAsFactors = FALSE)
 }
 
-#' Pseudo-R² (03:414-419): squared correlation of the fixed-effect fitted values with y.
+#' Pseudo-R²: squared correlation of the fixed-effect fitted values with y.
 pseudo_r2 <- function(m, y) stats::cor(stats::fitted(m), y)^2
 
-#' Predicted response across HMI within each level of `by` (03:443-470), for Fig. 3B–D.
+#' Predicted response across HMI within each level of `by`, for Fig. 3B–D.
 #'
 #' HMI grid: `n_grid` raw values from the min to the max of `data$gHM_mean`, as z-scores with
 #' `hmi_mean`/`hmi_sd` (the z-score's own mean and SD). Other covariates at their means; the
@@ -165,7 +163,7 @@ hmi_predictions <- function(m, data, by, label, hmi_mean, hmi_sd, n_grid = 101,
   out
 }
 
-#' The three fits of one response (03:300-305): additive spatial, full spatial, full non-spatial.
+#' The three fits of one response: additive spatial, full spatial, full non-spatial.
 #' `correlation` is the spatial_setup() structure for the rows of `data`.
 fit_mean_models <- function(data, response, correlation, method = "REML", max_iter = 200L,
                             cache_dir = NULL, label = response) {
@@ -182,7 +180,7 @@ fit_mean_models <- function(data, response, correlation, method = "REML", max_it
   )
 }
 
-#' All tables of one response's mean models (03:307-476). `fits` from fit_mean_models();
+#' All tables of one response's mean models. `fits` from fit_mean_models();
 #' `contrast_ref` = list(iucn, biome) for ref_contrasts() (NULL = skip); `moran` = weights from
 #' moran_weights() (NULL = skip) with `moran_settings` = list(nsim, seed);
 #' `pred_by` = factors to predict across HMI for.
@@ -224,16 +222,16 @@ mean_model_tables <- function(fits, data, response, label, hmi_mean, hmi_sd,
   out
 }
 
-# ── Change models (Stats ¶6) ──────────────────────────────────────────────────
-# Ported from PA_New_Analysis/scripts/02b_trend_drivers.R (147-300). Response: standardised
-# change (response SD per record); terms as the additive mean model; no interactions.
+# ── Change models ─────────────────────────────────────────────────────────────
+# Response: standardised change (response SD per record); terms as the additive mean model; no
+# interactions.
 #   A  primary: unweighted spatial GLS (REML);
 #   non-spatial analogue of A (AICc, Moran's I);
 #   B  sensitivity: spatial GLS with varFixed(~ v), v = se² + τ² (precision_weights()).
 
 CHANGE_MODEL_LABELS <- c(A = "primary (unweighted)", B = "precision-weighted")
 
-#' Precision weights for the change models (02b:246-250). τ² is the between-PA variance of the
+#' Precision weights for the change models. τ² is the between-PA variance of the
 #' trends by the method of moments from the unweighted fit, max(0, σ²_A − mean(se²));
 #' v = se² + τ², floored at `floor_frac` × median(v) (guards zero-variance series).
 #' Returns list(v, table) where table has sigma2_unweighted, mean_se2, tau2, share_sampling_var.
@@ -268,7 +266,7 @@ fit_change_models <- function(data, response, se_col, correlation, method = "REM
   list(fits = list(A = A, nosp = nosp, B = B), data = data, tau = pw$table)
 }
 
-#' Tables of one change response (02b:255-300). `cm` from fit_change_models(); `contrast_ref` =
+#' Tables of one change response. `cm` from fit_change_models(); `contrast_ref` =
 #' list(iucn, biome) for ref_contrasts(); `moran` = moran_weights() (NULL = skip) with
 #' `moran_settings` = list(nsim, seed). `models` = which of A, B to tabulate.
 change_model_tables <- function(cm, response, label, contrast_ref, moran = NULL,
@@ -300,12 +298,12 @@ change_model_tables <- function(cm, response, label, contrast_ref, moran = NULL,
   out
 }
 
-# Labels of the continuous predictors in Table SZ (02b:304-306)
+# Labels of the continuous predictors in Table SZ
 CONTINUOUS_LABELS <- c(STATUS_YR_z = "Establishment year", log_area_z = "PA area (log)",
                        gHM_mean_z = "Human modification (HMI)", elevation_mean_z = "Elevation",
                        terrain_slope_z = "Slope", water_extent_pct_z = "Water extent")
 
-#' Table SZ in long format (02b:304-318): continuous terms (per 1 SD) and the categorical
+#' Table SZ in long format: continuous terms (per 1 SD) and the categorical
 #' contrasts against the reference classes, for each response and model.
 table_sz <- function(coef, contrasts) {
   cont <- coef[coef$term %in% names(CONTINUOUS_LABELS), , drop = FALSE]

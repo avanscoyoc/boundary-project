@@ -1,6 +1,7 @@
 # Sourced automatically by testthat::test_dir("tests/r") before the tests; can also be sourced
 # by hand from anywhere inside the repository.
-# Loads the settings, the analysis modules and the old-run conventions (parity tests only).
+# Loads the settings, the analysis modules and the conventions of the legacy analysis
+# (tests/r/parity/legacy_inputs.R; parity tests only).
 local({
   root <- normalizePath(getwd())
   while (!file.exists(file.path(root, "modules", "r", "config.R"))) {

@@ -1,4 +1,4 @@
-# 05_prepare_analysis_data.R: the analysis data (Stats ¶1).
+# 05_prepare_analysis_data.R: the analysis data.
 #
 # The analysis set (biomes; PAs whose boundary is dominated by sea or by open water; missing
 # covariates; too few years; when config inspection$apply is TRUE, the PAs marked "exclude"
@@ -13,20 +13,20 @@
 # Inputs:  results/pa_edge_metrics_ndvi.csv (04: one row per PA-year)
 #          data/02_pas/pas_selected.gpkg (02: PA polygons; every PA of 02, with its RESOLVE biome)
 #          data/04_transect_years/missing_transects.csv (04: transects with a missing year)
-#          data/inspection/checklist.csv (05b + the reviewer; read only when inspection$apply)
+#          data/inspection/checklist.csv (05b, after visual inspection; read only when inspection$apply)
 # Outputs: data/05_analysis/pa_level.csv   one row per analysis PA, ordered by WDPA_PID: attributes,
 #                                          STATUS_YR (imputed where 0) + STATUS_YR_reported,
 #                                          STATUS_YR_imputed, impute_pool; IUCN_group; z-scores;
 #                                          lon/lat; PA means and n_years per transect version
 #                                          (unsuffixed = "all"); pct_complete (median share of
-#                                          complete transects); PA-set flags set_* (A3)
-#          data/05_analysis/pa_year.csv    analysis PAs × transect version × year (long, A2)
+#                                          complete transects); PA-set flags set_*
+#          data/05_analysis/pa_year.csv    analysis PAs × transect version × year (long)
 #          data/05_analysis/excluded_pas.csv   every PA of script 02 that is not analysed, the
 #                                          step that removed it, pct_complete, water_extent_pct
 #          data/05_analysis/scaling.csv    n, mean, SD of each z-scored covariate (gHM_mean_z: the
 #                                          HMI back-transform) and of each response's PA means
 #                                          (the SD for the standardised change)
-#          results/analysis_counts.json    counts for the methods and the Phase 4 checks (final_set:
+#          results/analysis_counts.json    counts for the methods and checks (final_set:
 #                                          transects, points, area, % of transects kept; missing_data:
 #                                          transect-years without data at all 5 points)
 # Coordinates are written only to data/05_analysis/, never to results/.
@@ -50,7 +50,7 @@ say <- function(...) cat(sprintf(...), "\n", sep = "")
 m <- readr::read_csv(CFG$paths$pa_metrics, guess_max = 1e6, show_col_types = FALSE, progress = FALSE,
                      col_types = readr::cols(WDPA_PID = "c", ISO3 = "c", .default = readr::col_guess()))
 m <- as.data.frame(m)
-names(m)[names(m) == "terrain_slope_mean"] <- "terrain_slope"     # A9
+names(m)[names(m) == "terrain_slope_mean"] <- "terrain_slope"     # name in config covariates
 mt <- as.data.frame(readr::read_csv(CFG$paths$missing_transects, show_col_types = FALSE, progress = FALSE,
                                     col_types = readr::cols(WDPA_PID = "c", .default = readr::col_double())))
 say("04 metrics: %d PA-years, %d PAs", nrow(m), length(unique(m$WDPA_PID)))
@@ -80,7 +80,7 @@ stopifnot(nrow(pa) == nrow(pa_attr))
 # ── 3. Analysis set ──────────────────────────────────────────────────────────
 # Every PA of script 02 enters: a PA without any complete transect-year has no metrics in 04
 # (e.g. Barrow Island, an island whose transects reach into the sea) and enters at 0% complete,
-# so the sea rule removes it (user, 2026-11-11). Biome groups are checked against 04's.
+# so the sea rule removes it. Biome groups are checked against 04's.
 polys <- sf::st_read(CFG$paths$pas_selected, quiet = TRUE)
 polys$WDPA_PID <- as.character(polys$WDPA_PID)
 pas02 <- sf::st_drop_geometry(polys)[c("WDPA_PID", "NAME", "ISO3", "BIOME_NAME")]
@@ -134,7 +134,7 @@ xy <- jitter_duplicates(xy, CFG$spatial$jitter_deg, CFG$spatial$jitter_seed, CFG
 d$lon <- xy$lon; d$lat <- xy$lat
 say("coordinates: %d PAs, %d jittered", nrow(xy), attr(xy, "n_jittered"))
 
-# ── 7. PA means of the other transect versions (wide, suffixed) and the PA sets (A3) ─
+# ── 7. PA means of the other transect versions (wide, suffixed) and the PA sets ─
 for (v in setdiff(CFG$transects, "all")) {
   x <- pm[pm$transects == v, ]
   i <- match(d$WDPA_PID, x$WDPA_PID)

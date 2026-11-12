@@ -30,7 +30,7 @@ test_that("legacy inputs are consistent with the old outputs", {
   expect_equal(nrow(L$pa), 4025)
   expect_setequal(unique(L$annual$WDPA_PID), L$pa$WDPA_PID)
 
-  # PA means of the annual series reproduce the old PA table (01:88-99)
+  # PA means of the annual series reproduce the old PA table
   i <- match(L$pa$WDPA_PID, names(tapply(L$annual$edge_extent, L$annual$WDPA_PID, mean)))
   m_ext <- tapply(L$annual$edge_extent, L$annual$WDPA_PID, mean, na.rm = TRUE)[i]
   m_int <- tapply(L$annual$edge_intensity, L$annual$WDPA_PID, mean, na.rm = TRUE)[i]
@@ -43,7 +43,7 @@ test_that("legacy inputs are consistent with the old outputs", {
   expect_true(all(stats::na.omit(L$pa$trend_extent) %in% CFG$trend$levels))
   expect_true(all(stats::na.omit(L$pa$trend_intensity_zyp) %in% CFG$trend$levels))
 
-  # The old model set: n = 3,914 with the old biome and IUCN counts (survey of 03/02b)
+  # The old model set: n = 3,914 with the old biome and IUCN counts (as in 03 and 02b)
   ms <- legacy_model_set(L$pa, L$coords)
   expect_equal(nrow(ms), 3914)
   expect_equal(as.vector(table(factor(ms$BIOME_NAME, levels = L$settings$biome_order))),
@@ -57,7 +57,7 @@ test_that("legacy inputs are consistent with the old outputs", {
                tolerance = 1e-12)
 })
 
-# ── Step 2: per-PA trends (02:63-128, 437-470) ─────────────────────────────────
+# ── Per-PA trends (legacy 02) ─────────────────────────────────────────────────
 # New: pa_trends() on the old annual series. Old: pa_level_clean.csv (all trend columns)
 # and pa_trends.csv (written by the same run of 02).
 legacy_new_trends <- local({
@@ -100,9 +100,9 @@ test_that("per-PA OLS trends, BH classes and Yue-Pilon reproduce the old run", {
   }
 })
 
-# ── Step 3: standardised change, bootstraps, biome GLS, correlation, % change ──
-# (02:135-150, 185-435, 494-534; 10:35-79; 11:31-52.) The new functions run on the PA table
-# with the step 2 trends (new), so this also checks that the chain reproduces the old tables.
+# ── Standardised change, bootstraps, biome GLS, correlation, % change ──────────
+# (legacy 02, 10, 11.) The new functions run on the PA table with the new per-PA trends
+# (legacy_new_trends()), so this also checks that the chain reproduces the old tables.
 # Metric labels and the pooled label are the old ones, so rows match by (metric, group).
 LEGACY_METRICS <- c(extent = "Edge extent", intensity = "Edge intensity")
 LEGACY_POOLED  <- "All biomes"
@@ -179,7 +179,7 @@ test_that("bootstrap means reproduce the old biome, pooled, area-weighted and Se
   }
 
   # Seed 43 (area-weighted, biomes): the old block also ran a duplicate unweighted bootstrap,
-  # removed here (A4) → point estimates identical, CIs within 5% of the CI width
+  # removed here → point estimates identical, CIs within 5% of the CI width
   old <- legacy_table("biome_slope_weighted_comparison.csv")
   n <- match_rows(S$weighted$summary, old, c("metric", "BIOME_NAME"))
   u <- match_rows(S$biome$summary, old, c("metric", "BIOME_NAME"))
@@ -196,7 +196,7 @@ test_that("bootstrap means reproduce the old biome, pooled, area-weighted and Se
   parity_check(f, "ci_lo_unweighted (/ CI width)", u$ci_lo / w_u, old$ci_lo_unweighted / w_u, 0.05, "abs")
   parity_check(f, "ci_hi_unweighted (/ CI width)", u$ci_hi / w_u, old$ci_hi_unweighted / w_u, 0.05, "abs")
 
-  # Pooled area-weighted and Sen rows: only in Table SV (10:57-79), rounded to 3 dp, from a
+  # Pooled area-weighted and Sen rows: only in Table SV (legacy 10), rounded to 3 dp, from a
   # stream with a duplicate bootstrap (removed) → points within rounding, CIs within 5% of the
   # CI width plus rounding
   sv <- legacy_table("TableSV_biome_trend_summary.csv")
@@ -250,8 +250,8 @@ test_that("class counts and Yue-Pilon agreement reproduce the old tables", {
   expect_equal(nrow(ag$crosstab), nrow(old))
 })
 
-# GLS tolerance: the collaborator's own rerun on this platform differed from the saved tables by
-# up to 2e-5 (REML optimiser, BLAS; Phase 1), so 1e-4 here. Group means are exact.
+# GLS tolerance: a rerun of the legacy analysis on this platform differed from its saved tables
+# by up to 2e-5 (REML optimiser, BLAS), so 1e-4 here. Group means are exact.
 test_that("biome GLS reproduces the old omnibus, means, contrasts, letters and sigma", {
   skip_if_no_legacy()
   S <- legacy_step3(); s <- legacy()$settings
@@ -290,7 +290,7 @@ test_that("biome GLS reproduces the old omnibus, means, contrasts, letters and s
 test_that("slope correlation and % change reproduce the old tables", {
   skip_if_no_legacy()
   S <- legacy_step3(); s <- legacy()$settings
-  # Table SV correlation: only saved rounded to 4 dp (10:138). Run on the OLD slopes: edge extent
+  # Table SV correlation: only saved rounded to 4 dp. Run on the OLD slopes: edge extent
   # is a ratio of transect counts, so some PAs have mathematically equal slopes (ties, incl. seven
   # exact zeros computed as ±1e-17 by lm and ±1e-19 by the sums). The two computations split these
   # ties differently in the last bits, so Spearman ranks them differently (Boreal rho moves by
@@ -318,7 +318,7 @@ test_that("slope correlation and % change reproduce the old tables", {
                  ca[[col]], cb[[col]], tol = 1e-8)
   }
 
-  # % change (11:31-52): biome rows from the seed-42 summaries, pooled from seed 45
+  # % change (legacy 11): biome rows from the seed-42 summaries, pooled from seed 45
   summ <- rbind(S$biome$summary, S$pooled$summary)
   new <- percent_change(summ, S$pa, S$cols("slope_"),
                         stats::setNames(c("edge_extent_mean", "edge_intensity_mean"), LEGACY_METRICS),
@@ -330,9 +330,9 @@ test_that("slope correlation and % change reproduce the old tables", {
   for (col in c("baseline", "pct_change", "pct_lo", "pct_hi")) parity_check(f, col, n[[col]], old[[col]], tol = 1e-8)
 })
 
-# ── Step 4: spatial set-up (HaversineLMEfunctions.R; 03:126-181) ───────────────
-# The full check (all 3,914 PAs, 7,657,741 pairs: bit-identical; 0.6 s vs 27 s) was run once on
-# 2026-11-08; here the first 800 PAs of the old model set, against the original file's loop.
+# ── Spatial set-up (HaversineLMEfunctions.R; legacy 03) ────────────────────────
+# The full check (all 3,914 PAs, 7,657,741 pairs: bit-identical; 0.6 s vs 27 s) was run once;
+# here the first 800 PAs of the old model set, against the original file's loop.
 test_that("vectorised distances on the old model set equal the original function", {
   skip_if_no_legacy()
   L <- legacy(); s <- L$settings
@@ -347,7 +347,7 @@ test_that("vectorised distances on the old model set equal the original function
                as.vector(haversineDist(xy)), as.vector(env$haversineDist(xy)), kind = "identical")
 })
 
-# ── Step 5: mean models (03) at the saved range ────────────────────────────────
+# ── Mean models (legacy 03) at the saved range ────────────────────────────────
 # The full spatial models are fitted with the range FIXED at the old estimate (corHaversine
 # fixed = TRUE), plus the non-spatial full models. This reproduces every table of the full
 # models, emmeans df included (emmeans counts the fixed range as a covariance parameter). The
@@ -387,9 +387,9 @@ test_that("mean models at the saved range reproduce the old full-model tables", 
   check_mean_tables(legacy_mean_fixed(), what = "full", tol = 1e-6, source = "fast")
 })
 
-# ── Step 6: change models (02b), model A at its saved range ────────────────────
-# Responses are the standardised changes from step 3 (new trends). Model A is fitted at its saved
-# range (fixed) with its non-spatial analogue; this also fixes σ_A and so τ² and the weights.
+# ── Change models (legacy 02b), model A at its saved range ────────────────────
+# Responses are the standardised changes of legacy_step3() (new trends). Model A is fitted at its
+# saved range (fixed) with its non-spatial analogue; this also fixes σ_A and so τ² and the weights.
 # Model B (range not saved), the ranges, CIs and AICc spatial: run_parity_full.R.
 source(testthat::test_path("parity", "change_model_checks.R"), local = TRUE)
 
@@ -422,7 +422,7 @@ test_that("change model A at its saved range reproduces the old 02b tables", {
   check_change_tables(tabs, models = "A", optimised = FALSE, tol = 1e-6, source = "fast")
 })
 
-# ── Phase 3, D1: the change models fitted with their own reference levels ──────
+# ── The change models fitted with the config reference levels ─────────────────
 # The old run fitted the change models with strict / Grassland as the reference and reported
 # emmeans contrasts against non-strict / Boreal. The new 08 fits them with non-strict / Boreal
 # as the reference (config ref), the same model reparametrised. Model A refitted that way

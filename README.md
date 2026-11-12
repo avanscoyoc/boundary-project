@@ -1,24 +1,29 @@
 # Protected Area Edge Analysis
 
 ## Overview
-This project analyzes change in vegetation contrast at protected area (PA) boundaries using Google Earth Engine and geospatial methods. The workflow selects ~4,000 terrestrial PAs from the WDPA, generates transects perpendicular to each boundary, samples the gradient magnitude of annual median NDVI (MODIS MOD13A1, 2003–2025) plus water, human modification, and topography at every point, and computes yearly edge metrics and their trends for each PA.
+This project analyzes change in vegetation contrast at protected area (PA) boundaries using Google Earth Engine and geospatial methods. The workflow selects more than 4,000 terrestrial PAs from the WDPA, generates transects perpendicular to each boundary, samples the gradient magnitude of annual median NDVI (MODIS MOD13A1, 2003–2025) plus water, human modification, and topography at every point, and computes yearly edge metrics and their trends for each PA. The statistical analysis (R) models mean edge extent and intensity and their change, and a validation compares every sampled PA with a displaced copy of its transects in the surrounding landscape.
+
+The data the scripts produce (`data/`, `results/`) are not part of the repository: run the scripts to regenerate them. WDPA boundaries may not be redistributed (see [License](#license)).
 
 ## Quick Start
 
 ### Workflow Overview
 ```
-01_collect_protected_areas.py   → filter WDPA in Earth Engine → download GeoJSON from Drive
-02_generate_sampling_points.py  → choose PAs + build transects → upload zips to Earth Engine
-03_sample_satellite_imagery.py  → sample NDVI gradients in Earth Engine → download CSVs from Drive
-04_compute_edge_metrics.py      → transect-years, PA-year metrics, trends → final CSV
-05_prepare_analysis_data.R      → analysis set, imputed establishment years, z-scores (R)
-05b_inspection_export.py + .js  → visual inspection of the analysis set in an Earth Engine app (optional)
-06_models_mean.R                → spatial GLS of mean edge extent and intensity → Tables SX, SY
-07_trends.R                     → per-PA trends, standardised change, biome comparison, case studies → Tables SV, SW
-08_models_change.R              → spatial GLS of change → Table SZ
-09_sensitivity.R                → transect subsets and PA subsets → sensitivity tables
-10_figures.R                    → Fig. 3, Fig. 4, supplementary and diagnostic figures, Fig. 2 map layers
-11–14 (validation, in development) → displaced-transect null model
+01_collect_protected_areas.py      → filter WDPA in Earth Engine → download GeoJSON from Drive
+02_generate_sampling_points.py     → choose PAs + build transects → upload zips to Earth Engine
+03_sample_satellite_imagery.py     → sample NDVI gradients in Earth Engine → download CSVs from Drive
+04_compute_edge_metrics.py         → transect-years, PA-year metrics, trends → final CSV
+05_prepare_analysis_data.R         → analysis set, imputed establishment years, z-scores (R)
+05b_inspection_export.py + .js     → visual inspection of the analysis set in an Earth Engine app (optional)
+06_models_mean.R                   → spatial GLS of mean edge extent and intensity → Tables SX, SY
+07_trends.R                        → per-PA trends, standardised change, biome comparison, case studies → Tables SV, SW
+08_models_change.R                 → spatial GLS of change → Table SZ
+09_sensitivity.R                   → transect subsets and PA subsets → sensitivity tables
+10_figures.R                       → Fig. 3, Fig. 4, supplementary and diagnostic figures, Fig. 2 map layers
+11_validation_displace_transects.py → displaced copies of sampled PAs' transects → upload zips to Earth Engine
+12_validation_sample_imagery.py    → sample the copies in Earth Engine → download CSVs from Drive
+13_validation_edge_metrics.py      → accept one copy per PA, its edge metrics
+14_validation_compare.R            → each PA against its copy → validation table and figure
 ```
 
 ### Run the pipeline
@@ -49,6 +54,15 @@ Rscript scripts/09_sensitivity.R
 Rscript scripts/10_figures.R
 # → results/tables/, results/figures/, results/diagnostics/, results/analysis_counts.json,
 #   data/10_map_layers/ (Fig. 2 layers; WDPA polygons, so kept out of results/)
+
+# 11–14. Validation (after script 05; see Validation below)
+python scripts/11_validation_displace_transects.py
+# → Upload each zip in data/11_validation/upload/ as an Earth Engine table asset
+python scripts/12_validation_sample_imagery.py --test
+python scripts/12_validation_sample_imagery.py
+# → Download all CSVs from Drive folder ndvi_gradient_displaced_v2 to data/12_gee_validation/
+python scripts/13_validation_edge_metrics.py
+Rscript scripts/14_validation_compare.R
 ```
 
 > **Reproducing the exact published analysis:** Script 01 reads a date-stamped WDPA release
@@ -72,7 +86,10 @@ boundary-project/
 │   ├── 08_models_change.R
 │   ├── 09_sensitivity.R
 │   ├── 10_figures.R
-│   └── 11–14_validation_*              # validation (in development): Python 11–13, R 14
+│   ├── 11_validation_displace_transects.py   # validation: Python 11–13, R 14
+│   ├── 12_validation_sample_imagery.py
+│   ├── 13_validation_edge_metrics.py
+│   └── 14_validation_compare.R
 ├── modules/                     # Reusable domain logic
 │   ├── config.py                # All parameters and paths (Python)
 │   ├── remotesensing.py         # Google Earth Engine functions
@@ -95,14 +112,15 @@ boundary-project/
 │   │                            #   excluded_pas.csv, cache/ (fitted models; coordinates stay here)
 │   ├── inspection/              # pas_final_v2.zip (upload to Earth Engine), checklist.csv (05b)
 │   ├── 10_map_layers/           # pa_map_layers.gpkg, case_study_pas.kml (Fig. 2; script 10)
-│   ├── 11_validation/           # displaced-transect sample and candidates; upload/ for Earth Engine
-│   └── 12_gee_validation/       # displaced-point CSVs                (download after script 12)
+│   ├── 11_validation/           # sample, candidates, displaced points; upload/ for Earth Engine
+│   └── 12_gee_validation/       # displaced-point CSVs and polygon biomes (download after script 12)
 └── results/
     ├── pa_edge_metrics_ndvi.csv # FINAL: one row per PA-year
     ├── pipeline_counts.json     # PA and transect counts at every step (for the methods)
     ├── analysis_counts.json     # analysis-set counts, imputation, PA sets (script 05)
-    ├── tables/                  # supplementary tables and figure source tables (scripts 06–09)
-    ├── figures/                 # Fig. 3, Fig. 4 (and 4A, 4B case panels), supplementary figures (script 10)
+    ├── validation_*.csv         # displaced copies: PA-year metrics, candidate checks, log (script 13)
+    ├── tables/                  # supplementary tables and figure source tables (scripts 06–09, 14)
+    ├── figures/                 # Fig. 3, Fig. 4 (and 4A, 4B case panels), supplementary figures (scripts 10, 14)
     ├── diagnostics/             # unreported checks: spatial ranges, Moran's I, residuals, …
     └── R_sessionInfo.txt        # R and package versions of the last figure run
 ```
@@ -132,24 +150,24 @@ boundary-project/
 ### Prerequisites
 - [VS Code](https://code.visualstudio.com/) with the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) running
-- A Google account with a Google Cloud project [registered for Earth Engine](https://code.earthengine.google.com/register) (free for noncommercial use). You use your own account and project; you do not need access to the authors' project.
+- A Google account with a Google Cloud project [registered for Earth Engine](https://code.earthengine.google.com/register) (free for noncommercial use). Use your own account and project; no access to the authors' project is needed.
 
 ### Initial Setup
 1. Clone the repository and open in VS Code:
    ```bash
-   git clone https://github.com/your-org/boundary-project.git
+   git clone https://github.com/avanscoyoc/boundary-project.git
    code boundary-project
    ```
-2. When prompted, click **"Reopen in Container"** — VS Code will build the Docker container and install all pinned dependencies from `requirements.txt` (~5 minutes).
+2. When prompted, click **"Reopen in Container"** — VS Code builds the Docker container and installs all pinned dependencies (Python from `requirements.txt` + `constraints.txt`, R from `.devcontainer/pixi.lock`; ~5 minutes).
 3. Sign in to Earth Engine with your Google account and set your project. Do this once, in the VS Code terminal:
    ```bash
    earthengine authenticate --auth_mode=notebook
    earthengine set_project YOUR-PROJECT-ID
    ```
    Open the printed link, sign in, and paste the code back into the terminal. Your sign-in and project are saved in a Docker volume on your machine (`boundary-project-earthengine`), not in the repo, so they survive **Rebuild Container**. You do not need to edit `modules/config.py`.
-4. Run the scripts in order (see [Detailed Workflow](#detailed-workflow)). Every dataset the scripts read is in the public Earth Engine catalog. The script 02 uploads go into your project, and the exports from scripts 01 and 03 go to your Google Drive.
+4. Run the scripts in order (see [Detailed Workflow](#detailed-workflow)). Every dataset the scripts read is in the public Earth Engine catalog. The uploads (scripts 02, 05b, 11) go into your project, and the exports (scripts 01, 03, 12) go to your Google Drive.
 
-**Sharing a project (optional).** To let a collaborator use your project and the transect assets you already uploaded, add their Google account in Cloud Console → IAM with the roles *Service Usage Consumer* and *Earth Engine Resource Writer*. They still sign in as themselves, then run `earthengine set_project YOUR-PROJECT-ID`. To use a different project for a single run, put `GEE_PROJECT=other-project` before the command.
+**Sharing a project (optional).** To let someone else use your project and the assets you already uploaded, add their Google account in Cloud Console → IAM with the roles *Service Usage Consumer* and *Earth Engine Resource Writer*. They still sign in as themselves, then run `earthengine set_project YOUR-PROJECT-ID`. To use a different project for a single run, put `GEE_PROJECT=other-project` before the command.
 
 ## Detailed Workflow
 
@@ -205,9 +223,9 @@ Processes one asset at a time: checks that every exported point arrived exactly 
 
 ## Statistical Analysis (R)
 
-Scripts 05–10 implement the Statistical Analyses of the methods in R (4.5.3, installed in the container with pixi; packages pinned in `.devcontainer/pixi.lock`). Settings are in [modules/r/config.R](modules/r/config.R); the functions are in `modules/r/`, and each script writes its own tables, which the figure script reads.
+Scripts 05–10 implement the statistical analysis in R (4.5.3, installed in the container with pixi; packages pinned in `.devcontainer/pixi.lock`). Settings are in [modules/r/config.R](modules/r/config.R); the functions are in `modules/r/`, and each script writes its own tables, which the figure script reads.
 
-- **05** builds the analysis set from `results/pa_edge_metrics_ndvi.csv`: drops the Mangrove and Rock & Ice biomes, PAs whose boundary is dominated by sea (fewer than 75% of transects complete in a typical year) or by open water (more than 75% of transects with surface water), and PAs missing a covariate or with fewer than 5 years of either metric (4,396 PAs; `excluded_pas.csv` lists the rest with the reason), and, once the visual inspection is finished (`inspection$apply = TRUE`), the PAs marked `exclude` in the checklist. It imputes missing establishment years (median of 1,000 draws from the country's known years), z-scores the covariates, and computes point-on-surface coordinates.
+- **05** builds the analysis set from `results/pa_edge_metrics_ndvi.csv`: drops the Mangrove and Rock & Ice biomes, PAs whose boundary is dominated by sea (fewer than 75% of transects complete in a typical year) or by open water (more than 75% of transects with surface water), and PAs missing a covariate or with fewer than 5 years of either metric (`excluded_pas.csv` lists them with the reason), and, when `inspection$apply = TRUE`, the PAs marked `exclude` in the visual-inspection checklist. It imputes missing establishment years (median of 1,000 draws from the country's known years), z-scores the covariates, and computes point-on-surface coordinates.
 - **06** fits spatial GLS (exponential correlation in great-circle distance, REML) of mean edge extent and intensity: main-effects and HMI-interaction models (reference levels non-strict / Boreal Forest, as for every model).
 - **07** computes per-PA OLS trends with Benjamini–Hochberg classes (Yue–Pilon as a check), standardised change, bootstrap biome means and the biome GLS comparison; the lag-1 autocorrelation of each PA's trend residuals (a diagnostic); and the series and % change of the Fig. 4B case-study PAs (`case_studies` in the config).
 - **08** fits spatial GLS of standardised change (reference non-strict / Boreal Forest), unweighted and precision-weighted.
@@ -216,36 +234,40 @@ Scripts 05–10 implement the Statistical Analyses of the methods in R (4.5.3, i
 
 Scripts 06, 08 and 09 take `--pilot N` (a random subset of PAs, for a quick check) and `--cores K`. At full size each spatial fit takes about an hour and about 1.5 GB of memory, so run 06, 08 and 09 in the background and one at a time on a machine with 8 GB. Fits are cached in `data/05_analysis/cache/` by content, so a rerun only refits what changed.
 
-**Tests.** `Rscript -e 'testthat::test_dir("tests/r")'` runs the unit tests and, when the collaborator's original project is present in `PA_New_Analysis/`, the parity tests that check the R functions reproduce the original analysis on its data (`data/parity/parity_report.csv`).
+**Tests.** `Rscript -e 'testthat::test_dir("tests/r")'` runs the R unit tests. The parity tests in `tests/r/parity/` check that the R functions reproduce an earlier R implementation of this analysis on its data; they need that project in `PA_New_Analysis/` (not included in this repository) and are skipped without it.
 
 ## Visual inspection (script 05b)
 
-Every analysed PA can be checked on satellite imagery before the final runs:
+Every analysed PA can be checked on satellite imagery:
 1. `python scripts/05b_inspection_export.py` writes `data/inspection/pas_final_v2.zip` (the analysed PAs in review order: biome, country, name) and `data/inspection/checklist.csv` (one row per PA; it never overwrites a checklist that has entries).
 2. Upload the zip as the Earth Engine table asset `pas_final_v2`, then paste `scripts/05b_inspection_app.js` into the Code Editor and run it (or publish it as an app). It shows one PA at a time with its outline, its transect points (interior, boundary, exterior) and an info panel; the page address keeps your place.
 3. Record decisions in the checklist (`decision`: blank = keep, `exclude`, or `check` while undecided; `note`). The app number is the checklist's `order`.
-4. When done, set `inspection$apply = TRUE` in `modules/r/config.R` and rerun 05 → 07 → 06 → 08 → 09 → 10 (and script 11 for the validation sample). Script 05 removes the excluded PAs as its last counted step and stops if any PA is still marked `check`.
+4. When done, set `inspection$apply = TRUE` in `modules/r/config.R` and rerun 05 → 07 → 06 → 08 → 09 → 10, then the validation (11 → 14). Script 05 removes the excluded PAs as its last counted step and stops if any PA is still marked `check`.
 
-## Validation (displaced transects; in development)
+## Validation (displaced transects; scripts 11–14)
 
-Scripts 11–14 test whether boundary edges exceed the contrast of the background landscape: each sampled PA's transect set is translated by a random vector (no rotation; distance between one and two times the PA's size, at least 50 km; at most 10% of transects with a PA boundary within 2.5 km of their centre point), and the copy must pass the same rules as an analysed PA (biome of the PA polygon moved by the same vector, by largest area as in script 01; the sea, lake and five-year rules of script 05), sampled like the original transects, measured with the same functions, and compared with the PA (paired, by biome). Script 11 (local) writes upload zips of the displaced points and the displaced PA polygons; script 12 samples the points in Earth Engine and gives each polygon its biome; script 13 computes the edge metrics of every candidate and accepts per PA the first that passes; script 14 (R) compares. Settings: `VALIDATION_*` in `modules/config.py`.
+The validation tests whether the edge signal at PA boundaries exceeds what the same transects record in the surrounding landscape.
+- **Sample (script 11, local):** 50 analysed PAs per biome, drawn at random with 25 reserves in draw order. Each PA's whole transect set is translated by a random vector (no rotation; distance uniform between d and 2d, where d is the larger of 50 km and the PA's footprint; at most 10% of displaced transects with a PA boundary within 2.5 km of their centre point), giving up to five candidate copies per PA. The PA polygon is moved with its transects. Script 11 writes upload zips of the displaced points and polygons.
+- **Sampling (script 12, Earth Engine):** the copies are sampled exactly as the original transects (script 03's image), and each displaced polygon gets its biome by largest area, as in script 01.
+- **Acceptance and metrics (script 13, local):** each copy is measured with script 04's functions and must pass the rules of an analysed PA: the displaced polygon keeps the PA's biome, and the sea, lake and five-year rules of script 05. Per PA the first passing candidate in draw order is used; reserves replace PAs with none.
+- **Comparison (script 14, R):** the paired difference, PA minus copy, in the 2003–2025 mean of each edge metric, per biome and for all validation PAs: the mean with a 95% percentile-bootstrap CI (10,000 resamples), the median, the share of PAs above their copy, and a paired Wilcoxon signed-rank test (Holm-adjusted across biomes). "All PAs" weights every biome equally; the table also gives the estimate with biomes weighted by their share of the analysed PAs.
+
+Outputs: `results/tables/TableS_validation.csv`, `results/figures/figS_validation.{pdf,png}` (filled symbols: Wilcoxon p < 0.05), `results/diagnostics/validation_paired_pa.csv` (one row per PA) and `validation_attrition.csv` (sampled PAs by outcome), and script 13's `results/validation_*.csv`. Settings: `VALIDATION_*` in [modules/config.py](modules/config.py) and `validation` in [modules/r/config.R](modules/r/config.R). The `--test` run of script 12 exports part 0 of the first asset again; keep one copy of it in `data/12_gee_validation/`.
 
 ## Configuration
 
-Edit [modules/config.py](modules/config.py) for:
+Python settings are in [modules/config.py](modules/config.py); the defaults reproduce the analysis. The Earth Engine project (`GEE_PROJECT`) is not set in the file: it comes from `earthengine set_project` or the `GEE_PROJECT` environment variable (see [Setup](#initial-setup)).
 
-**Required settings** (scripts 01 and 03):
-- `GEE_PROJECT`: Your Google Earth Engine project ID. Not edited here: it comes from `earthengine set_project` or the `GEE_PROJECT` environment variable (see [Setup](#initial-setup))
+R analysis settings (analysis set, reference levels, bootstrap seeds, spatial model, sensitivity, validation) are in [modules/r/config.R](modules/r/config.R).
 
-R analysis settings (analysis set, reference levels, bootstrap seeds, spatial model, sensitivity) are in [modules/r/config.R](modules/r/config.R).
-
-**Optional settings** (defaults reproduce the analysis):
+Main Python settings:
 - `START_YEAR`, `END_YEAR`: Analysis period (default: 2003–2025)
 - `BOUNDARY_SPACING`: Distance between boundary points (default: 500 m)
 - `TRANSECT_SPACING`: Distance between points along a transect (default: 2,500 m)
 - `POINTS_PER_SIDE`: Points on each side of the boundary (default: 2)
 - `CHUNK_SIZE`: PAs per upload file (default: 400)
 - `RUN_TAG`: Tag in Earth Engine asset and Drive folder names (default: `v2`); change it for a new full re-run so old and new outputs never mix
+- `VALIDATION_*`: validation sample size, displacement rules and seed
 
 ## Troubleshooting
 
@@ -257,8 +279,8 @@ R analysis settings (analysis set, reference levels, bootstrap seeds, spatial mo
 - Download every CSV from the Drive folder `ndvi_gradient_v2` into `data/03_gee/`
 - Script 04 compares the CSVs with `transect_points.parquet` and reports missing or duplicate points
 
-**"duplicate points in the CSVs"** (script 04)
-- A CSV part was downloaded twice (e.g. the `--test` part and the full run); keep one copy
+**"duplicate points in the CSVs"** (script 04) or **"candidates do not have all their points"** (script 13)
+- A CSV part is missing or was downloaded twice (e.g. the `--test` part and the full run); keep exactly one copy of every part
 
 **GEE authentication errors**
 ```bash

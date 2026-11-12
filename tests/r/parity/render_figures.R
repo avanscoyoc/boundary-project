@@ -1,6 +1,6 @@
-# Step 7 side-by-side check: render Fig. 3 and Fig. 4A with modules/r/plots.R from the OLD saved
-# tables (renamed to the new conventions), for comparison with the collaborator's re-rendered
-# figures in data/parity/reference_figures/ (Phase 1). Run from the repo root:
+# Side-by-side check: render Fig. 3 and Fig. 4A with modules/r/plots.R from the OLD saved tables
+# of the legacy analysis (renamed to the new conventions), for comparison with the earlier
+# implementation's figures, re-rendered in data/parity/reference_figures/. Run from the repo root:
 #   Rscript tests/r/parity/render_figures.R
 # Writes data/parity/figures/*_port.{pdf,png}: Fig. 3, Fig. 4A, the Moran correlogram, the residual
 # diagnostics (extent, from the fast suite's cached fixed-range fit) and the slope-correlation S fig.
@@ -20,7 +20,7 @@ tab <- function(name) {
 rows <- fig3a_rows(tab("model_coef_additive_gls.csv"), tab("response_sd_gls.csv"), s$biome_order,
                    contrasts = tab("model_contrasts_additive_gls.csv"))
 sl_i <- tab("hmi_slopes_iucn_gls.csv"); sl_b <- tab("hmi_slopes_biome_gls.csv")
-# Panels from the Wald tests (B3): on the old data extent × IUCN, extent × biome and intensity ×
+# Panels from the Wald tests: on the old data extent × IUCN, extent × biome and intensity ×
 # biome are supported (intensity × IUCN p = 0.27), which are the old panels B, C, D.
 wald <- tab("model_tests_wald_gls.csv")
 panels <- fig3_panels(wald)

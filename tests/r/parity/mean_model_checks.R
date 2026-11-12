@@ -1,5 +1,5 @@
-# Parity checks of the mean-model tables (03) against the old outputs/tables/, shared by the
-# fast suite (fixed range: full models only) and run_parity_full.R (optimised: everything).
+# Parity checks of the mean-model tables (legacy 03) against the old outputs/tables/, shared by
+# the fast suite (fixed range: full models only) and run_parity_full.R (optimised: everything).
 #
 # `tabs` = named list (extent, intensity) of mean_model_tables() results. `what` selects the
 # tables to compare; `tol` the relative tolerance. The emmeans df (N − p − number of covariance

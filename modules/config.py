@@ -176,28 +176,28 @@ INSPECTION_CHECKLIST = INSPECTION_DIR / "checklist.csv"         # the reviewer's
 INSPECTION_DECISIONS = ('', 'exclude', 'check')                 # blank = keep
 
 # =====================================================================
-# Validation: displaced-transect null model (scripts 11-13; draft for review)
+# Validation: displaced-transect null model (scripts 11-13)
 # =====================================================================
 # Each sampled PA's full transect set is translated by one random vector (no rotation) in a
-# local azimuthal equidistant projection. Values in [brackets] in the methods text are set here.
+# local azimuthal equidistant projection.
 
 VALIDATION_DIR = DATA_DIR / "11_validation"                  # script 11: sample, candidates, log
 VALIDATION_UPLOAD_DIR = VALIDATION_DIR / "upload"            # zipped shapefiles to upload to Earth Engine
 VALIDATION_GEE_CSV_DIR = DATA_DIR / "12_gee_validation"      # script 12 CSVs (download from Drive)
 VALIDATION_SAMPLE_FRAME = DATA_DIR / "05_analysis" / "pa_level.csv"   # the analysis PAs (R script 05)
 
-VALIDATION_N_PER_BIOME = 50        # [n] PAs per biome
+VALIDATION_N_PER_BIOME = 50        # PAs per biome
 VALIDATION_RESERVE = 25            # extra PAs drawn per biome, used in draw order to replace PAs
                                    # without an accepted displacement
 VALIDATION_N_CANDIDATES = 5        # displacements per PA passing the local checks, sent to Earth
                                    # Engine; the first that passes the imagery checks is accepted
-VALIDATION_MAX_ATTEMPTS = 200      # [N] vectors drawn per PA for the local checks
-VALIDATION_MIN_DIST_KM = 50        # [50 km] PA size d = the larger of this and the PA's footprint
+VALIDATION_MAX_ATTEMPTS = 200      # vectors drawn per PA for the local checks
+VALIDATION_MIN_DIST_KM = 50        # PA size d = the larger of this and the PA's footprint
                                    # (bounding-box diagonal of its transects: the copy cannot overlap)
-VALIDATION_DIST_MULT = 2           # [2] distance drawn uniformly in [d, mult × d] (user, 2026-11-11)
-VALIDATION_MAX_BOUNDARY_SHARE = 0.10   # [10%] a vector passes if at most this share of displaced
+VALIDATION_DIST_MULT = 2           # distance drawn uniformly in [d, mult × d]
+VALIDATION_MAX_BOUNDARY_SHARE = 0.10   # a vector passes if at most this share of displaced
                                    # transects has a PA boundary between points -1 and 1 (within
-                                   # one TRANSECT_SPACING, 2.5 km, of the centre point) (user, 2026-11-11)
+                                   # one TRANSECT_SPACING, 2.5 km, of the centre point)
 VALIDATION_SEED = 20261108
 
 VALIDATION_UPLOAD_PREFIX = f'displaced_points_{RUN_TAG}_'
@@ -207,7 +207,7 @@ VALIDATION_PA_METRICS = RESULTS_DIR / "validation_displaced_pa_years.csv"   # sc
 VALIDATION_LOG = RESULTS_DIR / "validation_displacement_log.csv"           # script 13
 VALIDATION_CHECKS = RESULTS_DIR / "validation_candidate_checks.csv"        # script 13
 
-# The displaced copy must pass the analysis-set rules of R script 05 (user, 2026-11-11). The
+# The displaced copy must pass the analysis-set rules of R script 05. The
 # values are those of modules/r/config.R (min_complete_pct, max_water_pct, min_years);
 # tests/test_validation.py checks that they agree.
 VALIDATION_MIN_COMPLETE_PCT = 75   # sea rule: median over years of the % of transects complete
