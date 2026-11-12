@@ -14,7 +14,7 @@ Workflow:
 
 BEFORE RUNNING:
 1. Set your GEE project once: earthengine set_project YOUR-PROJECT-ID (see README Setup)
-2. Upload every data/02_transects/upload/transect_points_{RUN_TAG}_NNN.zip as a
+2. Upload every data/02_transects/upload/transect_points_NNN.zip as a
    table asset (see output from script 02)
 
 TEST FIRST:
@@ -27,7 +27,7 @@ starts at asset 005 (e.g. if a run stopped after asset 004 finished), so assets
 that were already exported are not exported again.
 
 MANUAL STEP REQUIRED AFTER RUNNING:
-Download all CSV files from Google Drive folder '{INDEX_NAME}_gradient_{RUN_TAG}'
+Download all CSV files from Google Drive folder 'ndvi_gradient'
 to data/03_gee/
 
 Then run: python scripts/04_compute_edge_metrics.py
@@ -64,7 +64,7 @@ ee.Initialize(project=config.GEE_PROJECT)
 
 # Export folder and names
 folder_name = config.GEE_DRIVE_FOLDER
-export_prefix = f"{config.INDEX_NAME}_gradient_{config.RUN_TAG}_"
+export_prefix = config.GEE_EXPORT_PREFIX
 print(f"Export folder: {folder_name}")
 
 # Sampling projection: native MOD13A1 grid

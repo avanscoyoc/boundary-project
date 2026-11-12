@@ -94,7 +94,7 @@ test_that("fig3_panels keeps the supported interactions; fig3 builds with 0 to 4
   expect_silent(fig3_axes(pi[pi$response == "extent", ], "extent"))
 })
 
-test_that("Fig. 4B: placeholders + series, combined Fig. 4, single panels; values kept (B5)", {
+test_that("Fig. 4B: placeholders + series, combined Fig. 4, single panels; values outside the axis kept", {
   set.seed(2)
   cases <- data.frame(WDPA_PID = c("p1", "p2"), label = c("One, X · Grassland", "Two, Y · Trop. For."), stringsAsFactors = FALSE)
   py <- expand.grid(WDPA_PID = cases$WDPA_PID, year = 2003:2025, stringsAsFactors = FALSE)

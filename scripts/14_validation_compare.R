@@ -44,7 +44,8 @@ read <- function(path) as.data.frame(readr::read_csv(path, col_types = readr::co
                                                      guess_max = 1e5, show_col_types = FALSE, progress = FALSE))
 
 pa <- read(file.path(CFG$paths$analysis_dir, "pa_level.csv"))
-scaling <- read(file.path(CFG$paths$analysis_dir, "scaling.csv"))
+scaling <- as.data.frame(readr::read_csv(file.path(CFG$paths$analysis_dir, "scaling.csv"), show_col_types = FALSE,
+                                          progress = FALSE))   # no WDPA_PID column
 nul <- null_pa_means(read(src$pa_years), unname(CFG$responses), CFG$min_years)
 log <- read(src$log)
 metrics <- names(CFG$responses)

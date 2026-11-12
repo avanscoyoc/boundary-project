@@ -10,18 +10,18 @@ analysis-set rules to each copy and accepts one displacement per PA.
 
 BEFORE RUNNING:
 1. Run script 11.
-2. Upload every data/11_validation/upload/displaced_points_{RUN_TAG}_NNN.zip and
-   displaced_polygons_{RUN_TAG}_NNN.zip as an Earth Engine table asset of the same name in
+2. Upload every data/11_validation/upload/displaced_points_NNN.zip and
+   displaced_polygons_NNN.zip as an Earth Engine table asset of the same name in
    your project.
 
 TEST FIRST:
     python scripts/12_validation_sample_imagery.py --test
 exports only part 0 of point asset 000 and the biome of the first 20 polygons of polygon asset
-000 (as displaced_polygons_biome_{RUN_TAG}_000_test, which script 13 ignores).
+000 (as displaced_polygons_biome_000_test, which script 13 ignores).
 
 MANUAL STEP AFTER RUNNING:
-Download all CSVs from the Google Drive folder '{INDEX_NAME}_gradient_displaced_{RUN_TAG}' (the
-point parts and displaced_polygons_biome_{RUN_TAG}_NNN.csv) to data/12_gee_validation/, then run
+Download all CSVs from the Google Drive folder 'ndvi_gradient_displaced' (the
+point parts and displaced_polygons_biome_NNN.csv) to data/12_gee_validation/, then run
 script 13.
 """
 
@@ -48,7 +48,7 @@ ee.Authenticate(auth_mode='notebook')  # prompts only if not signed in yet
 ee.Initialize(project=config.GEE_PROJECT)
 
 folder_name = config.VALIDATION_DRIVE_FOLDER
-export_prefix = f"{config.INDEX_NAME}_gradient_displaced_{config.RUN_TAG}_"
+export_prefix = config.VALIDATION_EXPORT_PREFIX
 ndvi_proj = get_ndvi_projection()
 ndvi_scale = ndvi_proj.nominalScale().getInfo()
 

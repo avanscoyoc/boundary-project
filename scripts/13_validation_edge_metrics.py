@@ -14,7 +14,7 @@ VALIDATION_N_PER_BIOME PAs in draw order with an accepted copy are the validatio
 
 Inputs:  data/11_validation/sample.csv, candidates.csv (script 11)
          data/12_gee_validation/*.csv (script 12, downloaded from Drive): the point parts and
-         displaced_polygons_biome_{RUN_TAG}_NNN.csv
+         displaced_polygons_biome_NNN.csv
 Outputs: results/validation_displaced_pa_years.csv  one row per validation PA-year of the
                                                     displaced copy (WDPA_PID = the original PA)
          results/validation_candidate_checks.csv    one row per candidate: the rule values and

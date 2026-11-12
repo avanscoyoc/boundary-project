@@ -1,5 +1,5 @@
 # Exact versions of every Python package the code needs, including indirect dependencies.
-# Frozen on 2026-11-07 from the container that produced the v2 results (pip freeze), limited
+# Frozen on 2026-11-07 from the container that produced the published results (pip freeze), limited
 # to what requirements.txt pulls in. Used as: pip install -r requirements.txt -c constraints.txt
 certifi==2026.2.25
 cffi==2.0.0

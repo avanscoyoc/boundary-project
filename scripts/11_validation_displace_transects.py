@@ -8,7 +8,7 @@ VALIDATION_N_CANDIDATES displacements that pass the checks needing no imagery:
 - PA size d = max(VALIDATION_MIN_DIST_KM, the PA's footprint), so the copy cannot overlap
   the PA; distance drawn uniformly in [d, VALIDATION_DIST_MULT × d];
 - at most VALIDATION_MAX_BOUNDARY_SHARE of the displaced transects have the boundary of a PA
-  of the 6,570-PA WDPA set (pas_selected + pas_removed, the PA itself included) in their
+  of the WDPA set of script 02 (pas_selected + pas_removed, the PA itself included) in their
   centre zone (points -1 to 1, within 2.5 km of the centre point); the share is recorded.
 The checks needing imagery are those of the analysis set (R script 05) applied to the copy:
 biome (of the PA polygon moved by the same vector, largest-area ecoregion as script 01), sea,
@@ -22,8 +22,8 @@ Outputs: data/11_validation/sample.csv            sampled PAs: biome, draw order
          data/11_validation/candidates.csv        one row per candidate displacement, with the
                                                   share of transects near a PA boundary
          data/11_validation/candidate_points.parquet  displaced points of every candidate
-         data/11_validation/upload/displaced_points_{RUN_TAG}_NNN.zip  for Earth Engine
-         data/11_validation/upload/displaced_polygons_{RUN_TAG}_NNN.zip  the PA polygon moved by
+         data/11_validation/upload/displaced_points_NNN.zip  for Earth Engine
+         data/11_validation/upload/displaced_polygons_NNN.zip  the PA polygon moved by
              each candidate's vector (its biome, script 12, as script 01 for the PA)
              (both: field WDPA_PID = "<WDPA_PID>#<candidate>", as the key of script 13)
 

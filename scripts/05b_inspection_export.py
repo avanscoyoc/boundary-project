@@ -2,8 +2,8 @@
 Script 05b: Export the analysis set for visual inspection
 
 Writes the analysis-set PAs (R script 05) for the Earth Engine inspection app
-(scripts/05b_inspection_app.js), plus a checklist for the reviewer's notes.
-Run once, before the review. PAs marked `exclude` in the checklist are removed
+(scripts/05b_inspection_app.js), plus a checklist for the inspection notes.
+Run once, before the inspection. PAs marked `exclude` in the checklist are removed
 by script 05 as a counted step; scripts 02-04 do not rerun (each PA's transects
 and metrics are computed on their own).
 
@@ -20,17 +20,17 @@ Polygon fields (shapefile, names of at most 10 characters):
   MISS_PCT   % of the PA's transect-years with a missing value (as 05's missing-data count)
   COMPL_PCT  median % of complete transects (05's sea rule: >= 75 kept)
   WATER_PCT  % of transects with water (05's lake rule: <= 75 kept)
-  ASSET      NNN of the point asset transect_points_v2_NNN that holds the PA
+  ASSET      NNN of the point asset transect_points_NNN that holds the PA
 
 INPUT:
 - data/05_analysis/pa_level.csv                         (analysis set, R script 05)
 - data/02_pas/pas_selected.gpkg                         (polygons, transect counts; script 02)
-- data/02_transects/upload/transect_points_v2_NNN.zip   (the point assets; script 02)
+- data/02_transects/upload/transect_points_NNN.zip      (the point assets; script 02)
 - data/04_transect_years/missing_transects.csv          (script 04)
 - results/analysis_counts.json                          (05's totals, cross-checked)
 
 OUTPUT:
-- data/inspection/pas_final_v2.zip   (upload to Earth Engine as table asset pas_final_v2)
+- data/inspection/pas_final.zip      (upload to Earth Engine as table asset pas_final)
 - data/inspection/checklist.csv      (order, WDPA_PID, NAME, ISO3, BIOME_NAME, decision, note;
                                       UTF-8 with BOM so spreadsheet programs show names correctly)
 
@@ -65,7 +65,7 @@ for path in [config.INSPECTION_INPUT, config.PAS_SELECTED, config.MISSING_TRANSE
     if not path.exists():
         raise FileNotFoundError(f"{path} not found; run scripts 02, 04 and 05 first.")
 
-# --- Never overwrite the reviewer's notes ---------------------------------------
+# --- Never overwrite the inspection notes ---------------------------------------
 checklist = config.INSPECTION_CHECKLIST
 if checklist.exists():
     try:
@@ -163,7 +163,7 @@ for biome, g in pa.groupby('BIOME_NAME', sort=False):
     print(f"  {g['ORDER'].min():>5}–{g['ORDER'].max():<5} {biome} ({len(g):,})")
 
 asset_id = f"projects/{config.GEE_PROJECT}/assets/{zip_path.stem}"
-print("\n⚠️  MANUAL STEP: upload the zip to Earth Engine as a table asset:")
+print("\nMANUAL STEP: upload the zip to Earth Engine as a table asset:")
 print(f"  {zip_path.relative_to(project_root)}  ->  {asset_id}")
 print("  Then paste scripts/05b_inspection_app.js into the Code Editor and run it.")
 print(f"\nDone in {time.time() - t_start:.0f} s")

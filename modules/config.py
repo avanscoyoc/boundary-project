@@ -40,9 +40,12 @@ PIPELINE_COUNTS = RESULTS_DIR / "pipeline_counts.json"
 # =====================================================================
 # Run tag
 # =====================================================================
-# Used only where old and new outputs could mix: Earth Engine asset names and the
-# Google Drive export folder. Change it for a new full re-run.
-RUN_TAG = 'v2'
+# Optional tag in the names where old and new outputs could mix: Earth Engine assets, the
+# Google Drive export folders and the upload and export files. Empty by default (one version of
+# every name, e.g. transect_points_000); set a tag such as 'run2' for a new full re-run, and the
+# names become transect_points_run2_000 and so on.
+RUN_TAG = ''
+_TAG = f'_{RUN_TAG}' if RUN_TAG else ''
 
 # =====================================================================
 # Google Earth Engine Project - REQUIRED for scripts 01 and 03
@@ -160,19 +163,20 @@ GEE_BATCH_SIZE = 10
 
 # Upload files written by script 02 ({UPLOAD_PREFIX}000.zip, ...) and the Earth
 # Engine table assets they are uploaded as ({GEE_ASSET_PREFIX}000, ...)
-UPLOAD_PREFIX = f'transect_points_{RUN_TAG}_'
+UPLOAD_PREFIX = f'transect_points{_TAG}_'
 GEE_ASSET_PREFIX = f'projects/{GEE_PROJECT}/assets/{UPLOAD_PREFIX}'
 
-# Google Drive folder that script 03 exports CSVs to
-GEE_DRIVE_FOLDER = f'{INDEX_NAME}_gradient_{RUN_TAG}'
+# Google Drive folder that script 03 exports CSVs to, and the CSV names ({GEE_EXPORT_PREFIX}NNN_part_N.csv)
+GEE_DRIVE_FOLDER = f'{INDEX_NAME}_gradient{_TAG}'
+GEE_EXPORT_PREFIX = f'{GEE_DRIVE_FOLDER}_'
 
 # =====================================================================
 # Visual inspection of the analysis set (script 05b + scripts/05b_inspection_app.js)
 # =====================================================================
 INSPECTION_INPUT = DATA_DIR / "05_analysis" / "pa_level.csv"     # the analysis PAs (R script 05)
 INSPECTION_DIR = DATA_DIR / "inspection"
-INSPECTION_ZIP = INSPECTION_DIR / f"pas_final_{RUN_TAG}.zip"     # upload as table asset pas_final_{RUN_TAG}
-INSPECTION_CHECKLIST = INSPECTION_DIR / "checklist.csv"         # the reviewer's decisions (read by 05)
+INSPECTION_ZIP = INSPECTION_DIR / f"pas_final{_TAG}.zip"     # upload as the table asset of the same name
+INSPECTION_CHECKLIST = INSPECTION_DIR / "checklist.csv"         # the inspection decisions (read by 05)
 INSPECTION_DECISIONS = ('', 'exclude', 'check')                 # blank = keep
 
 # =====================================================================
@@ -200,9 +204,10 @@ VALIDATION_MAX_BOUNDARY_SHARE = 0.10   # a vector passes if at most this share o
                                    # one TRANSECT_SPACING, 2.5 km, of the centre point)
 VALIDATION_SEED = 20261108
 
-VALIDATION_UPLOAD_PREFIX = f'displaced_points_{RUN_TAG}_'
+VALIDATION_UPLOAD_PREFIX = f'displaced_points{_TAG}_'
 VALIDATION_ASSET_PREFIX = f'projects/{GEE_PROJECT}/assets/{VALIDATION_UPLOAD_PREFIX}'
-VALIDATION_DRIVE_FOLDER = f'{INDEX_NAME}_gradient_displaced_{RUN_TAG}'
+VALIDATION_DRIVE_FOLDER = f'{INDEX_NAME}_gradient_displaced{_TAG}'
+VALIDATION_EXPORT_PREFIX = f'{VALIDATION_DRIVE_FOLDER}_'                    # script 12 CSV names
 VALIDATION_PA_METRICS = RESULTS_DIR / "validation_displaced_pa_years.csv"   # script 13
 VALIDATION_LOG = RESULTS_DIR / "validation_displacement_log.csv"           # script 13
 VALIDATION_CHECKS = RESULTS_DIR / "validation_candidate_checks.csv"        # script 13
@@ -215,9 +220,9 @@ VALIDATION_MAX_WATER_PCT = 75      # lake rule: mean over years of the % of tran
 VALIDATION_MIN_YEARS = 5           # years with both edge metrics
 # Biome of the copy as of the PA (script 01): RESOLVE ecoregion with the largest area of the PA
 # polygon displaced by the same vector, grouped as in script 04
-VALIDATION_POLY_UPLOAD_PREFIX = f'displaced_polygons_{RUN_TAG}_'
+VALIDATION_POLY_UPLOAD_PREFIX = f'displaced_polygons{_TAG}_'
 VALIDATION_POLY_ASSET_PREFIX = f'projects/{GEE_PROJECT}/assets/{VALIDATION_POLY_UPLOAD_PREFIX}'
-VALIDATION_BIOME_EXPORT = f'displaced_polygons_biome_{RUN_TAG}'   # script 12 export, same Drive folder
+VALIDATION_BIOME_EXPORT = f'displaced_polygons_biome{_TAG}'   # script 12 export, same Drive folder
 
 
 def get_num_chunks():

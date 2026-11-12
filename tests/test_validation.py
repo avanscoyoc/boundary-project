@@ -232,7 +232,7 @@ def test_displaced_metrics_reproduce_script_04():
     """With no displacement, the validation metric path gives 04's PA-year metrics exactly."""
     from modules.analysis import read_asset_csvs
     # an asset's export is ordered by point position, so a PA's points span all its parts
-    files = sorted(config.GEE_CSV_DIR.glob(f'{config.INDEX_NAME}_gradient_{config.RUN_TAG}_000_part_*.csv'))
+    files = sorted(config.GEE_CSV_DIR.glob(f'{config.GEE_EXPORT_PREFIX}000_part_*.csv'))
     if not files or not config.PA_METRICS.exists() or not config.TRANSECT_POINTS.exists():
         pytest.skip("pipeline data not present")
     years = list(range(config.START_YEAR, config.END_YEAR + 1))

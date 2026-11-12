@@ -1,9 +1,8 @@
 # Settings for the statistical analysis (scripts 05–10).
 #
 # Settings only: no data are read here. Scripts source this file and pass the values they
-# need to the functions in modules/r/ explicitly, so the same functions run on the earlier
-# implementation's inputs in the parity tests (tests/r/parity/legacy_inputs.R) and on the
-# current data in the scripts.
+# need to the functions in modules/r/ explicitly, so the same functions run on small simulated
+# data in the unit tests (tests/r/) and on the full data in the scripts.
 # Paths are relative to the repository root (found from the working directory).
 
 repo_root <- function(start = getwd()) {
@@ -37,9 +36,7 @@ CFG <- local({
       session_info = p("results", "R_sessionInfo.txt"),
       # Fig. 2 map layers (script 10): WDPA polygons may not be redistributed, so they stay
       # under data/, like the coordinates
-      map_layers   = p("data", "10_map_layers"),
-      parity_dir   = p("data", "parity"),
-      legacy_root  = p("PA_New_Analysis")                         # earlier R implementation (read-only; not in this repository)
+      map_layers   = p("data", "10_map_layers")
     ),
 
     # ── Record and analysis set ──────────────────────────────────────────────
@@ -106,8 +103,7 @@ CFG <- local({
     ),
 
     # ── Bootstraps (percentile CIs) ──────────────────────────────────────────
-    # The seeds and block order of the earlier implementation are kept, so the parity tests
-    # reproduce its CIs exactly.
+    # Fixed seeds and block order make the bootstrap CIs reproducible.
     boot = list(
       R     = 10000L,
       seeds = c(biome = 42L, weighted = 43L, sen = 44L, pooled = 45L)

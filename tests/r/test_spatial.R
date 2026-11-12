@@ -41,15 +41,6 @@ test_that("vectorised haversineDist is bit-identical to the original loop (300 p
   expect_length(as.vector(haversineDist(matrix(c(1, 2), 1))), 0)
 })
 
-test_that("the original file's haversineDist gives the same distances", {
-  f <- file.path(CFG$paths$legacy_root, "scripts", "HaversineLMEfunctions.R")
-  skip_if_not(file.exists(f), "PA_New_Analysis/ not present")
-  env <- new.env(parent = globalenv())
-  sys.source(f, envir = env)
-  xy <- sim_coords(200, 12)
-  expect_identical(as.vector(haversineDist(xy)), as.vector(env$haversineDist(xy)))
-})
-
 test_that("Initialize(corHaversine) uses the vectorised distances", {
   xy <- sim_coords(120, 13)
   cs <- spatial_setup(data.frame(lon = xy[, 1], lat = xy[, 2]), value = 200)
@@ -60,7 +51,7 @@ test_that("Initialize(corHaversine) uses the vectorised distances", {
   expect_error(spatial_setup(data.frame(lon = xy[, 1], lat = xy[, 2]), value = 200), "zero distances")
 })
 
-test_that("jitter_duplicates moves only later duplicates, as the old loop", {
+test_that("jitter_duplicates moves only later duplicates, as a sequential jitter loop", {
   set.seed(3)
   d <- data.frame(lon = round(runif(50, -10, 10), 2), lat = round(runif(50, -10, 10), 2))
   d[c(10, 20, 30), c("lon", "lat")] <- d[c(1, 1, 2), c("lon", "lat")]

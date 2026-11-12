@@ -34,12 +34,12 @@ python scripts/01_collect_protected_areas.py
 
 # 2. Choose PAs and build transects (local)
 python scripts/02_generate_sampling_points.py
-# → Upload each data/02_transects/upload/transect_points_v2_NNN.zip as an Earth Engine table asset
+# → Upload each data/02_transects/upload/transect_points_NNN.zip as an Earth Engine table asset
 
 # 3. Sample NDVI gradients (Earth Engine, ~5 h) — test one part first
 python scripts/03_sample_satellite_imagery.py --test
 python scripts/03_sample_satellite_imagery.py
-# → Download all CSVs from Drive folder ndvi_gradient_v2 to data/03_gee/
+# → Download all CSVs from Drive folder ndvi_gradient to data/03_gee/
 
 # 4. Edge metrics and trends (local)
 python scripts/04_compute_edge_metrics.py
@@ -60,7 +60,7 @@ python scripts/11_validation_displace_transects.py
 # → Upload each zip in data/11_validation/upload/ as an Earth Engine table asset
 python scripts/12_validation_sample_imagery.py --test
 python scripts/12_validation_sample_imagery.py
-# → Download all CSVs from Drive folder ndvi_gradient_displaced_v2 to data/12_gee_validation/
+# → Download all CSVs from Drive folder ndvi_gradient_displaced to data/12_gee_validation/
 python scripts/13_validation_edge_metrics.py
 Rscript scripts/14_validation_compare.R
 ```
@@ -100,17 +100,17 @@ boundary-project/
 │   └── r/                       # R analysis: config.R (settings), prep.R, trends.R, spatial.R,
 │                                #   corHaversine.R, models.R, plots.R, validation.R
 ├── tests/                       # Python unit tests (python -m pytest tests/)
-│   └── r/                       # R unit tests and parity tests (see Statistical Analysis)
+│   └── r/                       # R unit tests (see Statistical Analysis)
 ├── data/                        # Each folder is filled by the script with the same number
 │   ├── 01_wdpa/                 # WDPA_polygons.geojson               (download after script 01)
 │   ├── 02_pas/                  # pas_selected.gpkg, pas_removed.gpkg
 │   ├── 02_transects/            # transect_points.parquet
-│   │   └── upload/              # transect_points_v2_NNN.zip          (upload to Earth Engine)
-│   ├── 03_gee/                  # ndvi_gradient_v2_NNN_part_N.csv     (download after script 03)
+│   │   └── upload/              # transect_points_NNN.zip             (upload to Earth Engine)
+│   ├── 03_gee/                  # ndvi_gradient_NNN_part_N.csv        (download after script 03)
 │   ├── 04_transect_years/       # ndvi_NNN.parquet, one row per transect-year
 │   ├── 05_analysis/             # pa_level.csv, pa_year.csv, pa_trends.csv, scaling.csv,
 │   │                            #   excluded_pas.csv, cache/ (fitted models; coordinates stay here)
-│   ├── inspection/              # pas_final_v2.zip (upload to Earth Engine), checklist.csv (05b)
+│   ├── inspection/              # pas_final.zip (upload to Earth Engine), checklist.csv (05b)
 │   ├── 10_map_layers/           # pa_map_layers.gpkg, case_study_pas.kml (Fig. 2; script 10)
 │   ├── 11_validation/           # sample, candidates, displaced points; upload/ for Earth Engine
 │   └── 12_gee_validation/       # displaced-point CSVs and polygon biomes (download after script 12)
@@ -204,7 +204,7 @@ Part 2 — transects (each PA in its own azimuthal equidistant projection, so di
 
 Removed PAs, with the step, reason, and the PA that replaced them, are in `data/02_pas/pas_removed.gpkg`.
 
-**⚠️ MANUAL STEP**: Upload each `data/02_transects/upload/transect_points_v2_NNN.zip` as its own Earth Engine table asset `transect_points_v2_NNN` (script 02 prints the full list). One asset per file: a single large upload can fail.
+**⚠️ MANUAL STEP**: Upload each `data/02_transects/upload/transect_points_NNN.zip` as its own Earth Engine table asset `transect_points_NNN` (script 02 prints the full list). One asset per file: a single large upload can fail.
 
 ### Script 03: Sample Satellite Imagery (Earth Engine)
 ```bash
@@ -213,7 +213,7 @@ python scripts/03_sample_satellite_imagery.py          # everything (~5 h)
 ```
 Computes the gradient magnitude of each annual median NDVI composite (MOD13A1, 2003–2025) on the native MODIS grid and samples it, with water (JRC GSW max extent), human modification (gHM), elevation and slope (Copernicus GLO-30), at every point. Each asset is exported in parts of 50,000 points.
 
-**⚠️ MANUAL STEP**: Download **all** CSVs from Google Drive folder `ndvi_gradient_v2` → `data/03_gee/`
+**⚠️ MANUAL STEP**: Download **all** CSVs from Google Drive folder `ndvi_gradient` → `data/03_gee/`
 
 ### Script 04: Compute Edge Metrics (local)
 ```bash
@@ -234,13 +234,13 @@ Scripts 05–10 implement the statistical analysis in R (4.5.3, installed in the
 
 Scripts 06, 08 and 09 take `--pilot N` (a random subset of PAs, for a quick check) and `--cores K`. At full size each spatial fit takes about an hour and about 1.5 GB of memory, so run 06, 08 and 09 in the background and one at a time on a machine with 8 GB. Fits are cached in `data/05_analysis/cache/` by content, so a rerun only refits what changed.
 
-**Tests.** `Rscript -e 'testthat::test_dir("tests/r")'` runs the R unit tests. The parity tests in `tests/r/parity/` check that the R functions reproduce an earlier R implementation of this analysis on its data; they need that project in `PA_New_Analysis/` (not included in this repository) and are skipped without it.
+**Tests.** `Rscript -e 'testthat::test_dir("tests/r")'` runs the R unit tests; `python -m pytest tests/` runs the Python tests.
 
 ## Visual inspection (script 05b)
 
 Every analysed PA can be checked on satellite imagery:
-1. `python scripts/05b_inspection_export.py` writes `data/inspection/pas_final_v2.zip` (the analysed PAs in review order: biome, country, name) and `data/inspection/checklist.csv` (one row per PA; it never overwrites a checklist that has entries).
-2. Upload the zip as the Earth Engine table asset `pas_final_v2`, then paste `scripts/05b_inspection_app.js` into the Code Editor and run it (or publish it as an app). It shows one PA at a time with its outline, its transect points (interior, boundary, exterior) and an info panel; the page address keeps your place.
+1. `python scripts/05b_inspection_export.py` writes `data/inspection/pas_final.zip` (the analysed PAs in review order: biome, country, name) and `data/inspection/checklist.csv` (one row per PA; it never overwrites a checklist that has entries).
+2. Upload the zip as the Earth Engine table asset `pas_final`, set `ASSET_ROOT` in `scripts/05b_inspection_app.js` to your project's asset folder, then paste `scripts/05b_inspection_app.js` into the Code Editor and run it (or publish it as an app). It shows one PA at a time with its outline, its transect points (interior, boundary, exterior) and an info panel; the page address keeps your place.
 3. Record decisions in the checklist (`decision`: blank = keep, `exclude`, or `check` while undecided; `note`). The app number is the checklist's `order`.
 4. When done, set `inspection$apply = TRUE` in `modules/r/config.R` and rerun 05 → 07 → 06 → 08 → 09 → 10, then the validation (11 → 14). Script 05 removes the excluded PAs as its last counted step and stops if any PA is still marked `check`.
 
@@ -266,7 +266,7 @@ Main Python settings:
 - `TRANSECT_SPACING`: Distance between points along a transect (default: 2,500 m)
 - `POINTS_PER_SIDE`: Points on each side of the boundary (default: 2)
 - `CHUNK_SIZE`: PAs per upload file (default: 400)
-- `RUN_TAG`: Tag in Earth Engine asset and Drive folder names (default: `v2`); change it for a new full re-run so old and new outputs never mix
+- `RUN_TAG`: Optional tag added to Earth Engine asset, Drive folder and upload/export file names (default: none, e.g. `transect_points_000`); set one (e.g. `run2`) for a new full re-run so old and new outputs never mix
 - `VALIDATION_*`: validation sample size, displacement rules and seed
 
 ## Troubleshooting
@@ -276,7 +276,7 @@ Main Python settings:
 - Check that manual download/upload steps were completed
 
 **"No CSV files found"** or **"expected points missing"** (script 04)
-- Download every CSV from the Drive folder `ndvi_gradient_v2` into `data/03_gee/`
+- Download every CSV from the Drive folder `ndvi_gradient` into `data/03_gee/`
 - Script 04 compares the CSVs with `transect_points.parquet` and reports missing or duplicate points
 
 **"duplicate points in the CSVs"** (script 04) or **"candidates do not have all their points"** (script 13)

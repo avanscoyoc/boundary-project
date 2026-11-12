@@ -256,16 +256,16 @@ def batch_sample_assets(asset_path, image, selectors, folder_name, export_prefix
     tasks to Google Drive. Waits for each batch to complete before submitting the next.
 
     Each sub-chunk is exported as '{export_prefix}{asset_num}_part_{i}' (e.g.
-    ndvi_gradient_v2_003_part_7). If a task FAILS (typically due to GEE memory
+    ndvi_gradient_003_part_7). If a task FAILS (typically due to GEE memory
     limits), it is retried once by splitting it into two halves (chunk_size // 2),
-    named with '_01' / '_02' suffixes (e.g. ndvi_gradient_v2_003_part_7_01). CANCELLED
+    named with '_01' / '_02' suffixes (e.g. ndvi_gradient_003_part_7_01). CANCELLED
     tasks are not retried.
 
     Parameters
     ----------
     asset_path : str
         Path to the Earth Engine FeatureCollection asset
-        (e.g., 'projects/my-project/assets/transect_points_v2_000').
+        (e.g., 'projects/my-project/assets/transect_points_000').
         The asset number is the text after the last '_'.
     image : ee.Image
         Multi-band image to sample (static layers + annual gradient bands).
@@ -274,7 +274,7 @@ def batch_sample_assets(asset_path, image, selectors, folder_name, export_prefix
     folder_name : str
         Google Drive folder name for export output.
     export_prefix : str
-        Start of the export task / CSV names (e.g., 'ndvi_gradient_v2_').
+        Start of the export task / CSV names (e.g., 'ndvi_gradient_').
     chunk_size : int, optional
         Number of features per sub-chunk (default: 50,000).
     batch_size : int, optional

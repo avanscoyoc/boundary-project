@@ -578,7 +578,10 @@ fig_validation <- function(summ, biome_order, pooled_label = "All PAs", alpha = 
     ggplot2::geom_vline(xintercept = 0, linetype = "dashed", colour = "grey50") +
     ggplot2::geom_errorbar(aes(xmin = ci_lo, xmax = ci_hi), orientation = "y", width = 0.2) +
     ggplot2::geom_point(size = 2.5, stroke = 0.9) +
-    ggplot2::geom_text(aes(label = label), nudge_y = 0.3, size = 3, colour = "grey30", family = PLOT_FAMILY) +
+    # n to the right of each CI, so it never sits on the zero line
+    ggplot2::geom_text(aes(x = ci_hi, label = label), hjust = -0.2, size = 3, colour = "grey30",
+                       family = PLOT_FAMILY) +
+    ggplot2::scale_x_continuous(expand = ggplot2::expansion(mult = c(0.05, 0.2))) +
     ggplot2::scale_colour_manual(values = FIG4_COLORS, guide = "none") +
     ggplot2::scale_fill_manual(values = c(FIG4_COLORS, ns = "white"), guide = "none") +
     ggplot2::scale_shape_manual(values = FIG3_SHAPES, guide = "none") +

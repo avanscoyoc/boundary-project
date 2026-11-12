@@ -23,7 +23,7 @@ Part 2 - Create transects (each PA in its own azimuthal equidistant projection):
 Input:  data/01_wdpa/WDPA_polygons.geojson
 Output: data/02_pas/pas_selected.gpkg, data/02_pas/pas_removed.gpkg
         data/02_transects/transect_points.parquet
-        data/02_transects/upload/transect_points_{RUN_TAG}_NNN.zip
+        data/02_transects/upload/transect_points_NNN.zip
         results/pipeline_counts.json (sections '02_pas', '02_transects')
 
 MANUAL STEP REQUIRED AFTER RUNNING:
@@ -175,7 +175,7 @@ res = generate_transects(
     max_gap_pct_limit=config.MAX_GAP_PCT_LIMIT,
 )
 
-print(f"  generated {res['n_generated']} transects")
+print(f"  generated {sum(res['n_generated'].values()):,} transects")
 
 # Transects per PA and how evenly the kept ones cover the boundary (also kept
 # for PAs removed for a coverage gap, so pas_removed.gpkg shows why)

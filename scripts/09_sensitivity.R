@@ -1,7 +1,7 @@
 # 09_sensitivity.R: sensitivity of the results to transect and PA selection.
 #
 # Runs (each recomputes the PA means, trends and models from the PA-year data):
-#   main         all transects, the 4,396 analysis PAs (reproduces 06–08 at their ranges)
+#   main         all transects, the analysis PAs (reproduces 06–08 at their ranges)
 #   all_common   all transects, the PAs of the transect-subset comparison (set_transects)
 #   nowater, nootherpa, noflags
 #                each transect subset on the same PAs as all_common; a PA-year counts only

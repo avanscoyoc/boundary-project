@@ -8,9 +8,9 @@
  * (blank = keep, exclude, check). Script 05 removes the PAs marked `exclude`.
  *
  * BEFORE RUNNING:
- * 1. Run scripts/05b_inspection_export.py and upload data/inspection/pas_final_v2.zip
+ * 1. Run scripts/05b_inspection_export.py and upload data/inspection/pas_final.zip
  *    as the table asset PAS_ASSET below. The transect points are the existing
- *    assets transect_points_v2_NNN (script 02).
+ *    assets transect_points_NNN (script 02).
  * 2. Paste this file into the Code Editor (code.earthengine.google.com) and Run.
  *    To publish it: Apps > New App. Viewers of a published app need read access
  *    to the assets (share them, e.g. "Anyone can read").
@@ -21,8 +21,8 @@
 
 // --- Settings ---------------------------------------------------------------
 var ASSET_ROOT = 'projects/dse-staff/assets/';
-var PAS_ASSET = ASSET_ROOT + 'pas_final_v2';                 // script 05b
-var POINTS_PREFIX = ASSET_ROOT + 'transect_points_v2_';      // script 02 (+ NNN)
+var PAS_ASSET = ASSET_ROOT + 'pas_final';                    // script 05b
+var POINTS_PREFIX = ASSET_ROOT + 'transect_points_';         // script 02 (+ NNN)
 var SEA_CUTOFF = 75;    // script 05: removed if median % complete transects < 75
 var LAKE_CUTOFF = 75;   // script 05: removed if % transects with water > 75
 var COLORS = {

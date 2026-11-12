@@ -38,7 +38,7 @@ jitter_duplicates <- function(d, jitter_deg, seed, tries = 10L) {
 #' Initialised corHaversine structure (exponential, great-circle km) for the rows of `coords`.
 #'
 #' `value` is the range in km: the optimiser start (fixed = FALSE) or the fixed range
-#' (fixed = TRUE, used by the fast parity tests and the sensitivity refits). With nugget = TRUE
+#' (fixed = TRUE, used by the sensitivity refits). With nugget = TRUE
 #' the start is c(value, 0.1). Initialisation computes the pairwise distances (≈ 1 s)
 #' and nlme's factor of the n × n correlation matrix (≈ 1 min at n ≈ 4,600), so the initialised
 #' object is cached in `cache_dir` (NULL = no cache) under a key that covers the coordinates in
