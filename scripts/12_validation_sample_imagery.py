@@ -1,7 +1,7 @@
 """
 Script 12: Validation, part 2 - sample the displaced transects.
 
-Samples the same layers as script 03 (NDVI gradient magnitude 2003-2025 on the native MODIS
+Samples the same layers as script 03 (NDVI gradient magnitude 2001-2025 on the native MODIS
 grid, JRC max_extent, gHM, elevation, slope), plus RESOLVE Ecoregions 2017 BIOME_NUM as a
 diagnostic, at every candidate point from script 11. Each candidate's moved PA polygon gets
 its biome as in script 01 (get_biome: the ecoregion with the largest area of the polygon).

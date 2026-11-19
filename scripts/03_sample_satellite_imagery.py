@@ -3,7 +3,7 @@ Script 03: Sample satellite imagery.
 
 Samples static layers (water, human modification, elevation and slope from the Copernicus
 GLO-30 DEM, 2024_1 release) and the NDVI gradient magnitude of each annual median composite
-(2003-2025) at every transect point in Earth Engine. Gradients are computed and sampled on
+(2001-2025) at every transect point in Earth Engine. Gradients are computed and sampled on
 the native MODIS grid (sinusoidal, ~463 m). Results go to Google Drive in parts of 50,000 points.
 
 Run:

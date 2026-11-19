@@ -42,7 +42,7 @@ GEE_PROJECT = os.environ.get("GEE_PROJECT") or _saved_gee_project() or 'YOUR-PRO
 
 # --- Data -----------------------------------------------------------------------------------
 WDPA_COLLECTION = "WCMC/WDPA/202508/polygons"   # pinned WDPA release (August 2025)
-START_YEAR = 2003
+START_YEAR = 2001   # first full year of MOD13A1 (its record starts on 18 Feb 2000)
 END_YEAR = 2025
 INDEX_NAME = 'ndvi'                             # used in file and export names
 NDVI_COLLECTION = 'MODIS/061/MOD13A1'           # MODIS Terra vegetation indices, 16-day, 500 m

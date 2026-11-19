@@ -36,8 +36,8 @@ CFG <- local({
     ),
 
     # ── Record and analysis set ──────────────────────────────────────────────
-    years     = 2003:2025,
-    n_span    = 22L,          # years spanned by the record (2025 − 2003): change = slope × n_span
+    years     = 2001:2025,
+    n_span    = 24L,          # years spanned by the record (2025 − 2001): change = slope × n_span
     min_years = 5L,           # min. complete years of both metrics per PA
     transects = c("all", "nowater", "nootherpa", "noflags"),      # transect versions; "all" is the main analysis
     exclude_biomes = c("Mangrove", "Rock & Ice"),
@@ -137,7 +137,7 @@ CFG <- local({
 
     # ── Sensitivity (09) ─────────────────────────────────────────────────────
     sensitivity = list(
-      established_by = 2003L,   # PA subset (a): analysed establishment year ≤ this
+      established_by = 2001L,   # PA subset (a): analysed establishment year ≤ this (the record's first year)
                                 # PA subset (b): reported year only (STATUS_YR_imputed == FALSE)
       # Transect subsets: a PA-year counts only with ≥ min_transects complete transects (the
       # fewest of any analysed PA, analysis_counts.json final_set); compared PAs need

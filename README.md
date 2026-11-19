@@ -1,6 +1,6 @@
 # Protected Area Edge Analysis
 
-This project analyzes change in vegetation contrast at protected area (PA) boundaries using Google Earth Engine and geospatial methods. The workflow selects more than 4,000 terrestrial PAs from the WDPA, generates transects perpendicular to each boundary, samples the gradient magnitude of annual median NDVI (MODIS MOD13A1, 2003–2025) plus water, human modification, and topography at every point, and computes yearly edge metrics for each PA. The statistical analysis (R) models mean edge extent and intensity and their change, and a validation compares every sampled PA with a displaced copy of its transects in the surrounding landscape.
+This project analyzes change in vegetation contrast at protected area (PA) boundaries using Google Earth Engine and geospatial methods. The workflow selects more than 4,000 terrestrial PAs from the WDPA, generates transects perpendicular to each boundary, samples the gradient magnitude of annual median NDVI (MODIS MOD13A1, 2001–2025) plus water, human modification, and topography at every point, and computes yearly edge metrics for each PA. The statistical analysis (R) models mean edge extent and intensity and their change, and a validation compares every sampled PA with a displaced copy of its transects in the surrounding landscape.
 
 The data the scripts produce (`data/`, `results/`) are not part of the repository: run the scripts to regenerate them. WDPA boundaries may not be redistributed (see [License](#license)).
 
@@ -89,7 +89,7 @@ Scripts 06, 08 and 09 take `--cores K` (fits run in parallel, default 2). At ful
 - Writes upload zips of 400 PAs; removed PAs and why are in `pas_removed.gpkg`.
 
 #### 03 Sample imagery · Earth Engine
-- Samples every transect point in every year, 2003–2025.
+- Samples every transect point in every year, 2001–2025 (2001 is MOD13A1's first full year).
 <<<<<<< HEAD
 - NDVI: gradient magnitude of the annual median MOD13A1 NDVI, on its native ~463 m grid, with no quality or snow masking.
 - Covariates: water (JRC GSW 1.4) max_extent at all points, human modification (gHM 2016) at 2 outside points, elevation and slope (Copernicus GLO-30, 2024) at boundary points.
@@ -139,7 +139,7 @@ Settings for 05–10 and 14 are in [modules/r/config.R](modules/r/config.R).
 
 #### 09 Sensitivity · R
 - Repeats the headline results without water or other-PA transects.
-- Repeats them for PAs established by 2003, with a reported establishment year, or keeping at least 50% of their transects.
+- Repeats them for PAs established by 2001, with a reported establishment year, or keeping at least 50% of their transects.
 - Fixes the spatial ranges at the main estimates.
 
 #### 10 Figures · R
@@ -166,7 +166,7 @@ Tests whether the edge signal at the boundary exceeds what the same transects re
 - Keeps, per PA, the first copy that passes 05's rules (same biome; sea, lake, 5 years); reserves replace PAs without one.
 
 #### 14 Compare · R
-- Compares PA minus copy in the 2003–2025 mean of each metric, per biome and for all PAs.
+- Compares PA minus copy in the 2001–2025 mean of each metric, per biome and for all PAs.
 - Reports the mean with a bootstrap CI, the median, the share of PAs above their copy, and a Wilcoxon test (Holm across biomes).
 - Weights biomes equally in "All PAs"; the table adds a PA-weighted row.
 
@@ -191,7 +191,7 @@ Tests whether the edge signal at the boundary exceeds what the same transects re
 
 ## Configuration
 
-Python settings are in [modules/config.py](modules/config.py) (the defaults reproduce the analysis): `START_YEAR`/`END_YEAR` (2003–2025), `BOUNDARY_SPACING` (500 m), `TRANSECT_SPACING` (2,500 m), `POINTS_PER_SIDE` (2), `CHUNK_SIZE` (400 PAs per upload file), `EXCLUDED_PIDS`, `VALIDATION_*`. R settings (analysis set, reference levels, seeds, spatial model, sensitivity, validation) are in [modules/r/config.R](modules/r/config.R).
+Python settings are in [modules/config.py](modules/config.py) (the defaults reproduce the analysis): `START_YEAR`/`END_YEAR` (2001–2025), `BOUNDARY_SPACING` (500 m), `TRANSECT_SPACING` (2,500 m), `POINTS_PER_SIDE` (2), `CHUNK_SIZE` (400 PAs per upload file), `EXCLUDED_PIDS`, `VALIDATION_*`. R settings (analysis set, reference levels, seeds, spatial model, sensitivity, validation) are in [modules/r/config.R](modules/r/config.R).
 
 ## Troubleshooting
 

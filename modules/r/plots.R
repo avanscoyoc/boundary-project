@@ -34,7 +34,10 @@ FIG3_Y_STEP <- c(extent = 0.05, intensity = 0.1)
 # PAs spans extent's. Set from the case series; .fig4b_long() warns when a value falls outside.
 FIG4B_Y <- c(0.30, 0.98)
 FIG4B_Y_BREAKS <- c(0.30, 0.60, 0.90)
-FIG4B_X_BREAKS <- c(2003, 2010, 2017, 2025)
+# The record (config years) labels the change axes and sets the Fig. 4B year breaks.
+RECORD <- range(CFG$years)
+RECORD_LABEL <- sprintf("%d–%d", RECORD[1], RECORD[2])
+FIG4B_X_BREAKS <- round(seq(RECORD[1], RECORD[2], length.out = 4))   # 2001, 2009, 2017, 2025
 TERM_LABELS <- c(STATUS_YR_z = "Establishment year", log_area_z = "PA area (log)",
                  gHM_mean_z = "Human modification (HMI)", elevation_mean_z = "Elevation",
                  terrain_slope_z = "Slope", water_extent_pct_z = "Water extent")
@@ -322,7 +325,7 @@ fig4a <- function(summary, reps, biome_order, pooled_label, pooled_display = "Al
     ggplot2::scale_color_manual(values = FIG4_COLORS, name = NULL) +
     ggplot2::scale_x_discrete(labels = function(x) stringr::str_wrap(x, width = 12),
                               expand = ggplot2::expansion(add = c(1.0, 0.6))) +
-    ggplot2::labs(x = NULL, y = "Change in edge metric, 2003–2025\n(among-PA SD)") +
+    ggplot2::labs(x = NULL, y = paste0("Change in edge metric, ", RECORD_LABEL, "\n(among-PA SD)")) +
     theme_pa(base_size = 12) +
     ggplot2::theme(axis.text.x = ggplot2::element_text(face = x_face),
                    # bottom right: the wide CIs of small biomes fill the centre
@@ -386,7 +389,7 @@ fig4b_series <- function(series, ylim = FIG4B_Y) {
 
 #' Fig. 4B image placeholders: grey boxes for each case PA's first- and last-year satellite
 #' images, added in the layout. `labels`: panel titles in panel order.
-fig4b_placeholders <- function(labels, years = c(2003, 2025)) {
+fig4b_placeholders <- function(labels, years = RECORD) {
   n <- length(labels)
   d <- data.frame(row = rep(seq_len(n), each = 2), col = rep(c(1, 2), times = n),
                   year = rep(as.character(years), times = n),
@@ -407,7 +410,7 @@ fig4b_placeholders <- function(labels, years = c(2003, 2025)) {
 }
 
 #' Fig. 4B: image placeholders (left, 2/3) beside the time series (right, 1/3).
-fig4b <- function(series, ylim = FIG4B_Y, years = c(2003, 2025)) {
+fig4b <- function(series, ylim = FIG4B_Y, years = RECORD) {
   labels <- unique(series$label[order(series$panel)])
   # wrap_plots(), not `+`: the operator needs patchwork loaded before the call
   patchwork::wrap_plots(fig4b_placeholders(labels, years), fig4b_series(series, ylim), widths = c(2, 1))
@@ -484,8 +487,8 @@ fig_slope_correlation <- function(pa, cor_tab, biome_order, pooled_label = "All 
                        size = 3, family = PLOT_FAMILY, inherit.aes = FALSE) +
     ggplot2::scale_colour_identity() +
     ggplot2::facet_wrap(~ panel, ncol = 3) +   # all PAs + 8 biomes: 3 × 3
-    ggplot2::labs(x = "Change in edge extent, 2003–2025 (among-PA SD)",
-                  y = "Change in edge intensity, 2003–2025 (among-PA SD)") +
+    ggplot2::labs(x = paste0("Change in edge extent, ", RECORD_LABEL, " (among-PA SD)"),
+                  y = paste0("Change in edge intensity, ", RECORD_LABEL, " (among-PA SD)")) +
     theme_pa(base_size = 11)
 }
 
