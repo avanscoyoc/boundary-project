@@ -60,7 +60,7 @@ def _fill_small_holes(geom, max_hole_area):
     return geom
 
 
-def fill_holes(gdf, max_hole_area=2250000):  # 1500m * 1500m = 2250000 sq meters
+def fill_holes(gdf, max_hole_area=2250000):
     """Fill holes of at most `max_hole_area` m² (default 1,500 m × 1,500 m, a 3 × 3 MODIS pixel
     window); larger holes stay. `gdf` in a metric CRS. Returns (copy, number of PAs changed).
     """
@@ -296,7 +296,7 @@ def transect(tpts, tlen, npts=1):
     x = tpts['x'].to_numpy()
     y = tpts['y'].to_numpy()
 
-    offsets = np.arange(-npts, npts + 1)              # -npts ... 0 ... +npts
+    offsets = np.arange(-npts, npts + 1)
     xx = x[:, None] - offsets[None, :] * dx[:, None]  # inner (negative) = x + k*dx
     yy = y[:, None] - offsets[None, :] * dy[:, None]
 
@@ -462,14 +462,9 @@ def flag_other_pa(points, tree, tree_pids, own_pids):
 
 
 def write_upload_zip(points, zip_path):
-    """
-    Write transect points as a zipped shapefile for Earth Engine table upload.
-
-    Fields: WDPA_PID (str), transectID (int), pointID (int); point geometry in
-    EPSG:4326. The shapefile is written to a local temporary folder (fast) and
-    only the finished zip is written to ``zip_path``; writing a shapefile
-    directly to a slow mounted folder takes about a minute per file.
-    """
+    """Write transect points (WDPA_PID, transectID, pointID; EPSG:4326) as a zipped shapefile for
+    Earth Engine upload. The shapefile is built in a local temporary folder: writing it directly
+    to a slow mounted folder takes about a minute per file."""
     zip_path = Path(zip_path)
     gdf = gpd.GeoDataFrame(
         {

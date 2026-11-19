@@ -1,28 +1,23 @@
 """
-Script 12: Validation, part 2 - sample the displaced transects
+Script 12: Validation, part 2 - sample the displaced transects.
 
-Samples exactly what script 03 samples (NDVI gradient magnitude 2003-2025 on the native
-MODIS grid, JRC max_extent, gHM, elevation, terrain slope), plus the RESOLVE Ecoregions 2017
-BIOME_NUM (a diagnostic), at every candidate point written by script 11. For each candidate,
-the PA polygon moved by the same vector gets its biome exactly as script 01 gave the PA its
-biome (get_biome: the ecoregion with the largest area of the polygon). Script 13 applies the
-analysis-set rules to each copy and accepts one displacement per PA.
+Samples the same layers as script 03 (NDVI gradient magnitude 2003-2025 on the native MODIS
+grid, JRC max_extent, gHM, elevation, slope), plus RESOLVE Ecoregions 2017 BIOME_NUM as a
+diagnostic, at every candidate point from script 11. Each candidate's moved PA polygon gets
+its biome as in script 01 (get_biome: the ecoregion with the largest area of the polygon).
 
-BEFORE RUNNING:
-1. Run script 11.
-2. Upload every data/11_validation/upload/displaced_points_NNN.zip and
-   displaced_polygons_NNN.zip as an Earth Engine table asset of the same name in
-   your project.
+Run:
+    python scripts/12_validation_sample_imagery.py           # full run
+    python scripts/12_validation_sample_imagery.py --test    # test exports only
+--test exports part 0 of point asset 000 and the biome of the first 20 polygons of polygon
+asset 000 (as displaced_polygons_biome_000_test, which script 13 ignores).
 
-TEST FIRST:
-    python scripts/12_validation_sample_imagery.py --test
-exports only part 0 of point asset 000 and the biome of the first 20 polygons of polygon asset
-000 (as displaced_polygons_biome_000_test, which script 13 ignores).
+Before running: run script 11, then upload every data/11_validation/upload/
+displaced_points_NNN.zip and displaced_polygons_NNN.zip as an Earth Engine table asset
+of the same name in your project.
 
-MANUAL STEP AFTER RUNNING:
-Download all CSVs from the Google Drive folder 'ndvi_gradient_displaced' (the
-point parts and displaced_polygons_biome_NNN.csv) to data/12_gee/, then run
-script 13.
+After running: download all CSVs from the Google Drive folder 'ndvi_gradient_displaced'
+(point parts and displaced_polygons_biome_NNN.csv) to data/12_gee/, then run script 13.
 """
 
 import sys
@@ -62,7 +57,7 @@ if n_assets == 0 or n_poly == 0:
 print(f"Export folder: {folder_name}; point assets: {n_assets}; polygon assets: {n_poly}; "
       f"MODIS grid {ndvi_scale:.1f} m")
 
-# Biome of each displaced PA polygon, with script 01's function (started first; small, runs alongside)
+# Biome of each displaced PA polygon, as in script 01 (small; started first so it runs alongside)
 poly_tasks = []
 for idx in ([0] if TEST_RUN else range(n_poly)):
     fc = ee.FeatureCollection(f'{config.VALIDATION_POLY_ASSET_PREFIX}{idx:03d}')

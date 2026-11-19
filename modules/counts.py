@@ -1,8 +1,6 @@
 """
-Pipeline counts log (results/pipeline_counts.json).
-
-Scripts 02 and 04 each write their own section(s), so the methods' PA and
-transect counts can be regenerated from one file.
+Pipeline counts log (results/pipeline_counts.json). Scripts 01, 02 and 04 each write their own
+section(s), so the methods' PA and transect counts can be regenerated from one file.
 """
 
 import json

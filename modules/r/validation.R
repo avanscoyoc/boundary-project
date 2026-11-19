@@ -1,13 +1,11 @@
-# Validation (Methods: Validation): each sampled PA against its displaced copy.
-# PA means of the copy's yearly metrics (as for a PA), paired differences PA − copy, and per biome and for all PAs
-# the mean difference with a percentile-bootstrap CI (resampling PAs within the biome), the median,
-# the share of PAs above their copy, and a paired Wilcoxon signed-rank test (Holm across biomes
-# within a metric). All PAs: the sampled PAs pooled (equal weight per biome; the figure), and the
-# PA-weighted (stratified) estimate, biomes weighted by their share of the analysis set (table
-# only). The displaced metrics come from Python script 13.
+# Validation (Methods: Validation): each sampled PA against its displaced copy (metrics from
+# script 13). Paired differences PA − copy per biome and for all PAs: mean with a percentile-
+# bootstrap CI, median, share of PAs above their copy, and a paired Wilcoxon signed-rank test
+# (Holm across biomes within a metric). "All PAs" is given pooled (equal weight per biome; the
+# figure) and PA-weighted (biomes weighted by their share of the analysis set; table only).
 
-#' PA means of the displaced copies: `py`: WDPA_PID, year and the metric columns (script 13).
-#' PAs with fewer than `min_years` years of any metric are left out (as for the PAs).
+#' PA means of the displaced copies from `py` (script 13: WDPA_PID, year, metric columns).
+#' Copies with fewer than `min_years` years of any metric are left out, as for the PAs.
 #' Returns WDPA_PID, <metric>_mean, n_years_<metric>.
 null_pa_means <- function(py, metrics, min_years) {
   py$transects <- factor("displaced")
@@ -18,9 +16,9 @@ null_pa_means <- function(py, metrics, min_years) {
   pm
 }
 
-#' PA weights of the stratified (PA-weighted) pooled estimate: PA i in group g gets
-#' (n_pop[g] / Σ n_pop) / n_g, n_g = the PAs of `g` in `group_vec` (the groups present; the
-#' weights sum to 1). `n_pop`: named vector of the PAs per group in the population (analysis set).
+#' Weights of the stratified (PA-weighted) pooled estimate: a PA in group g gets
+#' (n_pop[g] / Σ n_pop) / n_g, with n_g its group's count in `group_vec` and Σ over the groups
+#' present, so the weights sum to 1. `n_pop`: named PAs per group in the analysis set.
 pooled_weights <- function(group_vec, n_pop) {
   g <- as.character(group_vec)
   stopifnot(!is.null(names(n_pop)), all(g %in% names(n_pop)))
@@ -35,20 +33,18 @@ weighted_median <- function(x, w) {
   x[o][which(cumsum(w[o]) >= sum(w) / 2)[1]]
 }
 
-#' Paired PA − copy summary per group and for all PAs (`pooled_label`, last).
+#' Paired PA − copy summary per group, then for all PAs (`pooled_label`).
 #'
 #' `paired`: one row per PA with `group` and the difference columns `cols` (named: metric label →
-#' column). Mean and CI from boot_means() (`R`, `seed`; group rows, then the pooled row). Adds the
-#' median difference, the share of PAs with a positive difference, the Wilcoxon signed-rank p
-#' (normal approximation) and, for the groups, its Holm adjustment across groups within a metric.
+#' column). Mean and CI from boot_means(); adds the median, the share of positive differences, the
+#' Wilcoxon signed-rank p (normal approximation) and, for the groups, its Holm adjustment across
+#' groups within a metric.
 #'
-#' With `n_pop` (PAs per group in the analysis set) a `weighted_label` row per
-#' metric is appended: the PA-weighted (stratified) estimate, each group weighted by its share of
-#' the population (pooled_weights()): weighted mean, a percentile-bootstrap CI resampling PAs
-#' within groups (boot strata; `R`, `seed`), weighted median and share positive, and
-#' `p_stratified_t`, the design-based t test (SE² = Σ W_g² s_g² / n_g, df = n − groups; no
-#' finite-population correction, as the bootstrap). The group rows and the (equal-weight)
-#' `pooled_label` row are the same with or without `n_pop`.
+#' With `n_pop` (PAs per group in the analysis set) a `weighted_label` row per metric is
+#' appended, groups weighted by pooled_weights(): weighted mean, percentile-bootstrap CI (PAs
+#' resampled within groups), weighted median, share positive, and `p_stratified_t`, a
+#' design-based t test (SE² = Σ W_g² s_g² / n_g, df = n − groups; no finite-population
+#' correction, as in the bootstrap). The other rows do not depend on `n_pop`.
 paired_null_summary <- function(paired, cols, group, levels, R, seed, pooled_label = "All PAs",
                                 n_pop = NULL, weighted_label = paste0(pooled_label, ", PA-weighted")) {
   s <- boot_means(paired, cols, group, levels, R, seed, pooled = "append", pooled_label = pooled_label)$summary

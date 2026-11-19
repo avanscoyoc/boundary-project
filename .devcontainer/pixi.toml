@@ -1,9 +1,8 @@
-# R environment for the statistical analysis (scripts/05–10 and 14), built into the dev container at /opt/r.
+# R environment for the statistical analysis (scripts 05–10 and 14), built into the dev container at /opt/r.
 # Python is not managed here: it uses the system interpreter (requirements.txt + constraints.txt).
-#
 # pixi.lock pins every package for both Linux architectures, so the container builds the same way on
 # Apple Silicon (linux-aarch64) and on Windows/WSL2, Intel Macs and Linux (linux-64).
-#   After editing this file, update the lock with:  pixi lock --manifest-path .devcontainer/pixi.toml
+# After editing this file, update the lock with: pixi lock --manifest-path .devcontainer/pixi.toml
 [workspace]
 name = "boundary-project-r"
 channels = ["conda-forge"]

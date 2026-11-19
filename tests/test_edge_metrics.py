@@ -11,14 +11,9 @@ import pandas as pd
 from modules.edge_metrics import _grouped_cohens_d, PT_COLS, recategorize_biome, find_asset_csvs
 
 
-# Reference implementation of Cohen's d; pa_year_metrics computes the same values with
-# grouped statistics (_grouped_cohens_d).
 def cohens_d(x, y):
-    """
-    Cohen's d between two samples, with pooled standard deviation ((n-1) df).
-
-    Returns NaN if either sample has < 2 values or the pooled SD is 0.
-    """
+    """Reference Cohen's d for _grouped_cohens_d: pooled SD with (n-1) df; NaN if either sample
+    has < 2 values or the pooled SD is 0."""
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
     x = x[~np.isnan(x)]

@@ -1,23 +1,14 @@
 """
-Validation: the displaced-transect null model (Methods: Validation).
+Validation: the displaced-transect null model (scripts 11-13; Methods: Validation).
 
-Each sampled PA's full transect set is translated by one random vector, without rotation,
-in a local azimuthal equidistant projection centred on the PA, so the number, spacing,
-orientation and clustering of the transects are kept.
+Each sampled PA's whole transect set is translated by one random vector, without rotation, in
+a local azimuthal equidistant (AEQD) projection centred on the PA. This keeps the number,
+spacing, orientation and clustering of the transects. The PA polygon moves with them; script 12
+takes the copy's biome from it, as script 01 does for the PA (largest-area ecoregion).
 
-- sample_pas: stratified random draw order of PAs within each biome (with reserves)
-- displace / draw_vector / footprint_m: the translation, distance in [d, mult × d]
-- transect_lines / boundary_share: the share of displaced transects with a PA boundary near
-  their centre point (between points -1 and 1)
-- candidate_displacements: vectors drawn until enough candidates pass the local checks
-- displacement_centre / displace_polygon: the PA polygon moved with its transects (its biome is
-  taken as for the PA, script 01: the largest-area ecoregion, script 12)
-- candidate_checks: per PA, the first candidate whose copy passes the analysis-set rules of
-  R script 05 (biome, sea, lake, years; on the Earth Engine samples, script 13)
-- biome_from_num: RESOLVE BIOME_NUM -> the 8 biome groups of script 04 (point diagnostics)
-
-The edge metrics of the accepted displaced transects are computed with the functions of
-script 04 (modules.edge_metrics), so PA and displaced copy are measured identically.
+Script 11: sample_pas, candidate_displacements, displace_polygon, write_polygon_zip.
+Script 13: displaced_metrics (script 04's functions, so PA and copy are measured identically),
+candidate_checks (R script 05's analysis-set rules), select_pas, biome_from_num, split_key.
 """
 
 import numpy as np
@@ -30,8 +21,8 @@ from modules.edge_metrics import biome_groups, recategorize_biome
 POINT_IDS = (-2, -1, 0, 1, 2)
 CANDIDATE_SEP = '#'   # upload key: "<WDPA_PID>#<candidate>"
 
-# RESOLVE Ecoregions 2017 BIOME_NUM -> BIOME_NAME, from modules/biome_groups.csv (numbers 1-14;
-# other codes, e.g. RESOLVE's rock and ice, -> None)
+# RESOLVE Ecoregions 2017 BIOME_NUM (1-14) -> BIOME_NAME, from modules/biome_groups.csv.
+# Other codes (e.g. rock and ice) are absent, so biome_from_num gives None.
 RESOLVE_BIOMES = {int(n): name for n, name in biome_groups()[['BIOME_NUM', 'BIOME_NAME']].itertuples(index=False)
                   if n != ''}
 
@@ -47,12 +38,11 @@ def biome_from_num(num):
 
 def sample_pas(pas, n_per_biome, reserve, seed):
     """
-    Stratified random draw order of PAs within each biome.
+    Random draw order of PAs (WDPA_PID, BIOME_NAME) within each biome.
 
-    ``pas``: DataFrame with WDPA_PID and BIOME_NAME. PAs are sorted by WDPA_PID and biomes
-    by name before drawing, so the result depends only on the PAs and the seed. Returns the
-    first ``n_per_biome + reserve`` PAs of each biome (all of a smaller biome) with ``draw``
-    = 1, 2, ... in draw order; PAs after the first ``n_per_biome`` are reserves.
+    Returns the first n_per_biome + reserve PAs of each biome (all of a smaller one) with
+    ``draw`` = 1, 2, ...; those after the first n_per_biome are reserves. Input is sorted
+    before drawing, so the result depends only on the PAs and the seed.
     """
     rng = np.random.default_rng(seed)
     pas = pas[['WDPA_PID', 'BIOME_NAME']].copy()
@@ -87,11 +77,8 @@ def displacement_centre(points):
 
 
 def displace_polygon(geom, lon0, lat0, dx, dy):
-    """
-    The PA polygon translated by (dx, dy) m in the AEQD projection at (lon0, lat0), the same
-    translation as its transect points (candidate_displacements, displacement_centre).
-    ``geom``: shapely geometry in EPSG:4326. Returns the translated geometry in EPSG:4326.
-    """
+    """Translate a PA polygon (EPSG:4326) by (dx, dy) m in the AEQD projection at (lon0, lat0):
+    the same move as its transect points in candidate_displacements."""
     fwd, inv = aeqd_transformers(lon0, lat0)
 
     def move(xy):
@@ -101,11 +88,9 @@ def displace_polygon(geom, lon0, lat0, dx, dy):
 
 
 def write_polygon_zip(keys, geoms, zip_path):
-    """
-    Displaced PA polygons as a zipped shapefile for Earth Engine table upload: field WDPA_PID
-    (the key "<WDPA_PID>#<candidate>"), geometry in EPSG:4326. Written in a temporary folder
-    first, as modules.transects.write_upload_zip.
-    """
+    """Write displaced PA polygons as a zipped shapefile for Earth Engine upload: field WDPA_PID
+    (the key "<WDPA_PID>#<candidate>"), EPSG:4326. Built in a temporary folder, as
+    transects.write_upload_zip."""
     import tempfile
     import zipfile
     from pathlib import Path
@@ -136,11 +121,9 @@ def displace(x, y, dx, dy, inv):
 
 def transect_lines(points, ends=(POINT_IDS[0], POINT_IDS[-1])):
     """
-    One line per transect, from its point ``ends[0]`` to its point ``ends[1]``: by default the
-    whole transect (-2 to 2); (-1, 1) gives its centre zone, within one point spacing of point 0.
-
-    ``points``: DataFrame with transectID, pointID, lon, lat; every transect has both end
-    points. Returns (transectIDs, shapely LineString array) in transectID order.
+    One line per transect from point ends[0] to ends[1]: by default the whole transect (-2 to 2);
+    (-1, 1) gives the centre zone, within one point spacing of point 0. ``points``: transectID,
+    pointID, lon, lat. Returns (transectIDs, LineStrings), in transectID order.
     """
     p = points.sort_values(['transectID', 'pointID'], kind='stable')
     first = p[p['pointID'] == ends[0]]
@@ -162,19 +145,17 @@ def boundary_share(lines, tree):
 def candidate_displacements(points, tree, rng, n_candidates, max_attempts, d_min, mult,
                             max_boundary_share):
     """
-    Displacements of one PA's transect set that pass the checks needing no imagery.
+    Displacements of one PA's transect points (transectID, pointID, lon, lat) that pass the
+    checks needing no imagery, in the AEQD projection at the points' mean (displacement_centre).
 
-    ``points``: the PA's transect points (transectID, pointID, lon, lat). The projection is
-    centred on the mean point. The PA size d is the larger of ``d_min`` and the PA's footprint
-    (so the copy cannot overlap the PA); distances are drawn uniformly in [d, ``mult`` × d].
-    A vector is accepted when at most ``max_boundary_share`` of the displaced transects have a
-    PA boundary in ``tree`` within their centre zone (points -1 to 1), and no transect spans
-    more than 180 degrees of longitude (antimeridian). A boundary nearer the transect ends is
-    allowed. Vectors are drawn until ``n_candidates`` are accepted or ``max_attempts`` are used.
+    d is the larger of ``d_min`` and the PA's footprint, so the copy cannot overlap the PA;
+    distances are uniform in [d, mult × d]. A vector is accepted when at most
+    ``max_boundary_share`` of the moved transects have a PA boundary (``tree``) in their centre
+    zone (points -1 to 1; nearer the ends is allowed), and no transect spans more than 180
+    degrees of longitude (antimeridian). Drawing stops at n_candidates accepted or max_attempts.
 
-    Returns (candidates, attempts, d_min_used): candidates is a list of dicts with candidate
-    (1, 2, ...), attempt, bearing, dist_m, dx, dy, boundary_share and points (DataFrame:
-    transectID, pointID, lon, lat of the displaced points).
+    Returns (candidates, attempts, d_min_used). Each candidate is a dict: candidate (1, 2, ...),
+    attempt, bearing, dist_m, dx, dy, boundary_share, points (the moved points).
     """
     lon0, lat0 = displacement_centre(points)
     fwd, inv = aeqd_transformers(lon0, lat0)
@@ -205,22 +186,20 @@ CHECK_RULES = ('biome_ok', 'sea_ok', 'lake_ok', 'years_ok')
 def candidate_checks(candidates, pa_years, n_transects, copy_biome, pa_biome,
                      min_complete, max_water, min_years):
     """
-    The analysis-set rules of R script 05 applied to each candidate copy; per PA, the first
-    candidate (by number, i.e. draw order) passing all of them is accepted.
+    Apply R script 05's analysis-set rules (modules/r/prep.R analysis_set) to each candidate copy.
+    Per PA, the first candidate (lowest number, i.e. draw order) passing all of them is accepted.
 
-    ``candidates``: WDPA_PID, candidate (every candidate sent to Earth Engine).
-    ``pa_years``: displaced_metrics() rows of the candidates (WDPA_PID, candidate, year, n_trnst,
-    edge_extent, edge_intensity, water_extent_pct), one per candidate-year with at least one
-    complete transect (as script 04). ``n_transects``: dict WDPA_PID -> transects of the PA (= of
-    each copy). ``copy_biome``: WDPA_PID, candidate, biome (group of the displaced polygon's
-    largest-area ecoregion, or None). ``pa_biome``: dict WDPA_PID -> biome group.
+    ``candidates``: every candidate sent to Earth Engine (WDPA_PID, candidate). ``pa_years``: their
+    displaced_metrics() rows, with a candidate column. ``n_transects``: WDPA_PID -> the PA's
+    transect count (the same for each copy). ``copy_biome``: WDPA_PID, candidate, biome (group of
+    the moved polygon's largest-area ecoregion, or None). ``pa_biome``: WDPA_PID -> biome group.
 
-    Rules, as 05 (modules/r/prep.R analysis_set) on 04's PA-year table:
-      biome_ok  the copy's biome is the PA's;
-      sea_ok    pct_complete (median over the copy's years of 100 × n_trnst / transects) >= min_complete;
-      lake_ok   water_extent_pct (mean over years) <= max_water, or missing;
-      years_ok  >= min_years years of edge_extent and of edge_intensity.
-    Returns one row per candidate with those values, passes, accepted.
+      biome_ok  the copy's biome is the PA's
+      sea_ok    pct_complete (median over years of 100 × n_trnst / transects) >= min_complete
+      lake_ok   water_extent_pct (mean over years) <= max_water, or missing
+      years_ok  >= min_years years with edge_extent and with edge_intensity
+
+    Returns one row per candidate with these values and rules, passes and accepted.
     """
     base = candidates[['WDPA_PID', 'candidate']].drop_duplicates().copy()
     py = pa_years.copy()
@@ -253,14 +232,9 @@ def split_key(key):
 
 
 def displaced_metrics(df, years):
-    """
-    PA-year edge metrics of transect points, with script 04's functions (all transects only).
-
-    ``df``: points as read by modules.edge_metrics.read_asset_csvs (WDPA_PID, transectID, pointID,
-    max_extent, gHM, elevation, terrain_slope, one column per year). Returns one row per
-    PA-year with at least one complete transect: WDPA_PID, year, n_trnst, edge_extent, D02, D01,
-    D0m1, D0m2, edge_intensity, water_extent_pct.
-    """
+    """PA-year edge metrics of points read by edge_metrics.read_asset_csvs, with script 04's
+    functions (all-transects version only). One row per PA-year with at least one complete
+    transect."""
     from modules.edge_metrics import build_transect_years, pa_year_metrics
     ty, _ = build_transect_years(df, years)
     m = pa_year_metrics(ty)
@@ -270,10 +244,7 @@ def displaced_metrics(df, years):
 
 
 def select_pas(sample, accepted, n_per_biome):
-    """
-    The validation PAs: per biome, in draw order, the first ``n_per_biome`` sampled PAs with an
-    accepted displacement (reserves replace PAs without one). ``sample``: WDPA_PID, BIOME_NAME,
-    draw; ``accepted``: set of WDPA_PIDs with an accepted candidate. Returns the WDPA_PIDs.
-    """
+    """The validation PAs (WDPA_PIDs): per biome, in draw order, the first n_per_biome sampled PAs
+    in ``accepted`` (the set with an accepted candidate), so reserves replace PAs without one."""
     s = sample[sample['WDPA_PID'].isin(accepted)].sort_values(['BIOME_NAME', 'draw'], kind='stable')
     return s.groupby('BIOME_NAME', sort=True).head(n_per_biome)['WDPA_PID'].tolist()

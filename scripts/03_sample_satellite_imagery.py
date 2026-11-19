@@ -1,36 +1,24 @@
 """
-Script 03: Sample Satellite Imagery
+Script 03: Sample satellite imagery.
 
-Samples NDVI gradient magnitude (2003-2025) and static layers at every transect
-point using Google Earth Engine.
+Samples static layers (water, human modification, elevation and slope from the Copernicus
+GLO-30 DEM, 2024_1 release) and the NDVI gradient magnitude of each annual median composite
+(2003-2025) at every transect point in Earth Engine. Gradients are computed and sampled on
+the native MODIS grid (sinusoidal, ~463 m). Results go to Google Drive in parts of 50,000 points.
 
-Workflow:
-1. Load the transect point assets uploaded after script 02
-2. Sample static layers (water, human modification, elevation and slope from
-   the Copernicus GLO-30 DEM, 2024_1 release)
-3. Compute the NDVI gradient magnitude of each annual median composite, on the
-   native MODIS grid (sinusoidal, ~463 m), and sample at the same projection
-4. Export results to Google Drive in parts of 50,000 points
+Run:
+    python scripts/03_sample_satellite_imagery.py            # full run
+    python scripts/03_sample_satellite_imagery.py --test     # part 0 of asset 000 only
+    python scripts/03_sample_satellite_imagery.py --start 5  # resume at asset 005
+Run --test first to check an export completes. Use --start to skip assets already
+exported by a run that stopped.
 
-BEFORE RUNNING:
-1. Set your GEE project once: earthengine set_project YOUR-PROJECT-ID (see README Setup)
-2. Upload every data/02_transects/upload/transect_points_NNN.zip as a
-   table asset (see output from script 02)
+Before running: set your GEE project once (earthengine set_project YOUR-PROJECT-ID; see
+README Setup) and upload every data/02_transects/upload/transect_points_NNN.zip as a
+table asset (see script 02 output).
 
-TEST FIRST:
-    python scripts/03_sample_satellite_imagery.py --test
-exports only part 0 of asset 000, to check it completes before the full run.
-
-RESUME:
-    python scripts/03_sample_satellite_imagery.py --start 5
-starts at asset 005 (e.g. if a run stopped after asset 004 finished), so assets
-that were already exported are not exported again.
-
-MANUAL STEP REQUIRED AFTER RUNNING:
-Download all CSV files from Google Drive folder 'ndvi_gradient'
-to data/03_gee/
-
-Then run: python scripts/04_compute_edge_metrics.py
+After running: download all CSVs from the Google Drive folder 'ndvi_gradient' to
+data/03_gee/, then run script 04.
 """
 
 import sys
@@ -56,13 +44,11 @@ print("=" * 80)
 print(f"\nIndex: NDVI gradient magnitude ({config.NDVI_COLLECTION})")
 print(f"Years: {config.START_YEAR}-{config.END_YEAR}")
 
-# Initialize Earth Engine
 print("\nInitializing Google Earth Engine...")
 config.require_gee_project()
 ee.Authenticate(auth_mode='notebook')  # prompts only if not signed in yet
 ee.Initialize(project=config.GEE_PROJECT)
 
-# Export folder and names
 folder_name = config.GEE_DRIVE_FOLDER
 export_prefix = config.GEE_EXPORT_PREFIX
 print(f"Export folder: {folder_name}")

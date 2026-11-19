@@ -5,7 +5,7 @@ test_that("config settings are consistent", {
   expect_true(CFG$ref$biome %in% CFG$biome_order)
   expect_true(CFG$ref$iucn %in% names(CFG$iucn_groups))
   expect_false(any(CFG$biome_order %in% CFG$exclude_biomes))
-  expect_setequal(names(BIOME_COLORS), CFG$biome_order)   # one colour per biome group
+  expect_setequal(names(BIOME_COLORS), CFG$biome_order)
 
   cats <- unlist(CFG$iucn_groups, use.names = FALSE)
   expect_false(anyDuplicated(cats) > 0)

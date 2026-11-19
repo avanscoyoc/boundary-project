@@ -1,10 +1,6 @@
 """
-Google Earth Engine functions for remote sensing data collection.
-
-This module contains functions for:
-- Filtering protected area datasets (script 01)
-- Computing NDVI gradient magnitude and the sampling image (scripts 03, 12)
-- Managing GEE task submissions
+Google Earth Engine functions: the WDPA filters and PA biome (script 01), the NDVI gradient and
+sampling image (scripts 03, 12), and batched CSV exports with retries (batch_sample_assets).
 """
 
 import time
@@ -16,12 +12,10 @@ from modules.config import (
 
 
 def pa_filter_steps(type="Polygon"):
-    """The WDPA filters of script 01, in order, as (name, ee.Filter) pairs: terrestrial
-    (MARINE == "0"), not a Marine Protected Area, not a UNESCO-MAB Biosphere Reserve, STATUS in
-    config.VALID_STATUS, GIS_AREA >= config.MIN_AREA_KM2, WDPA_PID not in config.EXCLUDED_PIDS,
-    and single-part geometry (`type`; needs set_geometry_type()). Single-part is last, so counting
-    the PAs left after each step (script 01) inspects only the geometries the attribute filters
-    leave. The combined filter (get_pa_filter) gives the same PAs in any order.
+    """The WDPA filters of script 01, in order, as (name, ee.Filter) pairs. The single-part filter
+    (`type`; needs set_geometry_type()) is last, so counting the PAs left after each step only
+    inspects the geometries the attribute filters leave. get_pa_filter combines them (order does
+    not change the result).
     """
     return [
         ("terrestrial", ee.Filter.eq("MARINE", "0")),
@@ -50,11 +44,8 @@ def get_biome(pa_feature):
     """
     ECOREGIONS = ee.FeatureCollection("RESOLVE/ECOREGIONS/2017")
     pa_geom = pa_feature.geometry()
-
-    # Get all ecoregions that intersect the PA
     intersecting = ECOREGIONS.filterBounds(pa_geom)
 
-    # Compute actual intersection area for each candidate ecoregion
     def add_intersection_area(eco):
         area = eco.geometry().intersection(pa_geom, ee.ErrorMargin(1)).area()
         return eco.set('intersection_area', area)
@@ -102,11 +93,11 @@ def sampling_image(with_biome=False):
     per year. Returns (image, export selectors).
     """
     gsw = ee.Image('JRC/GSW1_4/GlobalSurfaceWater')
-    # the 2016 image, pinned: the collection's only image now, so a later addition can't change it
+    # Pinned to the 2016 image (currently the collection's only one), so additions can't change it
     hm = ee.Image('CSP/HM/GlobalHumanModification/2016')
-    # Copernicus DEM: tag the mosaic with the tiles' native projection. Without it,
-    # ee.Terrain.slope works on the mosaic's default 1-degree grid and returns
-    # near-zero or missing slopes (Earth Engine catalog: COPERNICUS/DEM/GLO30_2024_1).
+    # Tag the DEM mosaic with the tiles' native projection. Without it, ee.Terrain.slope works on
+    # the mosaic's default 1-degree grid and returns near-zero or missing slopes (Earth Engine
+    # catalog: COPERNICUS/DEM/GLO30_2024_1).
     dem = ee.ImageCollection('COPERNICUS/DEM/GLO30_2024_1').select('DEM')
     elevation = dem.mosaic().setDefaultProjection(dem.first().projection()).rename('elevation')
     slope = ee.Terrain.slope(elevation).rename('terrain_slope')
@@ -125,13 +116,9 @@ def sampling_image(with_biome=False):
 
 
 def _retry(fn, what, attempts=10, wait=60):
-    """
-    Call ``fn()``; on an error (e.g. a dropped connection), wait ``wait`` seconds
-    and try again, up to ``attempts`` times in total (~10 minutes by default).
-
-    Only used for read-only requests (task status, collection size), never for
-    starting tasks, so a retry can't submit an export twice.
-    """
+    """Call ``fn()``, retrying on any error (e.g. a dropped connection) every ``wait`` s, up to
+    ``attempts`` calls (~10 minutes by default). Only for read-only requests, never for starting
+    tasks, so a retry can't submit an export twice."""
     for attempt in range(1, attempts + 1):
         try:
             return fn()
@@ -202,7 +189,7 @@ def batch_sample_assets(asset_path, image, selectors, folder_name, export_prefix
                 break
             time.sleep(30)
 
-        # Retry any failed chunks at half chunk_size
+        # Retry failed chunks as two halves
         failed = [(idx, t) for idx, t in batch if _state(t) == 'FAILED']
         if failed:
             half = chunk_size // 2

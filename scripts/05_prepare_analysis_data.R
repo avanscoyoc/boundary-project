@@ -1,31 +1,26 @@
 # 05_prepare_analysis_data.R: the analysis data.
 #
-# The analysis set (biomes; PAs whose boundary is dominated by sea or by open water; missing
-# covariates; too few years), establishment-year imputation, z-scores on the final set,
-# point-on-surface coordinates, the response SDs and the HMI mean and SD, the long PA-year table,
-# the PA set of the transect-subset sensitivity runs, and the counts.
+# Builds the analysis set (drops excluded biomes, PAs whose boundary is dominated by sea or open
+# water, PAs with missing covariates or too few years), imputes missing establishment years,
+# z-scores the covariates on the final set, and writes PA coordinates, response SDs, the long
+# PA-year table, the PA sets of the sensitivity runs (09) and the counts.
 #
 # Run from the repository root:
 #   Rscript scripts/05_prepare_analysis_data.R
 #
 # Inputs:  results/pa_edge_metrics_ndvi.csv (04: one row per PA-year)
-#          data/02_pas/pas_selected.gpkg (02: PA polygons; every PA of 02, with its RESOLVE biome)
+#          data/02_pas/pas_selected.gpkg (02: polygons of every PA of 02, with RESOLVE biome)
 #          data/04_transect_years/missing_transects.csv (04: transects with a missing year)
-# Outputs: data/05_analysis/pa_level.csv   one row per analysis PA, ordered by WDPA_PID: attributes,
-#                                          STATUS_YR (imputed where 0) + STATUS_YR_reported,
-#                                          STATUS_YR_imputed, impute_pool; IUCN_group; z-scores;
-#                                          lon/lat; PA means and n_years per transect version
-#                                          (unsuffixed = "all"); pct_complete (median share of
-#                                          complete transects); PA-set flags set_*
-#          data/05_analysis/pa_year.csv    analysis PAs × transect version × year (long)
-#          data/05_analysis/excluded_pas.csv   every PA of script 02 that is not analysed, the
-#                                          step that removed it, pct_complete, water_extent_pct
-#          data/05_analysis/scaling.csv    n, mean, SD of each z-scored covariate (gHM_mean_z: the
-#                                          HMI back-transform) and of each response's PA means
-#                                          (the SD for the standardised change)
-#          results/analysis_counts.json    counts for the methods and checks (final_set:
-#                                          transects, points, area, % of transects kept; missing_data:
-#                                          transect-years without data at all 5 points)
+# Outputs: data/05_analysis/pa_level.csv       one row per analysis PA (WDPA_PID order): attributes,
+#                                              STATUS_YR (imputed where 0), z-scores, lon/lat, PA
+#                                              means per transect version (unsuffixed = "all"),
+#                                              PA-set flags set_*
+#          data/05_analysis/pa_year.csv        analysis PAs × transect version × year (long)
+#          data/05_analysis/excluded_pas.csv   PAs of 02 not analysed, with the step that removed them
+#          data/05_analysis/scaling.csv        n, mean, SD of each z-scored covariate and of each
+#                                              response's PA means (for the HMI back-transform and
+#                                              the standardised change)
+#          results/analysis_counts.json        counts for the methods and checks
 # Coordinates are written only to data/05_analysis/, never to results/.
 
 source(file.path("modules", "r", "load.R"))   # config.R, every module of modules/r, arg() / say()
@@ -41,9 +36,9 @@ mt <- as.data.frame(readr::read_csv(CFG$paths$missing_transects, show_col_types 
                                     col_types = readr::cols(WDPA_PID = "c", .default = readr::col_double())))
 say("04 metrics: %d PA-years, %d PAs", nrow(m), length(unique(m$WDPA_PID)))
 
-# One row per PA. The PA attributes are constant within a PA in 04's table. The covariates are
-# static per transect, but 04 averages them per PA-year over that year's complete transects, so
-# they can differ slightly between years: the PA value is their mean over the PA's years.
+# One row per PA. Attributes are constant within a PA. Covariates are static per transect, but 04
+# averages them over each year's complete transects, so they can differ slightly between years:
+# the PA value is their mean over the PA's years.
 attr_cols <- c("WDPA_PID", "NAME", "ISO3", "BIOME_NAME", "IUCN_CAT", "STATUS_YR", "AREA_KM2")
 cov_cols  <- c("gHM_mean", "elevation_mean", "terrain_slope", "water_extent_pct")
 stopifnot(all(c(attr_cols, cov_cols, "pct_complete") %in% names(m)), !anyDuplicated(unique(m[attr_cols])$WDPA_PID))
@@ -53,7 +48,7 @@ for (v in cov_cols) {
   x <- as.vector(tapply(m[[v]], pid, mean, na.rm = TRUE))
   pa_attr[[v]] <- ifelse(is.nan(x), NA_real_, x)
 }
-# Share of the PA's transects complete (data at all 5 points), median over its years: the sea rule
+# Median over years of the share of complete transects (data at all 5 points): the sea rule
 pa_attr$pct_complete <- as.vector(tapply(m$pct_complete, pid, stats::median, na.rm = TRUE))
 
 # ── 2. PA-year table and PA means (all transect versions) ────────────────────
@@ -64,9 +59,9 @@ pa <- merge(pa_attr, pm[pm$transects == "all", c("WDPA_PID", mean_cols)], by = "
 stopifnot(nrow(pa) == nrow(pa_attr))
 
 # ── 3. Analysis set ──────────────────────────────────────────────────────────
-# Every PA of script 02 enters: a PA without any complete transect-year has no metrics in 04
-# (e.g. Barrow Island, an island whose transects reach into the sea) and enters at 0% complete,
-# so the sea rule removes it. Biome groups are checked against 04's.
+# Every PA of 02 enters. A PA without any complete transect-year has no metrics in 04 (e.g.
+# Barrow Island, whose transects reach into the sea): it enters at 0% complete and the sea rule
+# removes it. Biome groups are checked against 04's.
 polys <- sf::st_read(CFG$paths$pas_selected, quiet = TRUE)
 polys$WDPA_PID <- as.character(polys$WDPA_PID)
 pas02 <- sf::st_drop_geometry(polys)[c("WDPA_PID", "NAME", "ISO3", "BIOME_NAME")]
@@ -117,8 +112,8 @@ for (v in setdiff(CFG$transects, "all")) {
   i <- match(d$WDPA_PID, x$WDPA_PID)
   for (col in mean_cols) d[[paste0(col, "_", v)]] <- x[[col]][i]
 }
-# Transect-subset runs: PA-years with ≥ sensitivity$min_transects complete transects in the
-# version; PAs with ≥ min_years such years of both metrics in every version
+# Transect-subset runs: a PA-year counts with ≥ sensitivity$min_transects complete transects in
+# the version; a PA needs ≥ min_years such years of both metrics in every version
 ts <- transect_subset_set(py[py$WDPA_PID %in% d$WDPA_PID, ], CFG$transects, unname(CFG$responses),
                           CFG$sensitivity$min_transects, CFG$min_years)
 stopifnot(identical(ts$WDPA_PID, d$WDPA_PID))

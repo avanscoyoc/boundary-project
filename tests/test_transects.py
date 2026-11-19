@@ -1,8 +1,4 @@
-"""
-Unit tests for modules/transects.py (script 02 geometry and transect logic).
-
-Run from the repo root:  python -m pytest tests/
-"""
+"""Unit tests for modules/transects.py (script 02). Run from the repo root: python -m pytest tests/"""
 
 import sys
 from pathlib import Path
@@ -204,8 +200,8 @@ def test_shape_ratio_is_size_neutral():
 # ---------------------------------------------------------------- other-PA flag
 
 def test_own_pid_sets_follows_replacement_chains():
-    removed = [pd.DataFrame({'WDPA_PID': ['n1', 'd1', 'x1'], 'replaced_by': ['d1', 'K', 'gone']}),   # step 2
-               pd.DataFrame({'WDPA_PID': ['m1', 'z'], 'replaced_by': ['K', None]})]                 # step 3
+    removed = [pd.DataFrame({'WDPA_PID': ['n1', 'd1', 'x1'], 'replaced_by': ['d1', 'K', 'gone']}),   # 02 step 2
+               pd.DataFrame({'WDPA_PID': ['m1', 'z'], 'replaced_by': ['K', None]})]                 # 02 step 3
     own = own_pid_sets(['K', 'L'], removed)
     # nested n1 -> duplicate d1 -> kept K; merged m1 -> K; x1's replacement was not kept
     assert own == {'K': {'K', 'n1', 'd1', 'm1'}, 'L': {'L'}}

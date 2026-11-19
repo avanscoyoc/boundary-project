@@ -1,4 +1,4 @@
-# Unit tests for modules/r/plots.R: builders produce plots from small tables (no rendering to file).
+# Unit tests for modules/r/plots.R: the builders produce plots from small tables.
 
 builds <- function(p) {
   f <- tempfile(fileext = ".png")

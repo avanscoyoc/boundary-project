@@ -1,35 +1,28 @@
 """
-Script 02: Select Protected Areas and Generate Transect Sampling Points
+Script 02: Select protected areas and generate transect sampling points.
 
-Part 1 - Choose PAs (equal-area Mollweide projection):
-1. Fill holes smaller than 2.25 km²
-2. Remove duplicates (overlap > 90% of both PAs; oldest kept) and nested PAs
-   (overlap > 90% of the smaller PA only; larger kept)
-3. Merge PAs with the same ORIG_NAME + ISO3 that touch or overlap (oldest
-   non-zero establishment year kept; merged PIDs listed in MERGED_PID)
-4. Add geodesic area, perimeter, and shape ratio (information only; no shape filter)
+Part 1, choose PAs (equal-area Mollweide): fill holes < 2.25 km²; remove duplicates (> 90%
+overlap of both PAs; oldest kept) and nested PAs (> 90% of the smaller only; larger kept);
+merge touching or overlapping PAs with the same ORIG_NAME + ISO3 (merged PIDs in MERGED_PID);
+add geodesic area, perimeter and shape ratio (information only, no shape filter).
 
-Part 2 - Create transects (each PA in its own azimuthal equidistant projection):
-1. Remove PAs with no interior at least 5.5 km from the edge
-2. Boundary points every 500 m; perpendicular transects of 5 points 2.5 km apart
-   (2 inner, 1 boundary, 2 outer)
-3. Keep a transect only if its inner half lies within the PA and its outer
-   half lies outside it (crosses the boundary once)
-4. Remove PAs whose longest unsampled stretch of boundary (MAX_GAP_PCT) is
-   more than 25% of the boundary
-5. Flag transects whose outer points fall inside another PA (in_other_pa)
-6. Write upload zips of 400 whole PAs each, and all points to Parquet
+Part 2, create transects (each PA in its own azimuthal equidistant projection): boundary
+points every 500 m; perpendicular transects of 5 points 2.5 km apart (2 inner, 1 boundary,
+2 outer). A transect is kept only if its inner half is inside the PA and its outer half
+outside. PAs are removed if they have no interior 5.5 km from the edge, no valid transect, or a
+longest unsampled stretch of boundary (MAX_GAP_PCT) > 25%. Transects whose outer points fall
+inside another PA are flagged (in_other_pa).
+
+Run: python scripts/02_generate_sampling_points.py
 
 Input:  data/01_wdpa/WDPA_polygons.geojson
 Output: data/02_pas/pas_selected.gpkg, data/02_pas/pas_removed.gpkg
         data/02_transects/transect_points.parquet
-        data/02_transects/upload/transect_points_NNN.zip
-        results/pipeline_counts.json (sections '02_pas', '02_transects')
+        data/02_transects/upload/transect_points_NNN.zip (400 whole PAs each)
+        results/pipeline_counts.json ('02_pas', '02_transects')
 
-MANUAL STEP REQUIRED AFTER RUNNING:
-Upload each zip in data/02_transects/upload/ to Google Earth Engine as a table asset.
-
-Then run: python scripts/03_sample_satellite_imagery.py
+After running: upload each zip in data/02_transects/upload/ to Earth Engine as a table
+asset, then run script 03.
 """
 
 import sys
@@ -81,8 +74,8 @@ wdpa_ll['WDPA_PID'] = wdpa_ll['WDPA_PID'].astype(str)
 wdpa_ll = wdpa_ll.drop(columns=['geometry_type'], errors='ignore')
 n_loaded = len(wdpa_ll)
 print(f"Loaded {n_loaded:,} PAs (already filtered by script 01).")
-# config.EXCLUDED_PIDS again: 0 from a current export of script 01; more from an older
-# export made before a PID was added to the list. Also keeps them out of the other-PA flag.
+# Applied again for older script-01 exports made before a PID was added to the list.
+# Also keeps these PAs out of the other-PA flag.
 wdpa_ll, n_excluded = drop_excluded_pids(wdpa_ll, config.EXCLUDED_PIDS)
 print(f"Dropped {n_excluded:,} PAs listed in EXCLUDED_PIDS.")
 n_input = len(wdpa_ll)
@@ -100,13 +93,11 @@ def record_removed(removed, step):
         removed_frames.append(removed)
 
 
-# Step 1: Fill small holes
 print(f"\nStep 1: Filling holes < {config.MAX_HOLE_AREA / 1_000_000:.2f} km²...")
 pas, n_filled = fill_holes(pas, max_hole_area=config.MAX_HOLE_AREA)
 steps.append({'step': '1_fill_holes', 'n_in': n_input, 'pas_with_holes_filled': n_filled, 'n_out': len(pas)})
 print(f"  Filled small holes in {n_filled:,} PAs")
 
-# Step 2: Duplicates and nested PAs
 print(f"\nStep 2: Removing duplicate and nested PAs (> {config.OVERLAP_THRESHOLD}% overlap)...")
 pas, removed, c = resolve_overlaps(pas, overlap_threshold=config.OVERLAP_THRESHOLD)
 record_removed(removed, '2_overlap')
@@ -114,7 +105,6 @@ steps.append({'step': '2_overlap', **c})
 print(f"  Removed {c['removed_duplicate']:,} duplicates and {c['removed_nested']:,} nested PAs "
       f"({c['n_invalid_fixed']} invalid geometries repaired) -> {c['n_out']:,} PAs")
 
-# Step 3: Merge same-name PAs that touch or overlap
 print("\nStep 3: Merging same-name PAs (ORIG_NAME + ISO3) that touch or overlap...")
 pas, removed, c = merge_same_name(pas, max_hole_area=config.MAX_HOLE_AREA)
 record_removed(removed, '3_same_name')
@@ -122,7 +112,7 @@ steps.append({'step': '3_same_name', **c})
 print(f"  Merged {c['pas_merged_away']:,} PAs into {c['groups_merged']:,} PAs "
       f"({c['groups_not_single_polygon']} groups left separate: not a single polygon) -> {c['n_out']:,} PAs")
 
-# Step 4: Area, perimeter, and shape ratio (information only; no shape filter)
+# Information only; no shape filter
 print("\nStep 4: Computing geodesic area, perimeter, and shape ratio...")
 pas = add_shape_metrics(pas)
 
@@ -141,7 +131,7 @@ tree = shapely.STRtree(np.asarray(wdpa_ll.geometry.values, dtype=object))
 tree_pids = wdpa_ll['WDPA_PID'].to_numpy()
 
 # PIDs that count as the same PA for the other-PA flag: itself, plus PAs merged into it or
-# removed as its duplicate or nested PA (following chains, e.g. nested -> duplicate -> kept)
+# removed as its duplicate or nested PA (chains followed, e.g. nested -> duplicate -> kept)
 own_pids = own_pid_sets(pas['WDPA_PID'], removed_frames)
 
 print(f"\nGenerating transects for {len(pas):,} PAs...")
@@ -164,8 +154,8 @@ res = generate_transects(
 
 print(f"  generated {sum(res['n_generated'].values()):,} transects")
 
-# Transects per PA and how evenly the kept ones cover the boundary (also kept
-# for PAs removed for a coverage gap, so pas_removed.gpkg shows why)
+# Transect counts and boundary coverage per PA (also set for PAs removed for a
+# coverage gap, so pas_removed.gpkg shows why)
 pas['N_TRNST'] = pas['WDPA_PID'].map(res['n_transects']).astype(int)
 pas['N_TRNST_GEN'] = pas['WDPA_PID'].map(res['n_generated']).astype(int)
 pas['PCT_KEPT'] = 100 * pas['N_TRNST'] / pas['N_TRNST_GEN'].replace(0, np.nan)

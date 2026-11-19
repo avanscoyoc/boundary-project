@@ -1,34 +1,32 @@
 """
-Script 11: Validation, part 1 - displaced transects
+Script 11: Validation, part 1 - displaced transects.
 
-For a stratified random sample of analysis PAs (VALIDATION_N_PER_BIOME per biome, plus
-VALIDATION_RESERVE reserves drawn in order), translates each PA's full transect set by random
-vectors (no rotation) in a local azimuthal equidistant projection, and keeps up to
-VALIDATION_N_CANDIDATES displacements that pass the checks needing no imagery:
-- PA size d = max(VALIDATION_MIN_DIST_KM, the PA's footprint), so the copy cannot overlap
-  the PA; distance drawn uniformly in [d, VALIDATION_DIST_MULT × d];
-- at most VALIDATION_MAX_BOUNDARY_SHARE of the displaced transects have the boundary of a PA
-  of the WDPA set of script 02 (pas_selected + pas_removed, the PA itself included) in their
-  centre zone (points -1 to 1, within 2.5 km of the centre point); the share is recorded.
-The checks needing imagery are those of the analysis set (R script 05) applied to the copy:
-biome (of the PA polygon moved by the same vector, largest-area ecoregion as script 01), sea,
-lake and years. Script 12 samples the candidates and the moved polygons' biome, script 13
-accepts per PA the first passing candidate and replaces PAs without one by the biome's reserves.
+Draws a biome-stratified random sample of analysis PAs (VALIDATION_N_PER_BIOME per biome, plus
+VALIDATION_RESERVE reserves drawn in order). Each PA's full transect set is shifted by random
+vectors (no rotation) in a local azimuthal equidistant projection. Up to VALIDATION_N_CANDIDATES
+displacements are kept that pass the checks needing no imagery:
+- distance drawn uniformly in [d, VALIDATION_DIST_MULT × d], with
+  d = max(VALIDATION_MIN_DIST_KM, PA footprint), so the copy cannot overlap the PA;
+- at most VALIDATION_MAX_BOUNDARY_SHARE of the displaced transects have a PA boundary
+  (pas_selected + pas_removed, the PA itself included) in their centre zone (points -1 to 1,
+  within 2.5 km of the centre point). The share is recorded.
+The imagery checks (the analysis-set rules of R script 05: biome of the moved PA polygon, sea,
+lake, years) follow in scripts 12 and 13. Script 13 accepts each PA's first passing candidate
+and replaces PAs without one by the biome's reserves.
 
-Inputs:  data/05_analysis/pa_level.csv (the analysis PAs, R script 05),
+Run: python scripts/11_validation_displace_transects.py
+
+Inputs:  data/05_analysis/pa_level.csv (analysis PAs, R script 05),
          data/02_transects/transect_points.parquet, data/02_pas/pas_{selected,removed}.gpkg
-Outputs: data/11_validation/sample.csv            sampled PAs: biome, draw order, transects,
-                                                  attempts, candidates, minimum distance
-         data/11_validation/candidates.csv        one row per candidate displacement, with the
-                                                  share of transects near a PA boundary
-         data/11_validation/candidate_points.parquet  displaced points of every candidate
-         data/11_validation/upload/displaced_points_NNN.zip  for Earth Engine
-         data/11_validation/upload/displaced_polygons_NNN.zip  the PA polygon moved by
-             each candidate's vector (its biome, script 12, as script 01 for the PA)
-             (both: field WDPA_PID = "<WDPA_PID>#<candidate>", as the key of script 13)
+Outputs (data/11_validation/):
+  sample.csv: sampled PAs (biome, draw order, transects, attempts, candidates, minimum distance)
+  candidates.csv: one row per candidate, with its share of transects near a PA boundary
+  candidate_points.parquet: displaced points of every candidate
+  upload/displaced_points_NNN.zip, upload/displaced_polygons_NNN.zip: the displaced points and
+    the PA polygon moved by each candidate's vector, keyed WDPA_PID = "<WDPA_PID>#<candidate>"
 
-Usage:
-    python scripts/11_validation_displace_transects.py
+After running: upload each zip as an Earth Engine table asset of the same name, then run
+script 12.
 """
 
 import sys
@@ -66,7 +64,7 @@ sample = sample_pas(frame, N_PER_BIOME, RESERVE, config.VALIDATION_SEED)
 print(f"\nSample frame: {len(frame):,} analysis PAs; drawn {len(sample):,} "
       f"({N_PER_BIOME} per biome + {RESERVE} reserves)")
 
-# 2. Their transect points
+# 2. Transect points of the sampled PAs
 pts = pq.read_table(config.TRANSECT_POINTS, columns=['WDPA_PID', 'transectID', 'pointID', 'lon', 'lat'],
                     filters=[('WDPA_PID', 'in', sample['WDPA_PID'].tolist())]).to_pandas()
 pts['WDPA_PID'] = pts['WDPA_PID'].astype(str)
@@ -88,7 +86,7 @@ def boundaries_near(lon_min, lat_min, lon_max, lat_max):
     return shapely.STRtree(np.concatenate(geoms) if geoms else np.array([], dtype=object))
 
 
-# PA polygons (script 02, the outlines the transects were built on), moved with each candidate
+# PA polygons from script 02 (the outlines the transects were built on), moved with each candidate
 polys = pyogrio.read_dataframe(config.PAS_SELECTED, columns=['WDPA_PID'])
 polys['WDPA_PID'] = polys['WDPA_PID'].astype(str)
 if polys.crs is not None and polys.crs.to_epsg() != 4326:
@@ -133,7 +131,7 @@ sample_out = pd.DataFrame(rows)
 cands = pd.DataFrame(cand_rows)
 points = pd.concat(cand_points, ignore_index=True)
 
-# 4. Write: tables, and upload zips of whole PAs (all candidates of a PA in the same zip)
+# 4. Write tables and upload zips of whole PAs (all candidates of a PA in one zip)
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 sample_out.to_csv(OUT_DIR / 'sample.csv', index=False)
@@ -150,8 +148,8 @@ for z in range(n_zip):
     write_upload_zip(upload[points['WDPA_PID'].isin(pids)],
                      UPLOAD_DIR / f'{config.VALIDATION_UPLOAD_PREFIX}{z:03d}.zip')
 
-# Displaced PA polygons (script 12 takes each one's biome as script 01 did for the PA), in zips of
-# whole PAs; invalid outlines after the move are repaired
+# Displaced PA polygons (for their biome in script 12), in zips of whole PAs.
+# Outlines made invalid by the move are repaired.
 pg = pd.DataFrame(cand_polys, columns=['WDPA_PID', 'candidate', 'geometry'])
 geoms = pg['geometry'].to_numpy()
 bad = ~shapely.is_valid(geoms)

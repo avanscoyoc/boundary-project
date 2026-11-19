@@ -1,37 +1,32 @@
 # 06_models_mean.R: models of mean edge extent and intensity.
 #
-# For each response (the PA mean of the yearly metric), spatial GLS with exponential correlation
-# in great-circle distance (corHaversine, range optimised from config spatial$range_start_km,
-# REML):
-#   main-effects model   → Fig. 3A and Table SX;
-#   interaction model    (+ HMI × IUCN, HMI × biome) → Table SY: coefficients, marginal Wald F
-#                        tests of the two interactions, HMI slopes per IUCN group and biome with
-#                        their contrasts, and the predictions across HMI for Fig. 3B–D (written
-#                        for both factors and both responses; 10_figures.R shows a panel only
-#                        where its interaction is supported);
+# Per response (PA mean of the yearly metric): spatial GLS with exponential correlation in
+# great-circle distance (corHaversine), range optimised, REML:
+#   main-effects model → Fig. 3A, Table SX;
+#   interaction model (+ HMI × IUCN, HMI × biome) → Table SY: Wald F tests of the two
+#     interactions, HMI slopes per group with contrasts, and predictions across HMI for
+#     Fig. 3B–D (written for all; 10 plots only the supported interactions);
 #   non-spatial interaction model → diagnostics only (AICc, Moran's I).
-# Reference levels: config ref (non-strict / Boreal Forest), so the categorical
-# coefficients of the main-effects model are the Fig. 3A contrasts.
+# Reference levels: config ref (non-strict / Boreal Forest), so the categorical coefficients of
+# the main-effects model are the Fig. 3A contrasts.
 #
 # Run from the repository root:
 #   Rscript scripts/06_models_mean.R [--cores K]
 # --cores K  spatial fits run in parallel, K at a time (default 2; each needs ~1.5 GB at full size).
 # At full size each spatial fit takes about an hour: run in the background, e.g.
 #   nohup Rscript scripts/06_models_mean.R > data/05_analysis/06_models_mean.log 2>&1 &
-# Fits are cached in data/05_analysis/cache by content (data, formula, settings), so a rerun
-# loads them, and a change in the data or settings refits.
+# Fits are cached in data/05_analysis/cache by content (data, formula, settings): a rerun
+# refits only what changed.
 #
-# Inputs:  data/05_analysis/pa_level.csv, data/05_analysis/scaling.csv (05)
-# Outputs: <tables>/TableSX_mean_models_main_effects.csv   main-effects coefficients
-#          <tables>/TableSY_mean_models_interaction.csv    interaction-model coefficients
-#          <tables>/TableSY_wald_interactions.csv          H2 (HMI × IUCN), H3 (HMI × biome)
-#          <tables>/TableSY_hmi_slopes_{iucn,biome}.csv and _contrasts.csv
-#          <tables>/fig3_pred_hmi_{iucn,biome}.csv         predictions across HMI (Fig. 3B–D)
-#          <tables>/mean_models_response_sd.csv            response SD over the PAs (Fig. 3A units)
+# Inputs:  data/05_analysis/pa_level.csv, scaling.csv (05)
+# Outputs: <tables>/TableSX_mean_models_main_effects.csv
+#          <tables>/TableSY_mean_models_interaction.csv, TableSY_wald_interactions.csv,
+#                   TableSY_hmi_slopes_{iucn,biome}{,_contrasts}.csv
+#          <tables>/fig3_pred_hmi_{iucn,biome}.csv   predictions across HMI (Fig. 3B–D)
+#          <tables>/mean_models_response_sd.csv      response SD over the PAs (Fig. 3A units)
 #          <diagnostics>/mean_models_{wald_all_terms,spatial_params,fit_stats,moran_knn,
 #                         moran_bands,residuals}.csv
-#          <diagnostics>/mean_models_ranges.csv           estimated range of each spatial fit (09
-#                                                         fixes the sensitivity refits at these)
+#          <diagnostics>/mean_models_ranges.csv   range of each spatial fit (fixed in 09's refits)
 
 source(file.path("modules", "r", "load.R"))   # config.R, every module of modules/r, arg() / say()
 
@@ -72,7 +67,10 @@ done <- parallel::mclapply(seq_len(nrow(jobs)), function(i) {
           stats::coef(m$modelStruct$corStruct, unconstrained = FALSE)[["range"]],
           attr(m, "fit_minutes") %||% NA_real_)
 }, mc.cores = cores, mc.preschedule = FALSE)
-for (x in done) if (inherits(x, "try-error")) stop("spatial fit failed: ", x) else say("fitted: %s", x)
+for (x in done) {
+  if (is.null(x)) stop("a spatial fit returned nothing: its worker process died (out of memory?)")
+  if (inherits(x, "try-error")) stop("spatial fit failed: ", x) else say("fitted: %s", x)
+}
 
 # ── 3. Tables ────────────────────────────────────────────────────────────────
 w <- suppressWarnings(moran_weights(d, CFG$spatial$k_nn, CFG$spatial$bands_km))  # short bands may be sparse
@@ -111,7 +109,7 @@ write("fit_stats",              out$diagnostics, "mean_models_fit_stats.csv")
 write("moran_knn",              out$diagnostics, "mean_models_moran_knn.csv")
 write("moran_bands",            out$diagnostics, "mean_models_moran_bands.csv")
 write("residuals",              out$diagnostics, "mean_models_residuals.csv")
-write("ranges",                 out$diagnostics, "mean_models_ranges.csv")   # fixed ranges of 09
+write("ranges",                 out$diagnostics, "mean_models_ranges.csv")
 
 wd <- stack("wald")
 for (i in seq_len(nrow(wd))) say("%s %s: F(%d, %d) = %.2f, p = %.3g", wd$response[i], wd$hypothesis[i],

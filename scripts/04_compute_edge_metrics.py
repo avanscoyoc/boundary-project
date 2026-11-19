@@ -1,30 +1,24 @@
 """
-Script 04: Compute Edge Metrics
+Script 04: Compute edge metrics.
 
-Turns the Earth Engine exports into transect-year data and PA-year edge metrics.
-(Per-PA trends are computed in R, script 07, on the analysis set.)
-
-Workflow (one asset at a time; every PA lies within a single asset):
-1. Read the asset's CSV parts and check every exported point arrived exactly once
-2. Build one row per complete transect-year (all 5 points have a value):
-   edge flag, water_extent and in_other_pa flags, covariates
-3. Compute PA-year metrics for four versions: all transects, without water,
-   without other-PA, without either flag
-4. Merge PA attributes (from pas_selected.gpkg) and group the biomes
+Turns the Earth Engine CSVs into transect-year data and PA-year edge metrics, one asset at a
+time (every PA lies within one asset). Checks every exported point arrived exactly once, keeps
+transect-years with a value at all 5 points, computes PA-year metrics for four versions (all
+transects, without water, without other-PA, without either flag), and adds PA attributes and
+grouped biomes. Per-PA trends are computed in R (script 07).
 
 Edge: pt_0 > min(pt_1, pt_2) and pt_0 > min(pt_m1, pt_m2).
-Edge intensity: mean of the four Cohen's d values (pt_0 vs each position),
-computed on edge transects only.
+Edge intensity: mean of the four Cohen's d values (pt_0 vs each position), edge transects only.
 
-BEFORE RUNNING:
-Download all CSVs from the Google Drive folder (see script 03 output) into data/03_gee/
+Run: python scripts/04_compute_edge_metrics.py
 
-OUTPUT:
-- data/04_transect_years/ndvi_NNN.parquet  (one per asset)
-- data/04_transect_years/missing_transects.csv  (transects with a missing value in any year;
-  R script 05 counts them for the analysis set)
-- results/pa_edge_metrics_ndvi.csv           (FINAL: one row per PA-year)
-- results/pipeline_counts.json               (section '04_ndvi')
+Before running: download all CSVs from the Google Drive folder (see script 03) into data/03_gee/.
+
+Output:
+  data/04_transect_years/ndvi_NNN.parquet       one per asset
+  data/04_transect_years/missing_transects.csv  transects missing a value in any year (counted by R script 05)
+  results/pa_edge_metrics_ndvi.csv              final: one row per PA-year
+  results/pipeline_counts.json                  section '04_ndvi'
 """
 
 import sys
@@ -67,7 +61,7 @@ if unrecognized:
                      f"{config.GEE_EXPORT_PREFIX}NNN_part_N.csv exports of this run (Drive duplicates "
                      f"such as 'name (1).csv', or another run's files): {unrecognized[:5]}")
 
-# Expected points (script 02), with each PA's upload file / asset number (column 'asset')
+# Expected points from script 02; 'asset' is each PA's upload file / asset number
 print(f"\nReading {config.TRANSECT_POINTS}...")
 points = pd.read_parquet(config.TRANSECT_POINTS,
                          columns=['WDPA_PID', 'transectID', 'pointID', 'in_other_pa', 'asset'])

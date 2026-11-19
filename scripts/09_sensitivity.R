@@ -1,31 +1,29 @@
 # 09_sensitivity.R: sensitivity of the results to transect and PA selection.
 #
-# Runs (each recomputes the PA means, trends and models from the PA-year data):
+# Runs (defined by sensitivity_runs() in modules/r/prep.R); each recomputes the PA means, trends
+# and models from the PA-year data:
 #   main         all transects, the analysis PAs (reproduces 06–08 at their ranges)
-#   all_common   all transects, the PAs of the transect-subset comparison (set_transects); as in
-#                the subsets, a PA-year counts only with ≥ config sensitivity$min_transects
-#                complete transects
+#   all_common   all transects, the PAs of the transect-subset comparison (set_transects)
 #   nowater, nootherpa, noflags
-#                each transect subset on the same PAs as all_common; a PA-year counts only
-#                with ≥ config sensitivity$min_transects complete transects in the subset
+#                each transect subset, on the PAs of all_common
 #   established  all transects, PAs established by config sensitivity$established_by (analysed year)
 #   reported     all transects, PAs with a reported establishment year
 #   coverage     all transects, PAs keeping ≥ config sensitivity$min_pct_kept % of their generated
 #                transects (PCT_KEPT)
-# The runs are defined by sensitivity_runs() (modules/r/prep.R).
-# Each run is compared with a reference: the transect subsets with all_common (same PAs, so a
-# difference comes from the transects); all_common and the PA subsets with main.
+# In all_common and the transect subsets, a PA-year counts only with ≥ config
+# sensitivity$min_transects complete transects. Reference of each run: all_common for the
+# transect subsets (same PAs, so differences come from the transects); main for all_common and
+# the PA subsets.
 #
-# S1 (TableS_sensitivity_metrics): per subset and metric, against all_common: Pearson r and the
-#   paired mean difference (response SDs, bootstrap CI) of the PA means and of the standardised
-#   change; agreement of the trend classes (% and Cohen's kappa).
-# S2 (TableS_sensitivity_models): per run, the headline results with the reference values beside
-#   them: main-effects coefficients of the mean models, the Wald F of the two HMI interactions,
-#   % of PAs increasing / decreasing, biome mean change (bootstrap CIs), and the change-model A
-#   coefficients; same sign, same significance at 0.05.
-# Spatial fits: range FIXED at the estimate of the main analysis (06, 08: *_ranges.csv). One
-# optimised refit (noflags, extent, main effects) checks that shortcut (diagnostics). Standardised
-# change uses the main analysis's response SDs; covariate z-scores are the main ones.
+# S1 (TableS_sensitivity_metrics): per transect subset and metric, vs all_common: Pearson r and
+#   paired mean difference (response SDs, bootstrap CI) of the PA means and the standardised
+#   change; trend-class agreement (% and Cohen's kappa).
+# S2 (TableS_sensitivity_models): per run, the headline results beside the reference's: mean-model
+#   main effects, Wald F of the two HMI interactions, % of PAs increasing / decreasing, biome mean
+#   change (bootstrap CIs), change-model A coefficients; same sign, same significance at 0.05.
+# Spatial ranges are FIXED at the main estimates (06, 08: *_ranges.csv); one optimised refit
+# (noflags, extent, main effects) checks this shortcut. Standardised change uses the main
+# response SDs; covariate z-scores are the main ones.
 #
 # Run from the repository root, after 06–08:
 #   Rscript scripts/09_sensitivity.R [--cores K]
@@ -140,7 +138,6 @@ done <- parallel::mclapply(names(runs), function(key) tryCatch(run_results(key),
                            mc.cores = cores, mc.preschedule = FALSE)
 names(done) <- names(runs)
 for (key in names(done)) {
-  # NULL: the worker process died (e.g. killed for memory), so mclapply has no result for it
   if (is.null(done[[key]])) stop("run ", key, " returned nothing: its worker process died (out of memory?)")
   if (inherits(done[[key]], "error") || inherits(done[[key]], "try-error")) {
     stop("run ", key, " failed: ", conditionMessage(done[[key]]))
@@ -197,12 +194,13 @@ if (file.exists(sx_file)) {
   sx <- read(sx_file)
   x <- res[res$run == "main" & res$section == "Mean model, main effects", ]
   i <- match(paste(x$metric, x$term), paste(sx$response, sx$term))
+  if (anyNA(i)) stop("main-run terms missing from TableSX: ", paste(utils::head(x$term[is.na(i)], 5), collapse = ", "))
   checks$main <- data.frame(check = "main run (fixed range) vs TableSX (06, optimised range)",
                             n = sum(!is.na(i)),
                             max_rel_diff_estimate = max(abs(x$estimate - sx$estimate[i]) / pmax(abs(sx$estimate[i]), 1e-8)),
                             max_abs_diff_p = max(abs(x$p.value - sx$p.value[i])))
 }
-# Optimised refit check: one transect-subset fit with its range optimised, vs the fixed range
+# Refit check: one transect-subset fit with its range optimised, vs the fixed range
 say("refit check: noflags, extent, main effects, range optimised from %g km", CFG$spatial$range_start_km)
 d <- set_model_references(run_data(runs$noflags), CFG$ref, names(CFG$iucn_groups), CFG$biome_order)
 f <- model_formula(paste0(CFG$responses[["extent"]], "_mean"), "add")

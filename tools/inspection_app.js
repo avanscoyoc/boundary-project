@@ -1,23 +1,23 @@
 /*
  * Visual inspection: Earth Engine app for the analysis-set PAs (optional, after the analysis)
  *
- * Shows one PA at a time on satellite imagery: its outline and its transect
- * points (interior, boundary, exterior), with an info panel. PAs come in
- * review order (biome, country, name); the PA number is the `order` column of
- * data/inspection/checklist.csv, where decisions are recorded
- * (blank = keep, exclude, check). PAs to exclude are added to EXCLUDED_PIDS in
- * modules/config.py, and the pipeline is rerun from script 01.
+ * Shows one PA at a time on satellite imagery: its outline, its transect points
+ * (interior, boundary, exterior) and an info panel. PAs come in review order
+ * (biome, country, name); the PA number is the `order` column of
+ * data/inspection/checklist.csv, where decisions are recorded (blank = keep,
+ * exclude, check). PAs to exclude go into EXCLUDED_PIDS in modules/config.py,
+ * then the pipeline is rerun from script 01.
  *
  * BEFORE RUNNING:
- * 1. Run tools/inspection_export.py and upload data/inspection/pas_final.zip
- *    as the table asset PAS_ASSET below. The transect points are the existing
- *    assets transect_points_NNN (script 02).
- * 2. Paste this file into the Code Editor (code.earthengine.google.com) and Run.
- *    To publish it: Apps > New App. Viewers of a published app need read access
- *    to the assets (share them, e.g. "Anyone can read").
+ * 1. Run tools/inspection_export.py and upload data/inspection/pas_final.zip as
+ *    the table asset PAS_ASSET below. The points are the existing
+ *    transect_points_NNN assets (script 02).
+ * 2. Set ASSET_ROOT below, paste this file into the Code Editor
+ *    (code.earthengine.google.com) and Run. To publish: Apps > New App. Viewers
+ *    of a published app need read access to the assets (e.g. "Anyone can read").
  *
  * The page address keeps the current PA (…#n=123&pid=100204), so a reload or a
- * bookmark comes back to it; …#pid=100204 alone opens a PA by its WDPA_PID.
+ * bookmark returns to it; …#pid=100204 alone opens a PA by its WDPA_PID.
  */
 
 // --- Settings ---------------------------------------------------------------
@@ -46,7 +46,7 @@ function pointAsset(n) {
   return POINTS_PREFIX + ('00' + n).slice(-3);
 }
 
-// The page address (#n=…&pid=…); never lets a failure stop the app.
+// Page address (#n=…&pid=…); a failure here never stops the app.
 function setUrl(key, value) {
   try { ui.url.set(key, value); } catch (e) { /* address not available */ }
 }

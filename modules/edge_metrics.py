@@ -1,19 +1,15 @@
 """
 Edge metric functions (script 04).
 
-- find_asset_csvs: group the Earth Engine CSV parts by asset number
-- read_asset_csvs: read one asset's CSV parts
-- build_transect_years: one row per complete transect-year, with edge flag and
-  the water / other-PA flags
-- pa_year_metrics: PA-year edge extent, Cohen's d values, and edge intensity, for
-  four transect subsets (all, no water, no other-PA, neither)
-- missing_transects: transects with a missing value in any year
-- recategorize_biome
+- find_asset_csvs / read_asset_csvs: the Earth Engine CSV parts of each asset
+- build_transect_years: one row per complete transect-year, with the edge, water and
+  other-PA flags
+- pa_year_metrics: PA-year edge extent, Cohen's d values and edge intensity, for four
+  transect subsets (all, no water, no other-PA, neither)
+- missing_transects, recategorize_biome
 
-Per-PA trends are computed in R (script 07) on the analysis set.
-
-Every PA lies within a single asset (script 02 writes whole PAs per upload file),
-so each asset is processed on its own; memory is bounded by one asset.
+Per-PA trends are computed in R (script 07). Script 02 writes whole PAs per upload file, so
+each asset is processed on its own and memory is bounded by one asset.
 """
 
 import re
@@ -46,8 +42,8 @@ _CSV_SUFFIX = r'(\d{3})_part_(\d+)(?:_(\d{2}))?\.csv'
 def find_asset_csvs(csv_dir, prefix):
     """Group the CSV parts in `csv_dir` named `{prefix}NNN_part_N[_RR].csv` by asset number NNN
     (`prefix`: config.GEE_EXPORT_PREFIX for script 04, config.VALIDATION_EXPORT_PREFIX for 13).
-    Returns ({asset: sorted paths, retry halves included}, names of the other CSVs in the folder,
-    e.g. Drive duplicates such as 'name (1).csv' or another run's exports).
+    Returns ({asset: sorted paths, retry halves included}, names of the other CSVs, e.g. Drive
+    duplicates such as 'name (1).csv' or another run's exports).
     """
     pattern = re.compile('^' + re.escape(prefix) + _CSV_SUFFIX + '$')
     groups, unrecognized = defaultdict(list), []
@@ -61,11 +57,7 @@ def find_asset_csvs(csv_dir, prefix):
 
 
 def read_asset_csvs(files, years):
-    """
-    Read and stack the CSV parts of one asset.
-
-    Gradient values of -9999 (masked pixels) become NaN. Values are float32.
-    """
+    """Read and stack the CSV parts of one asset (values float32; -9999, masked pixels, -> NaN)."""
     year_cols = [str(y) for y in years]
     dtypes = {'WDPA_PID': str, 'transectID': 'float64', 'pointID': 'float64',
               'max_extent': 'float32', 'gHM': 'float32', 'elevation': 'float32',
@@ -80,14 +72,13 @@ def read_asset_csvs(files, years):
 
 def build_transect_years(df, years, flags=None):
     """One row per complete transect-year of one asset (`df` from read_asset_csvs, `years` in CSV
-    column order): a transect needs all 5 points in the export, a transect-year a value at all 5
+    column order). A transect needs all 5 points in the export, a transect-year a value at all 5
     points; the others are dropped and counted. `flags`: WDPA_PID, transectID, in_other_pa
     (transect_points.parquet; missing -> 0).
 
-    Columns: WDPA_PID, transectID, year, pt_m2 ... pt_2, edge (pt_0 > min(pt_1, pt_2) and
-    pt_0 > min(pt_m1, pt_m2)), water_extent (any point in the JRC maximum extent), in_other_pa,
-    gHM_mean_outer, elevation_pt0, terrain_slope_pt0. Returns (transect-years, counts:
-    transects_received, transects_missing_points, complete_per_year).
+    edge: pt_0 > min(pt_1, pt_2) and pt_0 > min(pt_m1, pt_m2). water_extent: any point in the JRC
+    maximum water extent. Also the point values pt_m2 ... pt_2, in_other_pa and the covariates
+    gHM_mean_outer, elevation_pt0, terrain_slope_pt0. Returns (transect-years, counts).
     """
     key = ['WDPA_PID', 'transectID', 'pointID']
     n_dup = int(df.duplicated(key).sum())
@@ -146,13 +137,12 @@ def build_transect_years(df, years, flags=None):
 
 
 def missing_transects(df, years):
-    """The transects with no value at one or more of their 5 points in at least one year (the
+    """Transects missing a value at one or more of their 5 points in at least one year (the
     transect-years build_transect_years drops), for R script 05's missing-data counts. Transects
     without all 5 points in the export are skipped (build_transect_years counts them).
 
-    One row per such transect: WDPA_PID, transectID, n_missing_years, water_any (a point within the
-    JRC maximum water extent), n_missing_point_years, n_missing_point_years_water, and the missing
-    point-years per position (miss_pt_m2 ... miss_pt_2).
+    One row per such transect, with water_any (a point in the JRC maximum water extent) and
+    counts of missing years and point-years, in total, at water and per position (miss_pt_*).
     """
     key = ['WDPA_PID', 'transectID', 'pointID']
     df = df.sort_values(key, kind='stable')
@@ -176,7 +166,8 @@ def missing_transects(df, years):
 
 
 def _grouped_cohens_d(edge_rows, keys):
-    """Cohen's d (pt_0 vs each position) per group, same formula as cohens_d()."""
+    """Cohen's d of pt_0 vs each other position, per group: pooled SD with (n-1) df; NaN when
+    n < 2 or the pooled SD is 0."""
     g = edge_rows.groupby(keys, sort=False)
     n = g.size()
     mean = g[PT_COLS].mean()
@@ -225,10 +216,8 @@ def pa_year_metrics(ty):
 
 
 def biome_groups():
-    """
-    The biome table (config.BIOME_GROUPS_CSV): BIOME_NUM (RESOLVE number, empty for "N/A"),
-    BIOME_NAME (RESOLVE name), group. Read as text, so "N/A" stays a name.
-    """
+    """The biome table (config.BIOME_GROUPS_CSV): BIOME_NUM (empty for "N/A"), BIOME_NAME (RESOLVE
+    name), group. Read as text, so "N/A" stays a name."""
     from modules import config
     return pd.read_csv(config.BIOME_GROUPS_CSV, dtype=str, keep_default_na=False)
 

@@ -6,26 +6,22 @@
 # content is licensed under CC BY-SA (https://stackoverflow.com/help/licensing), so this file is
 # shared under CC BY-SA with that attribution, not under the repository's MIT licence.
 #
-# ONE CHANGE: haversineDist() is vectorised. The helper filled an n × n matrix with a double R
-# loop over the scalar haversine() (about a minute for a few thousand PAs) and returned as.dist()
-# of it. The vectorised version computes the same lower triangle in the same column-major
-# (as.dist) order with the same arithmetic, elementwise: min(1, ·) became pmin(1, ·),
-# R = 6371 km. The result is bit-identical (tests/r/test_spatial.R checks it against the loop).
-# The helper's scalar haversine() is in that test, as the reference. Everything below the
-# distance functions is as in the helper.
+# One change: haversineDist() is vectorised. The original filled an n × n matrix with a double
+# loop over the scalar haversine() (about a minute for a few thousand PAs). This version computes
+# the same lower triangle, in the same as.dist order, with the same arithmetic (min became pmin;
+# R = 6371 km), so the result is bit-identical; tests/r/test_spatial.R checks it against the
+# original loop. The code below the distance functions is as in the source.
 #
-# MUST BE SOURCED INTO globalenv() (sys.source(..., envir = globalenv())). The constructor, Dim
-# and getCovariate methods have their environment set to the nlme namespace, so they find
-# haversineDist() and the S3 methods only through the namespace's fall-back to the global
-# environment.
+# Must be sourced into globalenv() (sys.source(..., envir = globalenv())): the constructor, Dim
+# and getCovariate methods have the nlme namespace as environment, so they find haversineDist()
+# and the S3 methods only through its fall-back to the global environment.
 #
 # Usage: Initialize(corHaversine(value = <range km>, form = ~ lon + lat, mimic = "corExp"),
-#                   data = d)   — coordinates must be columns named lon and lat, in degrees.
+#                   data = d)   (columns lon and lat, in degrees).
 
 # ---- Distance functions ----------------------------------------------------
-# Pairwise great-circle distances (km) for a two-column matrix of longitude/latitude, as a "dist"
-# object (lower triangle, column-major). Input in decimal degrees (default) or radians.
-# Vectorised over pairs, in blocks of columns of at most `block` pairs to bound memory.
+# Pairwise great-circle distances (km) between the lon/lat rows of `xy` (degrees, or radians), as
+# a "dist" object. Pairs are computed in column blocks of at most `block` pairs to bound memory.
 haversineDist <- function(xy, radians = FALSE, block = 2e6) {
   if (ncol(xy) > 2) stop("Input must have two columns (longitude and latitude)")
   xy <- as.matrix(xy)
@@ -54,9 +50,7 @@ haversineDist <- function(xy, radians = FALSE, block = 2e6) {
 }
 
 
-# ---- Inherit standard methods from corSpatial ------------------------------
-# Most of the machinery from nlme's corSpatial parent class works without
-# modification; we simply alias these methods to corHaversine.
+# ---- Methods inherited unchanged from corSpatial ----------------------------
 Initialize.corHaversine <- nlme:::Initialize.corSpatial
 recalc.corHaversine     <- nlme:::recalc.corSpatial
 Variogram.corHaversine  <- nlme:::Variogram.corSpatial
@@ -66,7 +60,7 @@ coef.corHaversine       <- nlme:::coef.corSpatial
 "coef<-.corHaversine"   <- nlme:::"coef<-.corSpatial"
 
 
-# ---- Constructor for the corHaversine class --------------------------------
+# ---- Constructor ------------------------------------------------------------
 corHaversine <- function(value  = numeric(0),
                          form   = ~ 1,
                          mimic  = "corExp",
@@ -84,9 +78,7 @@ environment(corHaversine) <- asNamespace("nlme")
 
 
 # ---- Dim method -------------------------------------------------------------
-# Custom Dim method that uses the third element of the Dim list to store the
-# spatial-class index, so that downstream methods know which built-in
-# correlation shape to emulate.
+# The third element of Dim ("spClass") holds the index of the built-in shape to mimic.
 Dim.corHaversine <- function(object, groups, ...) {
   if (missing(groups)) return(attr(object, "Dim"))
   val <- Dim.corStruct(object, groups)
@@ -101,9 +93,8 @@ environment(Dim.corHaversine) <- asNamespace("nlme")
 
 
 # ---- getCovariate method ---------------------------------------------------
-# Extracts the lon/lat covariate from the model frame and converts it to a
-# pairwise Haversine-distance representation (grouped or ungrouped, depending
-# on whether the formula includes a grouping factor).
+# Pairwise Haversine distances of the lon/lat covariate, within groups if the formula has a
+# grouping factor.
 getCovariate.corHaversine <- function(object, form = formula(object), data) {
   
   if (is.null(covar <- attr(object, "covariate"))) {
@@ -118,8 +109,7 @@ getCovariate.corHaversine <- function(object, form = formula(object), data) {
       if (attr(terms(covForm), "intercept") == 1) {
         covForm <- eval(parse(text = paste0("~", deparse(covForm[[2]]), "-1")))
       }
-      
-      # Validate that the covariates are exactly "lon" and "lat"
+
       if (length(all.vars(covForm)) > 2) {
         stop("corHaversine can only take two covariates, 'lon' and 'lat'")
       }
@@ -136,8 +126,7 @@ getCovariate.corHaversine <- function(object, form = formula(object), data) {
     } else {
       covar <- NULL
     }
-    
-    # Compute pairwise distances, optionally within groups
+
     if (!is.null(getGroupsFormula(form))) {
       
       grps <- getGroups(object, data = data)

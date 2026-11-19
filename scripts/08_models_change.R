@@ -1,30 +1,29 @@
 # 08_models_change.R: models of change in edge extent and intensity.
 #
-# For each metric, the standardised change of each PA (07) on the same predictors as the
-# main-effects mean model, spatial GLS with the same correlation structure and fitting method:
-#   A  primary: unweighted (Table SZ);
+# Per metric, the standardised change of each PA (07) on the predictors of the main-effects mean
+# model; spatial GLS with the correlation structure and fitting method of 06:
+#   A  primary, unweighted (Table SZ);
 #   B  precision-weighted: varFixed(~ v), v = se² + τ², τ² from A by the method of moments
 #      (Table SZ, sensitivity);
-#   non-spatial analogue of A → diagnostics (AICc, Moran's I);
-#   Table SW: do the biomes differ in change? GLS of change on biome alone, with a residual
-#   variance per biome and the spatial correlation of A (range fixed at A's estimate);
-#   omnibus Wald F, all pairwise contrasts (Holm) and compact letters.
-# Reference levels: config ref (non-strict / Boreal Forest), fitted directly, so the
-# categorical rows of Table SZ are the coefficients of the fit.
+#   non-spatial A → diagnostics (AICc, Moran's I);
+#   Table SW: do the biomes differ in change? GLS of change on biome alone, residual variance
+#      per biome, spatial correlation of A (range fixed at A's estimate); omnibus Wald F, all
+#      pairwise contrasts (Holm) and compact letters.
+# Reference levels: config ref, fitted directly, so the categorical rows of Table SZ are the
+# coefficients of the fit.
 #
-# Run from the repository root (after 07):
+# Run from the repository root, after 07:
 #   Rscript scripts/08_models_change.R [--cores K]
 # --cores K  the two metrics are fitted in parallel when K ≥ 2 (default 2; ~1.5 GB each).
 # At full size A and B each take about an hour per metric: run in the background, not at the
-# same time as 06 (memory). The spatial set-up is the same as 06's (same PAs and settings), so
-# it is loaded from the cache.
+# same time as 06 (memory). The spatial set-up is the same as 06's, so it loads from the cache.
 #
-# Inputs:  data/05_analysis/pa_level.csv (05), data/05_analysis/pa_trends.csv (07)
-# Outputs: <tables>/TableSZ_change_models.csv   long: continuous terms (per 1 SD) and categorical
+# Inputs:  data/05_analysis/pa_level.csv (05), pa_trends.csv (07)
+# Outputs: <tables>/TableSZ_change_models.csv   continuous terms (per 1 SD) and categorical
 #                                               contrasts vs the reference, models A and B
 #          <tables>/TableSW_biome_{omnibus,contrasts,letters}.csv
-#          <diagnostics>/change_models_{wald,tau2,spatial_params,moran,
-#                         residuals,ranges}.csv, biome_change_gls_{means,sigma}.csv (Table SW fits)
+#          <diagnostics>/change_models_{wald,tau2,spatial_params,moran,residuals,ranges}.csv,
+#                        biome_change_gls_{means,sigma}.csv (Table SW fits)
 
 source(file.path("modules", "r", "load.R"))   # config.R, every module of modules/r, arg() / say()
 
@@ -64,7 +63,10 @@ done <- parallel::mclapply(metrics, function(m) {
   cm <- fit_one(m)
   sprintf("%s: A range %.3f km, B range %.3f km", m, rg(cm$fits$A), rg(cm$fits$B))
 }, mc.cores = min(cores, length(metrics)), mc.preschedule = FALSE)
-for (x in done) if (inherits(x, "try-error")) stop("change-model fit failed: ", x) else say("fitted: %s", x)
+for (x in done) {
+  if (is.null(x)) stop("a change-model fit returned nothing: its worker process died (out of memory?)")
+  if (inherits(x, "try-error")) stop("change-model fit failed: ", x) else say("fitted: %s", x)
+}
 
 # ── 3. Tables ────────────────────────────────────────────────────────────────
 w <- suppressWarnings(moran_weights(d, CFG$spatial$k_nn, CFG$spatial$bands_km[1:2]))  # kNN only
@@ -82,7 +84,7 @@ tabs <- lapply(stats::setNames(metrics, metrics), function(m) {
 })
 stack <- function(field) { x <- do.call(rbind, lapply(tabs, `[[`, field)); rownames(x) <- NULL; x }
 
-# Table SW: biome comparison of change, spatial (range fixed at model A's estimate)
+# Table SW: biome comparison of change (range fixed at model A's estimate)
 sw <- lapply(stats::setNames(metrics, RESPONSE_LABELS[metrics]), function(m) {
   cm <- fit_one(m)   # cached
   cs_m <- spatial_setup(d, value = rg(cm$fits$A), fixed = TRUE, cache_dir = CFG$paths$cache_dir)

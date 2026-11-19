@@ -1,17 +1,11 @@
-# Spatial set-up for the GLS models: the corHaversine correlation structure, cached model fits,
-# and Moran's I of residuals (diagnostics).
-#
-# Needs modules/r/corHaversine.R in globalenv().
-#
-# Row order matters: the correlation structure, the fits and the Moran weights all refer to the
-# rows of the model data in the order given. Build them from the same data frame.
+# Spatial set-up for the GLS models: the corHaversine correlation structure, cached gls fits and
+# Moran's I of residuals. Needs corHaversine.R sourced into globalenv().
+# Row order matters: the correlation structure, the fits and the Moran weights refer to the rows
+# of the model data in order, so build them all from the same data frame.
 
-#' Jitter PAs whose coordinates coincide with an earlier PA's.
-#'
-#' corHaversine stops on zero distances, so a PA whose (lon, lat), rounded to 6 decimals, equals
-#' an earlier row's is moved by up to ±`jitter_deg` in each coordinate (uniform; lon first, then
-#' lat), repeating for up to `tries` rounds until no duplicates are left. `seed` is set first.
-#' Returns `d` with lon/lat changed for the duplicates only; attribute "n_jittered".
+#' Jitter PAs whose (lon, lat), rounded to 6 decimals, equals an earlier PA's: corHaversine stops
+#' on zero distances. Each duplicate moves by up to ±`jitter_deg` (uniform) in lon and lat, for up
+#' to `tries` rounds, after set.seed(seed). Attribute "n_jittered" counts the moved PAs.
 jitter_duplicates <- function(d, jitter_deg, seed, tries = 10L) {
   stopifnot(all(c("lon", "lat") %in% names(d)), !anyNA(d$lon), !anyNA(d$lat))
   key <- function(d) paste(round(d$lon, 6), round(d$lat, 6))
@@ -34,8 +28,8 @@ jitter_duplicates <- function(d, jitter_deg, seed, tries = 10L) {
   file.path(cache_dir, sprintf("%s_%s.rds", prefix, rlang::hash(key_obj)))
 }
 
-#' saveRDS() to a temporary file next to `path`, then rename it: a run killed while writing
-#' (out of memory, full disk) leaves no truncated cache file for the next run to read.
+#' saveRDS() to a temporary file, then rename it, so a run killed while writing leaves no
+#' truncated cache file.
 save_atomic <- function(x, path) {
   tmp <- paste0(path, ".tmp", Sys.getpid())
   saveRDS(x, tmp)
@@ -45,12 +39,11 @@ save_atomic <- function(x, path) {
 
 #' Initialised corHaversine structure (exponential, great-circle km) for the rows of `coords`.
 #'
-#' `value` is the range in km: the optimiser start (fixed = FALSE) or the fixed range
-#' (fixed = TRUE, used by the sensitivity refits). With nugget = TRUE
-#' the start is c(value, 0.1). Initialisation computes the pairwise distances (≈ 1 s)
-#' and nlme's factor of the n × n correlation matrix (about a minute for the analysis set), so the initialised
-#' object is cached in `cache_dir` (NULL = no cache) under a key that covers the coordinates in
-#' row order and every setting. Attribute "cache_key" holds that key.
+#' `value`: range in km, the optimiser start or, with fixed = TRUE (sensitivity refits), the
+#' fixed range; with nugget = TRUE the start is c(value, 0.1). Initialising factors the n × n
+#' correlation matrix (about a minute for the analysis set), so the result is cached in
+#' `cache_dir` (NULL = no cache), keyed on the coordinates in row order and every setting
+#' (attribute "cache_key").
 spatial_setup <- function(coords, value, nugget = FALSE, fixed = FALSE, mimic = "corExp",
                           cache_dir = NULL) {
   stopifnot(all(c("lon", "lat") %in% names(coords)), !anyNA(coords$lon), !anyNA(coords$lat),
@@ -72,15 +65,13 @@ spatial_setup <- function(coords, value, nugget = FALSE, fixed = FALSE, mimic = 
   cs
 }
 
-#' nlme::gls fit, cached on disk.
+#' nlme::gls fit, cached on disk in `cache_dir` (NULL = no cache).
 #'
-#' The key covers: the formula; the data columns the model uses (values, row order, and factor
-#' levels, so a change of reference level is a new fit); the correlation structure (class,
-#' settings, start values and a hash of its distances); the variance function (class, formula,
-#' values); method; max_iter; and the nlme version. Any change gives a new fit.
-#' The formula is written into the stored call, so emmeans and predict see it; always
-#' pass `data =` explicitly to emmeans. `cache_dir = NULL` fits without caching.
-#' Returns the gls object with attributes "cache_key" and "fit_minutes".
+#' The cache key covers the formula, the data columns used (values, row order and factor levels,
+#' so a new reference level is a new fit), the correlation structure (class, settings, start
+#' values, a hash of its distances), the variance function (class, formula, values), method,
+#' max_iter and the nlme version. The formula is written into the stored call so emmeans and
+#' predict see it; still pass `data =` to emmeans. Adds attributes "cache_key" and "fit_minutes".
 fit_gls_cached <- function(formula, data, correlation = NULL, weights = NULL, method = "REML",
                            max_iter = 200L, cache_dir = NULL, label = NULL) {
   vars <- unique(c(all.vars(formula),
@@ -88,8 +79,7 @@ fit_gls_cached <- function(formula, data, correlation = NULL, weights = NULL, me
                    if (!is.null(correlation)) all.vars(attr(correlation, "formula"))))
   stopifnot(all(vars %in% names(data)))
   used <- lapply(data[vars], function(x) if (is.factor(x)) list(levels(x), as.integer(x)) else x)
-  # Formulas enter the key as text: a formula object carries its environment, which differs
-  # between sessions and would make every key new.
+  # Formulas are keyed as text: a formula's environment differs between sessions.
   txt <- function(f) paste(deparse(f), collapse = " ")
   cor_key <- if (!is.null(correlation)) list(
     class = class(correlation), value = as.numeric(correlation),
@@ -108,8 +98,8 @@ fit_gls_cached <- function(formula, data, correlation = NULL, weights = NULL, me
   }
   t0 <- Sys.time()
   ctrl <- nlme::glsControl(maxIter = max_iter, msMaxIter = max_iter)
-  # Only non-NULL arguments go into the call (emmeans reads call$weights); the formula and the
-  # (small) variance function are written into the call, the correlation structure is not.
+  # Only non-NULL arguments enter the call (emmeans reads call$weights). The formula and the small
+  # variance function are inlined in the call; the correlation structure is not.
   args <- list(model = formula, data = quote(data), method = method, control = quote(ctrl))
   if (!is.null(correlation)) args$correlation <- quote(correlation)
   if (!is.null(weights)) args$weights <- weights
@@ -125,9 +115,9 @@ fit_gls_cached <- function(formula, data, correlation = NULL, weights = NULL, me
   m
 }
 
-#' Spatial weights for Moran's I of residuals: k nearest neighbours (great-circle,
-#' row-standardised) and one set per distance band [bands_km[i], bands_km[i+1]] km (NULL where a
-#' band has no links). Build once per PA set; rows as in `coords`.
+#' Spatial weights for Moran's I of residuals, rows as in `coords`: k nearest neighbours
+#' (great-circle, row-standardised) and one set per distance band [bands_km[i], bands_km[i+1]] km
+#' (NULL where a band has no links).
 moran_weights <- function(coords, k, bands_km) {
   xy <- cbind(coords$lon, coords$lat)
   knn <- spdep::nb2listw(spdep::knn2nb(spdep::knearneigh(xy, k = k, longlat = TRUE)), style = "W")
@@ -140,9 +130,9 @@ moran_weights <- function(coords, k, bands_km) {
   list(knn = knn, bands = bands, n = nrow(xy))
 }
 
-#' Moran's I of residuals `r` (in the row order of the weights): kNN permutation test
-#' (moran.mc, `nsim`, after set.seed(seed)) and, if `bands = TRUE`, the distance-band
-#' correlogram (moran.test, randomisation). Returns list(knn, bands) data frames.
+#' Moran's I of residuals `r` (in the row order of the weights): kNN permutation test (moran.mc,
+#' `nsim`, after set.seed(seed)) and, if `bands = TRUE`, the distance-band correlogram
+#' (moran.test, randomisation). Returns list(knn, bands).
 moran_residuals <- function(r, w, nsim, seed, label, bands = TRUE) {
   r <- as.numeric(r)
   stopifnot(length(r) == w$n, !anyNA(r))

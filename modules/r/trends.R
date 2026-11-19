@@ -1,24 +1,16 @@
-# Per-PA trends: OLS slope on year, Benjamini–Hochberg classes, and the Yue–Pilon
-# (pre-whitened Sen / Mann–Kendall) robustness check.
-#
-# Input is long PA-year data: one row per PA and year, with `WDPA_PID`, `year` and the
-# response column. One call handles one series (one metric, one transect version), so the
-# sensitivity runs are a loop over the same functions.
-#
-# The OLS is computed from per-PA sums instead of one lm() per PA; slope, SE, t and p are the same as lm().
+# Per-PA trends (OLS slope on year, Benjamini–Hochberg classes, Yue–Pilon pre-whitened Sen /
+# Mann–Kendall check) and their summaries. Trend functions take long PA-year data (WDPA_PID,
+# year, response), one metric and transect version per call.
 
-# Group index in first-appearance order. rowsum() sorts character groups by the locale, which
-# would make the row order depend on the environment.
+# Group index in first-appearance order (rowsum() would sort character groups by locale).
 .group_index <- function(id) {
   f <- factor(id, levels = unique(id))
   list(levels = levels(f), index = as.integer(f))
 }
 
-#' Per-PA OLS of `response` on year.
-#'
-#' Rows with a missing response are dropped. PAs with fewer than `min_years` remaining years
-#' are left out. Returns one row per PA, in first-appearance order:
-#' WDPA_PID, n_years, slope, se, stat (t), p_value (two-sided, df = n_years − 2).
+#' Per-PA OLS of `response` on year, from per-PA sums (same slope, SE, t and p as lm()).
+#' Drops missing responses, then PAs with fewer than `min_years` years. Returns WDPA_PID,
+#' n_years, slope, se, stat (t), p_value (two-sided, df = n_years − 2).
 ols_trends <- function(d, response, min_years) {
   stopifnot(all(c("WDPA_PID", "year", response) %in% names(d)), min_years >= 3)
   y <- d[[response]]
@@ -58,12 +50,9 @@ ols_trends <- function(d, response, min_years) {
   )
 }
 
-#' Benjamini–Hochberg adjustment across PAs and trend classes.
-#'
-#' `estimate` is the slope (OLS or Sen); `p` its p-value. Missing p-values are left out of the
-#' adjustment (as p.adjust does). Class: `levels[1]` (increase) if estimate > 0 and p_fdr < fdr,
-#' `levels[3]` (decrease) if estimate < 0 and p_fdr < fdr, otherwise `levels[2]` (no trend);
-#' NA where the estimate is NA. Returns list(p_fdr, class).
+#' Benjamini–Hochberg p-values across PAs (NA p-values left out) and trend classes: increase or
+#' decrease by the sign of `estimate` (OLS or Sen slope) where p_fdr < fdr, else no trend; NA
+#' where `estimate` is NA. Returns list(p_fdr, class).
 bh_classes <- function(estimate, p, fdr, levels) {
   stopifnot(length(estimate) == length(p), length(levels) == 3)
   p_fdr <- stats::p.adjust(p, method = "BH")
@@ -74,13 +63,10 @@ bh_classes <- function(estimate, p, fdr, levels) {
   list(p_fdr = p_fdr, class = cls)
 }
 
-#' Lag-1 autocorrelation of each PA's OLS trend residuals: a check of the independence behind
-#' the per-PA OLS p-values (Yue–Pilon is the robustness check).
-#'
-#' r1 = Σ e_t e_{t−1} / Σ e_t², the usual ACF estimator, with the sum over pairs of consecutive
-#' years only (a missing year breaks a pair). `bound` = 1.96 / √n_years, the approximate 95%
-#' limit for white noise. Same PAs as ols_trends() (≥ min_years); first-appearance order.
-#' Returns WDPA_PID, n_years, n_pairs, r1, bound.
+#' Lag-1 autocorrelation of each PA's OLS residuals, a check of the independence behind the OLS
+#' p-values. r1 = Σ e_t e_{t−1} / Σ e_t², summing over consecutive-year pairs only (a missing
+#' year breaks a pair); `bound` = 1.96 / √n_years, the approximate 95% limit for white noise.
+#' Same PAs as ols_trends(). Returns WDPA_PID, n_years, n_pairs, r1, bound.
 residual_autocorrelation <- function(d, response, min_years) {
   stopifnot(all(c("WDPA_PID", "year", response) %in% names(d)))
   ok <- !is.na(d[[response]])
@@ -103,7 +89,6 @@ residual_autocorrelation <- function(d, response, min_years) {
 
 #' Summary of residual_autocorrelation() per metric, for all PAs and per group: n, median and
 #' quartiles of r1, % of PAs with r1 > bound (positive autocorrelation) and with |r1| > bound.
-#' `ac`: metric, <group>, r1, bound.
 autocorrelation_summary <- function(ac, group, group_order, pooled_label = "All PAs") {
   one <- function(x, m, gname) {
     r <- x$r1; ok <- !is.na(r); b <- x$bound[ok]; r <- r[ok]
@@ -123,11 +108,9 @@ autocorrelation_summary <- function(ac, group, group_order, pooled_label = "All 
   out
 }
 
-#' Yue–Pilon trend per PA: Sen slope and the Mann–Kendall p-value after pre-whitening
-#' (zyp::zyp.trend.vector, method "yuepilon").
-#'
-#' Rows with a missing response are dropped; PAs with fewer than `min_years` years are left
-#' out. A series for which zyp fails gets NA. Returns WDPA_PID, sen, p (first-appearance order).
+#' Yue–Pilon trend per PA (zyp::zyp.trend.vector, method "yuepilon"): Sen slope and Mann–Kendall
+#' p-value after pre-whitening. Drops missing responses, then PAs with fewer than `min_years`
+#' years; NA where zyp fails. Returns WDPA_PID, sen, p.
 yuepilon_trends <- function(d, response, min_years) {
   stopifnot(all(c("WDPA_PID", "year", response) %in% names(d)))
   ok <- !is.na(d[[response]])
@@ -146,12 +129,9 @@ yuepilon_trends <- function(d, response, min_years) {
   data.frame(WDPA_PID = pids, sen = res[1, ], p = res[2, ], stringsAsFactors = FALSE)
 }
 
-#' All per-PA trend columns for one metric: OLS + BH class, and Yue–Pilon + BH class.
-#'
-#' `suffix` names the metric in the output columns (e.g. "extent"):
-#' slope_<s>, se_<s>, stat_<s>, p_value_<s>, p_fdr_<s>, trend_<s>,
-#' sen_<s>, p_zyp_<s>, p_fdr_zyp_<s>, trend_<s>_zyp.
-#' One row per PA with an OLS trend (≥ min_years), in first-appearance order.
+#' All per-PA trend columns for one metric: OLS and Yue–Pilon, each with BH p-values and class.
+#' `suffix` names the metric in the columns (e.g. slope_extent, trend_extent_zyp). One row per
+#' PA with an OLS trend, in first-appearance order.
 pa_trends <- function(d, response, suffix, min_years, fdr, levels) {
   ols <- ols_trends(d, response, min_years)
   bh  <- bh_classes(ols$slope, ols$p_value, fdr, levels)
@@ -172,34 +152,26 @@ pa_trends <- function(d, response, suffix, min_years, fdr, levels) {
 }
 
 # ── Standardised change, bootstraps, biome GLS, correlation, % change ────────
-# Input is one row per PA. `cols` arguments are named character vectors, metric label → column,
-# e.g. c("Edge extent" = "slope_extent", "Edge intensity" = "slope_intensity"); outputs carry
-# the label in a `metric` column and the group in a column named by `group`.
+# Input is one row per PA. `cols` maps metric label → column, e.g. c("Edge extent" =
+# "slope_extent"); outputs carry the label in `metric` and the group in a column named by `group`.
 
-#' Standardised change over the record: slope × n_span / sd, in response SDs per
-#' record. The SE is rescaled the same way (used by the precision weights of the change models).
+#' Standardised change over the record: slope × n_span / sd, in response SDs per record. The
+#' SE is scaled the same way (for the precision weights of the change models).
 standardised_change <- function(slope, se, n_span, sd) {
   stopifnot(length(sd) == 1, is.finite(sd), sd > 0)
   k <- n_span / sd
   list(change = slope * k, se_change = se * k, k = k)
 }
 
-#' Percentile-bootstrap means by group, with boot::boot and boot.ci(type = "perc").
-#'
-#' PAs are resampled within each group (same n as the group), R times. With `weights` (a column
-#' name) the statistic is the weighted mean, resampling (value, weight) pairs; a failed
-#' bootstrap gives NA limits. Rows with a missing value or group are left out.
-#'
-#' The random-number stream: `seed` is set once, then the bootstraps run in this order —
-#'   pooled = "none":   for each metric, each group in `levels` order;
-#'   pooled = "only":   for each metric, all PAs as one group (`pooled_label`);
-#'   pooled = "append": as "none", then for each metric the pooled group.
-#' "append" leaves the group results identical to "none", so a pooled row can be added to a
-#' block without changing the by-group CIs. Within a group, rows keep their order in `d`
-#' (the resampled indices refer to it).
-#'
-#' Returns list(summary, reps). summary: metric, <group>, n, mean, ci_lo, ci_hi (rows in run
-#' order). reps: metric, <group>, rep, mean (the R bootstrap means; for Fig. 4A).
+#' Percentile-bootstrap means by group (boot::boot, boot.ci type "perc"): PAs are resampled
+#' within each group, R times. With `weights` (a column) the statistic is the weighted mean of
+#' resampled (value, weight) pairs. Rows with a missing value or group are left out; a failed CI
+#' gives NA limits.
+#' `seed` is set once, then runs go by metric, then group in `levels` order. pooled = "only"
+#' runs all PAs as one group (`pooled_label`); "append" runs it after the by-group runs, so
+#' their CIs equal those of "none". Rows keep their order in `d` within a group.
+#' Returns list(summary = metric, <group>, n, mean, ci_lo, ci_hi; reps = the R bootstrap means,
+#' for Fig. 4A).
 boot_means <- function(d, cols, group, levels, R, seed, weights = NULL,
                        pooled = c("none", "only", "append"), pooled_label = "All PAs") {
   pooled <- match.arg(pooled)
@@ -246,21 +218,15 @@ boot_means <- function(d, cols, group, levels, R, seed, weights = NULL,
   out
 }
 
-#' Do the groups differ in mean change? GLS of `response` on `group` with a separate residual
-#' variance per group (varIdent), REML; emmeans with mode "df.error". With `correlation` (an
-#' initialised corHaversine from spatial_setup(), script 08: range fixed at the change model's
-#' estimate) the residuals are spatially correlated, as in 06 and 08, and the fit is cached in
-#' `cache_dir`; `d` must then have no missing `response` or `group` and columns lon, lat in the
-#' row order of the correlation structure. Without it, PAs are treated as independent.
-#'
-#' Returns list(omnibus, means, pairs, letters, sigma):
-#'   omnibus  marginal Wald F for the group term (denDF = N − p);
-#'   means    estimated group means with 95% CIs;
-#'   pairs    all pairwise contrasts, Holm-adjusted p (Bonferroni-simultaneous CIs);
-#'   letters  compact letter display at `alpha` from the Holm p-values (multcompView);
-#'   sigma    residual SD per group (sigma × varIdent ratio).
-#' Groups take the order of `levels` (the first is the model's reference); rows with a missing
-#' response or group are left out, the remaining rows keep their order in `d`.
+#' Do the groups differ in mean change? REML GLS of `response` on `group` with a residual
+#' variance per group (varIdent); emmeans with mode "df.error". `levels[1]` is the reference.
+#' Rows with a missing response or group are left out. With `correlation` (an initialised
+#' corHaversine from spatial_setup(); 08 fixes the range at the change model's estimate) the
+#' residuals are spatially correlated and the fit is cached; `d` must then have no missing
+#' `response` or `group`, and lon, lat in the correlation's row order. Without it, PAs are
+#' independent. Returns list(omnibus = marginal Wald F (denDF = N − p), means (95% CIs), pairs
+#' (Holm p, Bonferroni-simultaneous CIs), letters (compact letter display at `alpha` from the
+#' Holm p), sigma (residual SD per group)).
 biome_gls <- function(d, response, group, levels, max_iter = 200L, alpha = 0.05,
                       correlation = NULL, cache_dir = NULL, label = NULL) {
   stopifnot(all(c(response, group) %in% names(d)))
@@ -348,12 +314,10 @@ class_counts <- function(d, cols, group, levels, class_levels, pooled_label = "A
   out
 }
 
-#' Agreement of the OLS + BH classes with the Yue–Pilon classes (robustness check).
-#' `pairs` is a named list, metric label → c(ols column, Yue–Pilon column).
-#' Returns list(agreement, crosstab):
-#'   agreement  metric, <group>, n, n_concordant, pct_concordant and the % increase / decrease
-#'              under each method; all PAs (`pooled_label`) and by group; PAs with both classes;
-#'   crosstab   metric, ols, zyp, n over all PAs (NA classes kept as their own row/column).
+#' Agreement of the OLS and Yue–Pilon trend classes. `pairs`: metric label → c(OLS column,
+#' Yue–Pilon column). Returns list(agreement = n and % concordant, % increase / decrease per
+#' method, over PAs with both classes, for all PAs and by group; crosstab = OLS × Yue–Pilon
+#' counts over all PAs, NA classes included).
 trend_agreement <- function(d, pairs, group, levels, class_levels, pooled_label = "All PAs") {
   g <- as.character(d[[group]])
   agreement <- do.call(rbind, lapply(names(pairs), function(m) {
@@ -381,13 +345,10 @@ trend_agreement <- function(d, pairs, group, levels, class_levels, pooled_label 
   list(agreement = agreement, crosstab = crosstab)
 }
 
-#' Mean change over the record as % of the baseline (Results text; diagnostics).
-#'
-#' `summary` is a boot_means() summary in slope units (metric, <group>, n, mean, ci_lo, ci_hi).
-#' The baseline of a group is the unweighted mean of the PA means (`base_cols`, metric → column)
-#' over the PAs that enter its trend mean (non-missing slope, `slope_cols`); for
-#' `pooled_label`, over all such PAs. pct = 100 × slope × n_span / baseline, for the mean and
-#' both CI limits (the baseline is held fixed).
+#' Mean change over the record as % of the baseline: 100 × slope × n_span / baseline, for the
+#' mean and CI limits of a boot_means() `summary` (slope units). A group's baseline is the
+#' unweighted mean of its PA means (`base_cols`) over PAs with a slope (`slope_cols`); it is
+#' held fixed for the CI limits.
 percent_change <- function(summary, d, slope_cols, base_cols, group, n_span,
                            pooled_label = "All PAs") {
   stopifnot(identical(sort(names(slope_cols)), sort(names(base_cols))))
@@ -407,9 +368,8 @@ percent_change <- function(summary, d, slope_cols, base_cols, group, n_span,
 
 # ── Fig. 4B case studies (config case_studies) ───────────────────────────────
 
-#' Annual series of the case-study PAs, in panel order.
-#' `py`: PA-year table of one transect version (WDPA_PID, year, the response columns);
-#' `cases`: data frame WDPA_PID, label (config case_studies); `responses`: c(extent = "edge_extent", ...).
+#' Annual series of the case-study PAs, in panel order. `py`: PA-year table of one transect
+#' version; `cases`: config case_studies; `responses`: config responses.
 case_series <- function(py, cases, responses) {
   stopifnot(!anyDuplicated(cases$WDPA_PID), all(cases$WDPA_PID %in% py$WDPA_PID))
   x <- py[py$WDPA_PID %in% cases$WDPA_PID, c("WDPA_PID", "year", unname(responses))]
@@ -420,10 +380,9 @@ case_series <- function(py, cases, responses) {
   x
 }
 
-#' Case-study PAs: trends, and the change over the record in metric units (slope × n_span) and
-#' as % of the PA's own mean, in panel order.
-#' `d`: one row per PA with WDPA_PID, <response>_mean, slope_<m>, p_fdr_<m>, trend_<m>,
-#' change_<m>_z (NAME, ISO3, BIOME_NAME kept when present); `cases`, `responses`: as case_series().
+#' Case-study PAs in panel order: trends, and the change over the record in metric units
+#' (slope × n_span) and as % of the PA's own mean. `d`: one row per PA with <response>_mean,
+#' slope_<m>, p_fdr_<m>, trend_<m>, change_<m>_z.
 case_summary <- function(d, cases, responses, n_span) {
   i <- match(cases$WDPA_PID, d$WDPA_PID)
   stopifnot(!anyNA(i))
@@ -445,7 +404,7 @@ case_summary <- function(d, cases, responses, n_span) {
   out
 }
 
-# ── Sensitivity (09): agreement of per-PA values between two transect versions ──
+# ── Sensitivity (09): agreement of per-PA values between two versions ───────
 
 #' Cohen's kappa of two classifications of the same PAs (pairs with an NA are left out).
 #' NA when the expected agreement is 1 (both classifications constant and equal).

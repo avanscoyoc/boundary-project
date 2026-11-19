@@ -1,15 +1,10 @@
-# Analysis data (script 05): the long PA-year table, PA means, the analysis set,
-# establishment-year imputation, z-scores and point-on-surface coordinates.
-#
-# Functions take data frames and explicit settings and read no files; 05 reads the inputs and
-# writes data/05_analysis/. Rows are ordered by WDPA_PID (character, C-locale order: radix sort,
-# independent of the session locale) throughout.
+# Analysis data (script 05): long PA-year table, PA means, analysis set, establishment-year
+# imputation, z-scores and coordinates. Functions take data frames and settings; 05 does the I/O.
+# Rows are ordered by WDPA_PID in C-locale order (radix sort), independent of the session locale.
 
-#' Long PA-year table: one row per PA × transect version × year.
-#'
-#' `metrics` is script 04's wide table (one row per PA-year). Version "all" uses the unsuffixed
-#' columns, version v the columns "<col>_<v>". Returns WDPA_PID, transects (factor, levels =
-#' `versions`), year, and `cols`, ordered by WDPA_PID, version, year.
+#' Long PA-year table (one row per PA × transect version × year) from 04's wide table `metrics`.
+#' Version "all" uses the unsuffixed columns, version v the columns "<col>_<v>".
+#' Returns WDPA_PID, transects (factor, levels = `versions`), year and `cols`.
 pa_year_long <- function(metrics, versions, cols = c("n_trnst", "edge_extent", "edge_intensity")) {
   stopifnot(!anyDuplicated(paste(metrics$WDPA_PID, metrics$year)))
   out <- do.call(rbind, lapply(versions, function(v) {
@@ -27,11 +22,8 @@ pa_year_long <- function(metrics, versions, cols = c("n_trnst", "edge_extent", "
   out
 }
 
-#' PA means of the yearly metrics, per PA and transect version.
-#'
-#' Each metric's mean is unweighted over that metric's non-NA years, and
-#' n_years_<metric> counts those years. Returns WDPA_PID, transects, <metric>_mean,
-#' n_years_<metric> for each metric, ordered by WDPA_PID, version.
+#' PA means of the yearly metrics, per PA and transect version: <metric>_mean is the unweighted
+#' mean over the metric's non-NA years, n_years_<metric> the number of those years.
 pa_means <- function(py, metrics = c("edge_extent", "edge_intensity")) {
   key <- paste(py$WDPA_PID, as.character(py$transects), sep = "\r")   # factor or character
   first <- !duplicated(key)
@@ -49,23 +41,17 @@ pa_means <- function(py, metrics = c("edge_extent", "edge_intensity")) {
   out
 }
 
-#' The analysis set, step by step, from one row per PA with metrics.
-#'
-#' Steps, in order: drop PAs in `exclude_biomes` (or with no biome); if `min_complete` is given,
-#' drop PAs whose `pct_complete` (median share of complete transects) is below it (boundaries
-#' largely on the sea, where MODIS has no data); if `max_water` is given, drop PAs whose
-#' `water_extent_pct` is above it (lakes, wetlands; a missing value is left to the covariate
-#' step); drop PAs missing any of `covariates` (one step per covariate, in the order given); drop
-#' PAs with fewer than `min_years` years of any of `year_cols` (the main version's
-#' n_years_<metric>). Returns list(set = the kept rows ordered by WDPA_PID, steps = data frame of
-#' step, n_removed, n_left, removed = WDPA_PID and step of every removed PA). `start_label` names
-#' the first row of `steps` (the input).
+#' The analysis set, filtered step by step from `pa` (one row per PA with metrics). Steps, in
+#' order: excluded or missing biome; `pct_complete` < `min_complete` (sea); `water_extent_pct` >
+#' `max_water` (lakes, wetlands; NA is left to the covariate steps); each missing covariate;
+#' fewer than `min_years` in any of `year_cols`. A NULL threshold skips its step.
+#' Returns list(set = kept rows, steps = n_removed and n_left per step, removed = WDPA_PID, step).
 analysis_set <- function(pa, exclude_biomes, covariates, year_cols, min_years,
                          min_complete = NULL, max_water = NULL, start_label = "PAs with metrics") {
   stopifnot(!anyDuplicated(pa$WDPA_PID), all(c(covariates, year_cols, "BIOME_NAME") %in% names(pa)),
             is.null(min_complete) || "pct_complete" %in% names(pa),
             is.null(max_water) || "water_extent_pct" %in% names(pa))
-  # Each filter is a function of the remaining rows, applied in order.
+  # Each filter applies to the rows left by the previous ones.
   filters <- list(function(x) !is.na(x$BIOME_NAME) & !x$BIOME_NAME %in% exclude_biomes)
   labels <- paste0("excluded biomes (", paste(exclude_biomes, collapse = ", "), ") or no biome")
   if (!is.null(min_complete)) {
@@ -96,11 +82,10 @@ analysis_set <- function(pa, exclude_biomes, covariates, year_cols, min_years,
   list(set = pa, steps = steps, removed = removed)
 }
 
-#' The runs of 09: per run, `label`, `pids` (the run's PAs), transect `version`, `min_tr` (a
-#' PA-year counts only with ≥ min_tr complete transects) and `vs` (the run it is compared with; NA
-#' for main). `pa`: pa_level.csv with the PA-set flags of 05 (set_transects, set_established,
-#' set_reported, set_coverage); `s`: config sensitivity. The transect subsets and their reference
-#' all_common use the same PAs and the same min_tr, so a difference comes from the transects only.
+#' The sensitivity runs of 09, each with `label`, `pids`, transect `version`, `min_tr` (min.
+#' complete transects for a PA-year to count) and `vs` (the run it is compared with; NA for main).
+#' `pa`: pa_level.csv with 05's set_* flags; `s`: config sensitivity. The transect subsets and
+#' their reference all_common share PAs and min_tr, so differences come from the transects only.
 sensitivity_runs <- function(pa, s) {
   stopifnot(all(c("WDPA_PID", "set_transects", "set_established", "set_reported", "set_coverage") %in% names(pa)))
   run <- function(label, pids, version, min_tr, vs) list(label = label, pids = pids, version = version,
@@ -121,13 +106,9 @@ sensitivity_runs <- function(pa, s) {
                       pa$WDPA_PID[pa$set_coverage], "all", 0L, "main"))
 }
 
-#' PAs for the transect-subset sensitivity runs.
-#'
-#' In each transect version a PA-year counts only if it has ≥ `min_transects` complete
-#' transects; a PA qualifies in a version with ≥ `min_years` such years with a value of every
-#' metric in `metrics`. `py`: pa_year_long() rows (WDPA_PID, transects, year, n_trnst, metrics).
-#' Returns one row per PA of `py` (ordered by WDPA_PID): ok_<version> for each of `versions`,
-#' and ok_every_version.
+#' PAs for the transect-subset sensitivity runs. In each version a PA-year counts only with
+#' ≥ `min_transects` complete transects; a PA qualifies with ≥ `min_years` such years for every
+#' metric. `py`: pa_year_long() rows. Returns one row per PA: ok_<version>, ok_every_version.
 transect_subset_set <- function(py, versions, metrics, min_transects, min_years) {
   stopifnot(all(c("WDPA_PID", "transects", "n_trnst", metrics) %in% names(py)))
   ids <- sort(unique(py$WDPA_PID), method = "radix")
@@ -145,18 +126,12 @@ transect_subset_set <- function(py, versions, metrics, min_transects, min_years)
   out
 }
 
-#' Establishment-year imputation for STATUS_YR == 0.
-#'
-#' For each target PA with year 0, in the order of `targets`, draw `draws` years with
-#' replacement from the known years (> 0) of the `donors` in the same country; the imputed year
-#' is the median of the draws. If the country pool has fewer than `min_country` donors, draw from
-#' all donors' known years (global pool). ISO3 may list several countries ("A;B"): the pool is
-#' every donor that lists any of them, each donor once. `seed` is set once, before the first
-#' target. Known years are returned unchanged.
-#'
-#' `targets`, `donors`: data frames with WDPA_PID, ISO3, STATUS_YR. Returns `targets`' rows
-#' with STATUS_YR (imputed where it was 0), STATUS_YR_reported (the input), STATUS_YR_imputed,
-#' impute_pool ("country", "global", or NA for known years) and n_donors (pool size).
+#' Establishment-year imputation for STATUS_YR == 0: the median of `draws` years drawn with
+#' replacement from the known years of donors in the same country, or of all donors if the
+#' country has fewer than `min_country`. With several countries in ISO3 ("A;B") the pool is every
+#' donor listing any of them. `seed` is set once; targets are imputed in row order.
+#' Returns `targets`' rows with STATUS_YR (imputed where 0), STATUS_YR_reported,
+#' STATUS_YR_imputed, impute_pool ("country", "global", NA if known) and n_donors.
 impute_year <- function(targets, donors, draws, min_country, seed) {
   stopifnot(all(c("WDPA_PID", "ISO3", "STATUS_YR") %in% names(targets)),
             all(c("WDPA_PID", "ISO3", "STATUS_YR") %in% names(donors)),
@@ -182,10 +157,9 @@ impute_year <- function(targets, donors, draws, min_country, seed) {
   out
 }
 
-#' z-scores over the rows of `d`: for each element of `vars` (name = new column, value = source
-#' column), (x − mean) / SD, with log(x) first for the names in `log_vars`. Returns `d` with the
-#' new columns and attribute "scaling" (variable, source, log, n, mean, sd; mean and SD on the
-#' scale used, i.e. of log(x) for logged variables).
+#' z-scores over the rows of `d`: `vars` maps new column → source column; names in `log_vars`
+#' are logged first. Returns `d` with the new columns and attribute "scaling" (variable,
+#' source, log, n, mean, sd; mean and SD of log(x) for logged variables).
 add_zscores <- function(d, vars, log_vars = character()) {
   stopifnot(!is.null(names(vars)), all(vars %in% names(d)), all(log_vars %in% names(vars)))
   sc <- data.frame(variable = names(vars), source = unname(vars), log = names(vars) %in% log_vars,
@@ -201,10 +175,8 @@ add_zscores <- function(d, vars, log_vars = character()) {
   d
 }
 
-#' Point-on-surface coordinates (lon, lat in EPSG:4326) of PA polygons, for `pids` in that order.
-#'
-#' The point is computed in `crs_compute` (config coords_crs: Mollweide) and transformed to
-#' EPSG:4326. `polys`: sf with WDPA_PID, one row per PA.
+#' Point-on-surface coordinates (lon, lat in EPSG:4326) of the PA polygons `polys`, for `pids`
+#' in that order. The point is computed in `crs_compute` (config coords_crs: Mollweide).
 pa_coordinates <- function(polys, pids, crs_compute) {
   stopifnot(inherits(polys, "sf"), !anyDuplicated(polys$WDPA_PID))
   i <- match(pids, as.character(polys$WDPA_PID))
@@ -221,14 +193,10 @@ iucn_group <- function(cat, groups) {
   factor(out, levels = names(groups))
 }
 
-#' Transects and size of the final PA set (Methods, the final dataset).
-#'
-#' `polys`: script 02's pas_selected (N_TRNST = transects kept, i.e. the PA's transects in the
-#' point file sent to Earth Engine; N_TRNST_GEN = transects generated before the inner/outer-half
-#' removals). `py`: pa_year_long() table; its "all" rows give the complete transects per PA-year.
-#' `area`: AREA_KM2 of `pids`, in that order. Points: `points_per_transect` per transect
-#' (02: 2 × POINTS_PER_SIDE + 1). Median and range of transects per PA, area, % of generated
-#' transects kept (and pooled over the set) and complete transects per PA-year.
+#' Transects, points and size of the final PA set (totals, and median and range per PA).
+#' `polys`: 02's pas_selected (N_TRNST = transects kept and sent to Earth Engine, N_TRNST_GEN =
+#' transects generated before the inner/outer-half removals). `py`: pa_year_long() table.
+#' `area`: AREA_KM2 of `pids`, same order. `points_per_transect`: 2 × POINTS_PER_SIDE + 1 (02).
 final_set_summary <- function(pids, polys, py, area, points_per_transect = 5L) {
   i <- match(pids, as.character(polys$WDPA_PID))
   if (anyNA(i)) stop(sum(is.na(i)), " PAs are not in pas_selected, e.g. ", pids[is.na(i)][1])
@@ -248,16 +216,17 @@ final_set_summary <- function(pids, polys, py, area, points_per_transect = 5L) {
        complete_transects_per_pa_year = rng(a$n_trnst))
 }
 
-#' RESOLVE Ecoregions 2017 biome names -> the groups of script 04 (`recategorize_biome()` in
-#' modules/edge_metrics.py), from the one table both read: modules/biome_groups.csv. 8 analysis
-#' groups, plus Mangrove and Rock & Ice (RESOLVE's "N/A"), excluded by script 05. A missing name,
-#' "Unknown", "None" or "" gives NA; any other name is kept as it is (as in Python).
+#' RESOLVE Ecoregions 2017 biome name -> biome group, from modules/biome_groups.csv (also read by
+#' 04's recategorize_biome() in modules/edge_metrics.py). Includes Mangrove and Rock & Ice
+#' (RESOLVE's "N/A"), which 05 excludes.
 BIOME_GROUPS <- local({
   x <- utils::read.csv(file.path(CFG$root, "modules", "biome_groups.csv"), colClasses = "character",
                        na.strings = character(), check.names = FALSE)
   stats::setNames(x$group, x$BIOME_NAME)
 })
 
+#' Biome group of RESOLVE names, as in Python: a missing name, "Unknown", "None" or "" gives NA;
+#' a name not in the table is kept as it is.
 biome_group <- function(x) {
   x <- as.character(x)
   out <- unname(BIOME_GROUPS[x])
@@ -266,12 +235,11 @@ biome_group <- function(x) {
   out
 }
 
-#' PAs of script 02 (`pas02`: WDPA_PID, NAME, ISO3, BIOME_NAME = RESOLVE name) without any
-#' complete transect-year, so without metrics in 04 (e.g. a small island whose transects reach
-#' into the sea), appended to `pa` (one row per PA with metrics, BIOME_NAME grouped) with
-#' pct_complete = 0 and their grouped biome, so that the analysis set's rules apply to them (the
-#' sea rule removes them unless the biome step does). Checks that every PA with
-#' metrics is in `pas02` with the same grouped biome. Other columns of the added rows are NA.
+#' Appends to `pa` (one row per PA with metrics, grouped BIOME_NAME) the PAs of 02 (`pas02`,
+#' RESOLVE BIOME_NAME) with no complete transect-year, e.g. small islands whose transects reach
+#' into the sea. They get pct_complete = 0 and their biome group (other columns NA), so the
+#' analysis-set steps remove them (biome or sea). Checks that every PA of `pa` is in `pas02` with
+#' the same biome group.
 add_pas_without_metrics <- function(pa, pas02) {
   stopifnot(all(c("WDPA_PID", "BIOME_NAME") %in% names(pas02)), !anyDuplicated(pas02$WDPA_PID))
   i <- match(pa$WDPA_PID, pas02$WDPA_PID)
@@ -292,15 +260,11 @@ add_pas_without_metrics <- function(pa, pas02) {
   out
 }
 
-#' Missing data of the analysis set. A transect-year is missing when any of its
-#' 5 points has no value that year; script 04 leaves it out of that year's metrics.
-#'
-#' `pids`: the analysis PAs; `n_transects`, `biome`: their transects (N_TRNST) and biomes, same
-#' order; `py`: pa_year_long() rows (version "all": complete transects per PA-year; a PA-year
-#' without any is absent); `mt`: script 04's missing_transects.csv (one row per transect with a
-#' missing year, all PAs); `years`: the record; `biome_levels`: the order of the by-biome rows
-#' (05: config biome_order). The missing transect-years of each PA from `py` must equal those in
-#' `mt` (checked). Returns a list for analysis_counts.json.
+#' Missing-data summary of the analysis set, for analysis_counts.json. A transect-year is
+#' missing when any of its 5 points has no value that year (04 leaves it out of the metrics).
+#' `n_transects`, `biome`: N_TRNST and biome of `pids`, same order; `py`: pa_year_long() rows
+#' (a PA-year without complete transects is absent); `mt`: 04's missing_transects.csv (one row
+#' per transect with a missing year). Stops if `py` and `mt` disagree on missing transect-years.
 missing_data_summary <- function(pids, n_transects, py, mt, biome, years,
                                  biome_levels = sort(unique(biome))) {
   stopifnot(length(n_transects) == length(pids), length(biome) == length(pids), !anyDuplicated(pids))

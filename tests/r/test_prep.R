@@ -12,7 +12,7 @@ test_that("impute_year: a country with >= min_country known years draws only fro
   r <- impute_year(tg, rbind(donor_pool(), tg), draws = 1000, min_country = 5, seed = 1)
   expect_true(r$STATUS_YR_imputed); expect_equal(r$impute_pool, "country"); expect_equal(r$n_donors, 6L)
   expect_gte(r$STATUS_YR, 1950); expect_lte(r$STATUS_YR, 1975)
-  # Every draw comes from the country: with one huge-year donor elsewhere the median cannot move
+  # Every draw comes from the country: huge years in another country do not move the result
   d <- donor_pool(); d$STATUS_YR[d$ISO3 == "BBB"] <- 3000
   expect_equal(impute_year(tg, d, 1000, 5, 1)$STATUS_YR, r$STATUS_YR)
 })
@@ -267,7 +267,7 @@ test_that("sensitivity_runs: references, transect thresholds and PA subsets of 0
   expect_identical(vapply(r, `[[`, "", "version"),
                    c(main = "all", all_common = "all", nowater = "nowater", nootherpa = "nootherpa",
                      noflags = "noflags", established = "all", reported = "all", coverage = "all"))
-  # transect subsets vs all_common: same PAs, same threshold (like for like)
+  # transect subsets vs all_common: same PAs, same threshold
   for (v in c("nowater", "nootherpa", "noflags")) {
     expect_identical(r[[v]]$vs, "all_common")
     expect_identical(r[[v]]$pids, r$all_common$pids)

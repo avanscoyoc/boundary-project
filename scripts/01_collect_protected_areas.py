@@ -1,21 +1,16 @@
 """
-Script 01: Collect Protected Areas
+Script 01: Collect protected areas.
 
-Downloads and filters protected area polygons from Google Earth Engine.
+Filters WDPA polygons in Earth Engine, adds the RESOLVE Ecoregions 2017 biome with the
+largest overlap, and exports the result to Google Drive. Filters (modules/remotesensing.py):
+terrestrial, not a Marine Protected Area or UNESCO-MAB Biosphere Reserve, status
+Designated/Established/Inscribed, GIS_AREA >= 200 km², not in EXCLUDED_PIDS, single-part
+polygon. PAs removed by each filter are counted in results/pipeline_counts.json ('01_wdpa').
 
-Workflow:
-1. Filter the WDPA release (modules/remotesensing.py, pa_filter_steps): terrestrial
-   (MARINE == "0"), not a Marine Protected Area or a UNESCO-MAB Biosphere Reserve, status
-   Designated / Established / Inscribed, GIS_AREA >= 200 km², WDPA_PID not in
-   EXCLUDED_PIDS, single-part polygon; the PAs removed by each filter are counted in
-   results/pipeline_counts.json (section '01_wdpa')
-2. Add the RESOLVE Ecoregions 2017 biome with the largest overlap
-3. Export to Google Drive
+Run: python scripts/01_collect_protected_areas.py
 
-MANUAL STEP REQUIRED AFTER RUNNING:
-Download WDPA_polygons.geojson from Google Drive to data/01_wdpa/
-
-Then run: python scripts/02_generate_sampling_points.py
+After running: download WDPA_polygons.geojson from Google Drive to data/01_wdpa/,
+then run script 02.
 """
 
 import sys
@@ -34,13 +29,12 @@ print("="*80)
 print("SCRIPT 01: Collect Protected Areas")
 print("="*80)
 
-# Initialize Earth Engine
 print("\nInitializing Google Earth Engine...")
 config.require_gee_project()
 ee.Authenticate(auth_mode='notebook')  # prompts only if not signed in yet
 ee.Initialize(project=config.GEE_PROJECT)
 
-# Load WDPA dataset (a pinned monthly release, not WCMC/WDPA/current)
+# A pinned monthly release, not WCMC/WDPA/current
 release = config.WDPA_COLLECTION.split("/")[-2]
 print(f"Loading WDPA release {release} ({config.WDPA_COLLECTION})...")
 try:
@@ -54,10 +48,8 @@ except ee.EEException as e:
     )
 wdpa = ee.FeatureCollection(config.WDPA_COLLECTION)
 
-# Add geometry type property
 wdpa = wdpa.map(set_geometry_type)
 
-# Apply filters
 print("Applying filters...")
 print(f"  - Minimum area: {config.MIN_AREA_KM2} km²")
 print(f"  - Status: {', '.join(config.VALID_STATUS)}")
@@ -66,8 +58,8 @@ print(f"  - Excluding {len(config.EXCLUDED_PIDS)} problematic PIDs")
 pa_filter = get_pa_filter(type="Polygon")
 wdpa_filtered = wdpa.filter(pa_filter)
 
-# PAs left after each filter, in order (for the methods' counts; about 2 min). The geometry
-# type is computed only for the PAs left by the attribute filters (single_part is last).
+# PAs left after each filter, for the methods counts (~2 min). Geometry type is computed
+# only for PAs that pass the attribute filters (single_part is last).
 print("Counting the PAs removed by each filter...")
 try:
     fc = ee.FeatureCollection(config.WDPA_COLLECTION)
@@ -87,15 +79,12 @@ try:
 except ee.EEException as e:
     print(f"  WARNING: counts not computed ({e}); the export below is unaffected.")
 
-# Add biome information
 print("Adding biome information from RESOLVE Ecoregions 2017...")
 wdpa_with_biome = wdpa_filtered.map(get_biome)
 
-# Count filtered polygons
 count = wdpa_with_biome.size().getInfo()
 print(f"\nFiltered to {count:,} protected area polygons")
 
-# Export to Google Drive
 print("\nExporting to Google Drive...")
 print("  File: WDPA_polygons.geojson")
 

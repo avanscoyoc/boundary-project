@@ -219,7 +219,7 @@ def test_python_r_and_app_settings_agree():
     assert config.VALIDATION_MIN_COMPLETE_PCT == get('min_complete_pct')
     assert config.VALIDATION_MAX_WATER_PCT == get('max_water_pct')
     assert config.VALIDATION_MIN_YEARS == get('min_years')
-    # the record: Python config START_YEAR..END_YEAR = R config years
+    # Python START_YEAR..END_YEAR = R config years
     first, last = map(int, re.search(r'\byears\s*=\s*(\d{4}):(\d{4})', r).groups())
     assert (config.START_YEAR, config.END_YEAR) == (first, last)
     # the 05 cut-offs shown in the inspection app
@@ -240,8 +240,7 @@ def test_biome_from_num_and_split_key():
 
 
 def test_script_04_path_on_synthetic_exports(tmp_path):
-    """Earth Engine-style CSVs -> script 04's metrics, with known answers; the validation path
-    (displaced_metrics) gives the same PA-years. Runs without pipeline data."""
+    """Synthetic Earth Engine CSVs -> script 04's metrics (known answers) and the same from displaced_metrics."""
     from modules.edge_metrics import (find_asset_csvs, read_asset_csvs, build_transect_years,
                                   pa_year_metrics, POINT_IDS)
     years = [2003, 2004]
@@ -284,8 +283,7 @@ def test_script_04_path_on_synthetic_exports(tmp_path):
 
 
 def test_displaced_metrics_reproduce_script_04():
-    """With no displacement, the validation metric path gives 04's PA-year metrics exactly, on
-    the real exports (skips without pipeline data; the synthetic test above always runs)."""
+    """On the real exports, displaced_metrics reproduces 04's PA-year metrics (skips without data)."""
     from modules.edge_metrics import read_asset_csvs
     # an asset's export is ordered by point position, so a PA's points span all its parts
     files = sorted(config.GEE_CSV_DIR.glob(f'{config.GEE_EXPORT_PREFIX}000_part_*.csv'))

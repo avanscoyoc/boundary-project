@@ -1,29 +1,25 @@
 """
-Script 13: Validation, part 3 - accept displacements and compute edge metrics
+Script 13: Validation, part 3 - accept displacements and compute edge metrics.
 
-Each candidate copy (script 11) is measured with script 04's functions and must pass the
-analysis-set rules of R script 05, as the analysed PAs did:
-- biome: the PA polygon moved by the same vector has the PA's biome (largest-area RESOLVE
-  ecoregion, as script 01; grouped as script 04; from script 12);
+Measures each candidate copy (script 11) with script 04's functions and applies the
+analysis-set rules of R script 05:
+- biome: the moved PA polygon has the PA's biome (from script 12; grouped as in script 04);
 - sea: median over years of the % of transects complete >= VALIDATION_MIN_COMPLETE_PCT;
 - lake: mean over years of the % of transects with surface water <= VALIDATION_MAX_WATER_PCT;
 - years: >= VALIDATION_MIN_YEARS years of both edge metrics.
-Per PA the first passing candidate in draw order is accepted. Per biome, the first
-VALIDATION_N_PER_BIOME PAs in draw order with an accepted copy are the validation PAs
-(reserves replace PAs without one).
+Each PA's first passing candidate in draw order is accepted. Per biome, the first
+VALIDATION_N_PER_BIOME PAs in draw order with an accepted copy are the validation PAs;
+reserves replace PAs without one.
+
+Run: python scripts/13_validation_edge_metrics.py
 
 Inputs:  data/11_validation/sample.csv, candidates.csv (script 11)
-         data/12_gee/*.csv (script 12, downloaded from Drive): the point parts and
-         displaced_polygons_biome_NNN.csv
-Outputs: data/13_validation/validation_displaced_pa_years.csv  one row per validation PA-year of the
-                                                    displaced copy (WDPA_PID = the original PA)
-         data/13_validation/validation_candidate_checks.csv    one row per candidate: the rule values and
-                                                    results, passes, accepted
-         data/13_validation/validation_displacement_log.csv    one row per sampled PA: candidates, the
-                                                    accepted one, distance, status
-
-Usage:
-    python scripts/13_validation_edge_metrics.py
+         data/12_gee/*.csv (script 12, from Drive): point parts and displaced_polygons_biome_NNN.csv
+Outputs (data/13_validation/):
+  validation_displaced_pa_years.csv  one row per validation PA-year of the displaced copy
+                                     (WDPA_PID = the original PA)
+  validation_candidate_checks.csv    one row per candidate: rule values and results, passes, accepted
+  validation_displacement_log.csv    one row per sampled PA: candidates, accepted one, distance, status
 """
 
 import sys
@@ -64,8 +60,8 @@ if not biome_files:
 if other:
     raise ValueError(f"Unrecognised CSVs in {CSV_DIR} (Drive duplicates?): {other[:5]}")
 
-# 1. Every candidate copy, asset by asset (all points of a PA are in one asset): script 04's
-#    PA-year metrics, and the share of points in the PA's biome (a diagnostic only)
+# 1. Every candidate copy, asset by asset (a PA's points are all in one asset): script 04's
+#    PA-year metrics and the share of points in the PA's biome (diagnostic only)
 py_parts, pt_parts = [], []
 for asset, files in groups.items():
     df = read_asset_csvs(files, YEARS)
@@ -83,13 +79,13 @@ for asset, files in groups.items():
           "candidates with data")
 pa_years = pd.concat(py_parts, ignore_index=True)
 pts_diag = pd.concat(pt_parts, ignore_index=True)
-# a candidate's points are all in one asset: one found in two assets means stale or duplicate files
+# A candidate found in two assets means stale or duplicate files
 dup = pts_diag.duplicated(['WDPA_PID', 'candidate'], keep=False)
 if dup.any():
     raise ValueError(f"{int(dup.sum())} candidate rows appear in more than one asset "
                      f"(e.g. {pts_diag.loc[dup, ['WDPA_PID', 'candidate']].head(3).values.tolist()}): "
                      f"are files from another run in {CSV_DIR}?")
-# every candidate point must have come back (as script 04 checks the PA points)
+# Every candidate point must have come back (as script 04 checks the PA points)
 exp = cands[['WDPA_PID', 'candidate']].merge(sample[['WDPA_PID', 'n_transects']], on='WDPA_PID')
 exp = exp.merge(pts_diag[['WDPA_PID', 'candidate', 'n_points']], on=['WDPA_PID', 'candidate'], how='left')
 short = exp['n_points'].fillna(0) != 5 * exp['n_transects']

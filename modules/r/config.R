@@ -1,9 +1,6 @@
-# Settings for the statistical analysis (scripts 05–10).
-#
-# Settings only: no data are read here. Scripts source this file and pass the values they
-# need to the functions in modules/r/ explicitly, so the same functions run on small simulated
-# data in the unit tests (tests/r/) and on the full data in the scripts.
-# Paths are relative to the repository root (found from the working directory).
+# Settings for the statistical analysis (scripts 05–10 and 14). No data are read here: scripts
+# pass these values to the functions in modules/r/, which tests/r/ also run on simulated data.
+# Paths are relative to the repository root, found from the working directory.
 
 repo_root <- function(start = getwd()) {
   d <- normalizePath(start, mustWork = TRUE)
@@ -34,31 +31,25 @@ CFG <- local({
       diagnostics  = p("results", "diagnostics"),                 # outputs not reported in the paper
       counts       = p("results", "analysis_counts.json"),
       session_info = p("results", "R_sessionInfo.txt"),
-      # Fig. 2 map layers (script 10): WDPA polygons may not be redistributed, so they stay
-      # under data/, like the coordinates
+      # Fig. 2 map layers (script 10); kept under data/ as WDPA polygons may not be redistributed
       map_layers   = p("data", "10_map_layers")
     ),
 
     # ── Record and analysis set ──────────────────────────────────────────────
     years     = 2003:2025,
     n_span    = 22L,          # years spanned by the record (2025 − 2003): change = slope × n_span
-    min_years = 5L,           # a PA needs ≥ 5 complete years of BOTH metrics
+    min_years = 5L,           # min. complete years of both metrics per PA
     transects = c("all", "nowater", "nootherpa", "noflags"),      # transect versions; "all" is the main analysis
     exclude_biomes = c("Mangrove", "Rock & Ice"),
-    # PAs whose boundary is dominated by sea or open water. Sea: transects reaching into the sea
-    # have no MODIS data and are never complete, so a PA needs a median share of complete transects
-    # (04 pct_complete, median over its years) ≥ min_complete_pct; a PA of 02 with no complete
-    # transect in any year counts as 0% (05, `add_pas_without_metrics()`). This is about data, not
-    # geometry: it is separate from 02's coverage rule (the longest stretch of boundary without
-    # transects ≤ 25% of the perimeter, MAX_GAP_PCT_LIMIT). Lakes and wetlands: a PA needs
-    # ≤ max_water_pct of its transects with JRC water (04 water_extent_pct, the PA's mean over
-    # years).
+    # Drop PAs whose boundary is mostly sea or open water (%; a data rule, separate from 02's
+    # coverage rule). Sea transects have no MODIS data, so a PA needs a median share of complete
+    # transects (04 pct_complete; 0% if none) ≥ min_complete_pct, and ≤ max_water_pct of its
+    # transects with JRC water (04 water_extent_pct, mean over years).
     min_complete_pct = 75,
     max_water_pct    = 75,
 
-    # Biome groups (script 04, recategorize_biome) in their order for tables and figures only:
-    # by vegetation structure (grassland and tundra, desert, Mediterranean, forest), then
-    # temperature. Reference levels are set separately (`ref`).
+    # Biome order in tables and figures (groups from 04's recategorize_biome): by vegetation
+    # structure, then temperature. Model reference levels are set in `ref`.
     biome_order = c("Tropical Grassland", "Temperate & Montane Grassland", "Tundra",
                     "Desert", "Mediterranean",
                     "Tropical Forest", "Temperate Forest", "Boreal Forest"),
@@ -70,8 +61,7 @@ CFG <- local({
       "unknown"    = c("Not Applicable", "Not Assigned", "Not Reported")
     ),
 
-    # ── Reference levels: one pair for every model ───────────────────────────
-    # Scripts 06, 08, 09; Fig. 3A and Tables SX, SY, SZ.
+    # ── Reference levels, shared by all models (06, 08, 09) ──────────────────
     ref = list(iucn = "non-strict", biome = "Boreal Forest"),
 
     # ── Trends ───────────────────────────────────────────────────────────────
@@ -83,14 +73,13 @@ CFG <- local({
     # ── Analysis data (05) ───────────────────────────────────────────────────
     # Responses: the yearly metric columns of script 04 (PA means are <col>_mean).
     responses = c(extent = "edge_extent", intensity = "edge_intensity"),
-    # Model covariates, z-scored over the analysis set: z column = source column (raw names as in
-    # 04, terrain_slope_mean renamed terrain_slope). log_area_z = z of log(AREA_KM2), the
-    # geodesic area of the selected polygon. Names must match models.R.
+    # Model covariates, z-scored over the analysis set: z column = source column (04 names;
+    # terrain_slope_mean is renamed terrain_slope). Names must match models.R.
     covariates = c(STATUS_YR_z = "STATUS_YR", log_area_z = "AREA_KM2", elevation_mean_z = "elevation_mean",
                    terrain_slope_z = "terrain_slope", water_extent_pct_z = "water_extent_pct",
                    gHM_mean_z = "gHM_mean"),
-    log_covariates = "log_area_z",
-    # Point-on-surface is computed in Mollweide, then transformed to EPSG:4326
+    log_covariates = "log_area_z",   # z of log(AREA_KM2), the geodesic polygon area
+    # PA coordinates: point-on-surface computed in Mollweide, then transformed to EPSG:4326
     coords_crs = "+proj=moll +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs",
 
     # ── Establishment-year imputation (STATUS_YR == 0) ───────────────────────
@@ -109,11 +98,10 @@ CFG <- local({
     pooled_label = "All PAs",   # the all-PAs row of the biome summaries
 
     # ── Fig. 4B case studies (07 tables, 10 figures and the KML) ─────────────
-    # One PA per panel, top to bottom. `label`: panel title; `expect`: the trend classes
-    # (extent/intensity) the panel illustrates (07 warns if they differ). The PAs were chosen
-    # as examples after seeing the results, so after any rerun check 07's warnings (and 07
-    # stops if a case PA is no longer analysed). Pô-Nazinga-Sissili includes Sissili (28556),
-    # merged into the complex by script 02.
+    # One PA per panel, top to bottom. `label`: panel title; `expect`: the extent/intensity trend
+    # classes the panel illustrates. The PAs were chosen after seeing the results, so check 07's
+    # warnings after a rerun (07 warns if `expect` differs, stops if a PA is no longer analysed).
+    # Pô-Nazinga-Sissili includes Sissili (28556), merged into it by script 02.
     case_studies = data.frame(
       WDPA_PID = c("555705201", "36531", "34032", "19667"),
       label    = c("Pô-Nazinga-Sissili, Burkina Faso · Trop. Grass.",
@@ -149,11 +137,11 @@ CFG <- local({
 
     # ── Sensitivity (09) ─────────────────────────────────────────────────────
     sensitivity = list(
-      established_by = 2003L,   # PA subset (a): analysed establishment year ≤ 2003
+      established_by = 2003L,   # PA subset (a): analysed establishment year ≤ this
                                 # PA subset (b): reported year only (STATUS_YR_imputed == FALSE)
-      # Transect subsets: a PA-year counts in a version only with ≥ min_transects complete
-      # transects (the fewest transects of any analysed PA, analysis_counts.json final_set), and the comparison set is
-      # the PAs with ≥ min_years such years of both metrics in every version.
+      # Transect subsets: a PA-year counts only with ≥ min_transects complete transects (the
+      # fewest of any analysed PA, analysis_counts.json final_set); compared PAs need
+      # ≥ min_years such years of both metrics in every version.
       min_transects = 60L,
       # PA subset (c): PAs keeping ≥ min_pct_kept % of the transects 02 generated (PCT_KEPT); 02's
       # coverage rule caps only the longest unsampled stretch, so some PAs keep few transects.

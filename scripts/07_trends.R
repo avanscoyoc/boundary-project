@@ -1,21 +1,18 @@
 # 07_trends.R: per-PA trends and the biome comparison of change.
 #
-#   per-PA OLS slope of each metric on year, Benjamini–Hochberg across PAs per metric, classes
-#   (increase / no trend / decrease at FDR config trend$fdr); Yue–Pilon (pre-whitened Sen and
-#   Mann–Kendall) as the robustness check, with the class agreement;
-#   Pearson correlation of the extent and intensity slopes, overall and per biome (Spearman as a
-#   check);
-#   standardised change = slope × n_span / SD of the metric's PA means over the analysis set
-#   (scaling.csv from 05), with its SE (for the precision weights of 08);
-#   percentile-bootstrap means of change per biome and for all PAs (Fig. 4A), area-weighted means
-#   and Sen-slope means (Table SV); fixed seeds (config boot$seeds), biomes in config
-#   biome_order. The bootstraps resample PAs as independent: descriptive summaries (the spatial
-#   tests of biome differences in change are 08's: Table SZ and Table SW);
-#   % change over the record (diagnostic);
-#   the Fig. 4B case-study PAs (config case_studies): their annual series, trends and % change
-#   of their own mean;
-#   lag-1 autocorrelation of each PA's OLS trend residuals (diagnostic).
-# Main analysis only: transect version "all", the analysis set of 05. The other versions and
+#   per-PA OLS slope of each metric on year; Benjamini–Hochberg across PAs per metric; classes
+#     increase / no trend / decrease at FDR config trend$fdr; Yue–Pilon (pre-whitened Sen and
+#     Mann–Kendall) as a robustness check, with the class agreement;
+#   Pearson correlation of the extent and intensity slopes, overall and per biome (Spearman as
+#     a check);
+#   standardised change = slope × n_span / SD of the metric's PA means (scaling.csv), with its
+#     SE (for the precision weights of 08);
+#   bootstrap means of change per biome and for all PAs (Fig. 4A), area-weighted and Sen-slope
+#     means (Table SV). The bootstraps treat PAs as independent, so they are descriptive; the
+#     spatial tests of biome differences are 08's (Tables SZ, SW);
+#   Fig. 4B case-study PAs (config case_studies): annual series, trends, % change of their own mean;
+#   diagnostics: % change over the record; lag-1 autocorrelation of the OLS trend residuals.
+# Main analysis only (transect version "all", the analysis set of 05); the other versions and
 # PA subsets are 09's.
 #
 # Run from the repository root (about a minute):
@@ -23,18 +20,13 @@
 #
 # Inputs:  data/05_analysis/pa_level.csv, pa_year.csv, scaling.csv (05)
 # Outputs: data/05_analysis/pa_trends.csv            one row per PA: trend columns, change_*_z,
-#                                                    se_change_*_z (input of 08, 09 and the S fig)
-#          <tables>/TableSV_biome_trend_summary.csv   per biome and all PAs: mean change (CI),
-#                                                    area-weighted, % per class, Yue–Pilon
-#                                                    agreement, Sen-slope change (unrounded)
+#                                                    se_change_*_z (input of 08 and 10)
+#          <tables>/TableSV_biome_trend_summary.csv   per biome and all PAs (unrounded)
 #          <tables>/TableSV_slope_correlation.csv
 #          <tables>/fig4a_change_summary.csv, fig4a_boot_replicates.csv
-#          <tables>/fig4b_case_series.csv (one row per case PA × year), fig4b_case_pas.csv (one
-#                         row per case PA: trends, change over the record, % of its own mean)
-#          <diagnostics>/trend_{yuepilon_agreement,yuepilon_crosstab,
-#                         percent_change_biome}.csv,
-#                         trend_residual_autocorrelation{,_summary}.csv (per PA; per biome and
-#                         all PAs)
+#          <tables>/fig4b_case_series.csv (case PA × year), fig4b_case_pas.csv (one row per case PA)
+#          <diagnostics>/trend_{yuepilon_agreement,yuepilon_crosstab,percent_change_biome}.csv,
+#                        trend_residual_autocorrelation{,_summary}.csv
 
 source(file.path("modules", "r", "load.R"))   # config.R, every module of modules/r, arg() / say()
 
@@ -101,7 +93,7 @@ for (i in which(ac_sum$BIOME_NAME == CFG$pooled_label))
   say("%s residual lag-1 autocorrelation: median %.2f (IQR %.2f to %.2f); %.1f%% of PAs above +1.96/sqrt(n)",
       ac_sum$metric[i], ac_sum$median_r1[i], ac_sum$q25_r1[i], ac_sum$q75_r1[i], ac_sum$pct_positive_above_bound[i])
 
-# ── 3. Bootstraps (config seeds and run order; slopes, reported in change units) ─
+# ── 3. Bootstraps of the slopes, in change units (config seeds and run order) ─
 run <- function(cl, seed, ...) boot_means(d, cl, "BIOME_NAME", CFG$biome_order, CFG$boot$R, seed,
                                           pooled_label = CFG$pooled_label, ...)
 B <- list(
@@ -113,7 +105,7 @@ to_z <- function(s) {
   data.frame(metric = s$metric, BIOME_NAME = s$BIOME_NAME, n = s$n, mean_change_z = s$mean * k[s$metric],
              ci_lo_z = s$ci_lo * k[s$metric], ci_hi_z = s$ci_hi * k[s$metric], stringsAsFactors = FALSE)
 }
-main <- to_z(rbind(B$biome$summary, B$pooled$summary))      # biome rows (seed 42) + all PAs (45)
+main <- to_z(rbind(B$biome$summary, B$pooled$summary))      # biome rows + all PAs
 reps <- rbind(B$biome$reps, B$pooled$reps)
 reps <- data.frame(metric = reps$metric, BIOME_NAME = reps$BIOME_NAME, rep = reps$rep,
                    change_z = reps$mean * k[reps$metric], stringsAsFactors = FALSE)

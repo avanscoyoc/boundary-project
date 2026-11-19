@@ -79,7 +79,7 @@ The WDPA release is pinned (`WDPA_COLLECTION = "WCMC/WDPA/202508/polygons"`, Aug
 Part 2, each PA in its own azimuthal equidistant projection (true meters):
 1. Remove PAs with no interior at least 5.5 km from the edge.
 2. Boundary points every 500 m along the outer ring; transects of 5 points 2.5 km apart (2 inner, 1 boundary, 2 outer), perpendicular to the boundary.
-3. Keep a transect only if its inner half lies within the PA and its outer half outside it.
+3. Keep a transect only if its inner half lies within the PA and its outer half outside it; PAs left without any transect are removed.
 4. Remove PAs whose longest unsampled stretch is more than 25% of the boundary (`MAX_GAP_PCT_LIMIT`). The rule caps the longest gap only, so a few PAs keep a small share of their transects (`PCT_KEPT`; script 09 has a sensitivity run without them).
 5. Flag transects whose outer points fall inside another PA (`in_other_pa`). "Another PA" is one of script 01's polygons (≥ 200 km², single-part, designated): smaller, multi-part or proposed PAs are not flagged.
 6. Write upload zips of 400 whole PAs each, and every point (with its upload file number) to `transect_points.parquet`.

@@ -1,8 +1,6 @@
-# Loads the R settings (config.R) and every analysis module of modules/r into globalenv(), and
-# defines the scripts' helpers arg() and say(). The R scripts start with
-# source(file.path("modules", "r", "load.R")), run from the repository root; tests/r/helper_load.R
-# sources it as well. corHaversine must live in globalenv() (see its header), so the modules are
-# sys.source()d there.
+# Loads config.R and every module of modules/r into globalenv() and defines the script helpers
+# arg() and say(). The R scripts (run from the repository root) and tests/r/helper_load.R source
+# it. Modules are sys.source()d into globalenv() because corHaversine must live there.
 local({
   root <- normalizePath(getwd())
   while (!file.exists(file.path(root, "modules", "r", "config.R"))) {

@@ -1,17 +1,14 @@
-# 14_validation_compare.R: validation, part 4 — each PA against its displaced copy (Methods:
-# Validation).
+# 14_validation_compare.R: validation part 4, each PA against its displaced copy.
 #
-# The displaced copies (Python scripts 11–13) are measured exactly as the PAs: PA means of the
-# yearly edge metrics, PAs with ≥ min_years of both metrics. Paired difference PA − copy, per
-# biome and for all PAs: mean with a percentile-bootstrap 95% CI (10,000 resamples of PAs within
-# the biome), median, share of PAs above their copy, and a paired Wilcoxon signed-rank test
-# (Holm-adjusted across biomes within a metric). All PAs: the sampled PAs pooled, each biome
-# weighted equally (shown in the figure; the conservative estimate), and in the table also
-# "All PAs, PA-weighted": each biome weighted by its share of the analysis set (pa_level.csv),
-# with a within-biome bootstrap CI, weighted median and share, and a design-based t test
-# (p_stratified_t). Differences are also given in response SDs
-# (the analysis set's SD of PA means). The chance rate of edge extent (8/15, five exchangeable
-# values) is a reference line.
+# The copies (Python scripts 11–13) are measured exactly as the PAs (PA means of the yearly edge
+# metrics; ≥ min_years of both metrics). Paired difference PA − copy, per biome and for all PAs:
+# mean with a percentile-bootstrap 95% CI (resampling PAs within biome), median, share of PAs
+# above their copy, paired Wilcoxon signed-rank test (Holm across biomes within a metric).
+# "All PAs" pools the sampled PAs, each biome weighted equally (the figure; the conservative
+# estimate). The table adds "All PAs, PA-weighted": biomes weighted by their share of the
+# analysis set, with a within-biome bootstrap CI, weighted median and share, and a design-based
+# t test (p_stratified_t). Differences are also given in response SDs (SD of the analysis set's
+# PA means). The chance rate of edge extent (8/15, five exchangeable values) is a reference line.
 #
 # Run from the repository root, after 05 and Python scripts 11–13:
 #   Rscript scripts/14_validation_compare.R
@@ -50,8 +47,7 @@ say("14: %d validation PAs with a displaced copy (%d in the log as selected)", n
 if (nrow(p) != sum(log$status == "selected"))
   stop("selected validation PAs missing from the analysis set or without a copy: ",
        paste(utils::head(setdiff(log$WDPA_PID[log$status == "selected"], p$WDPA_PID), 5), collapse = ", "))
-# The "All PAs" row pools the validation PAs, so it weights each biome equally only when every
-# biome has the same number of validation PAs.
+# The pooled "All PAs" row weights the biomes equally only if each has as many validation PAs.
 n_val <- table(factor(p$BIOME_NAME, levels = CFG$biome_order))
 if (length(unique(as.vector(n_val))) > 1)
   warning("validation PAs per biome differ (", paste(names(n_val), n_val, sep = " ", collapse = ", "),

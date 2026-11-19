@@ -1,10 +1,12 @@
 """
-Visual inspection: export the analysis set (optional, after the analysis)
+Visual inspection: export the analysis set (optional, after the analysis).
 
 Writes the analysis-set PAs (R script 05) for the Earth Engine inspection app
 (tools/inspection_app.js), plus a checklist for the inspection notes. PAs that the
 inspection shows should be excluded (e.g. problematic geometries) are added to
 EXCLUDED_PIDS in modules/config.py, and the pipeline is rerun from script 01.
+
+Run: python tools/inspection_export.py
 
 Review order: biome, country (ISO3), name (case-insensitive), then WDPA_PID.
 The app's PA number is the checklist's `order` column.
@@ -21,20 +23,21 @@ Polygon fields (shapefile, names of at most 10 characters):
   WATER_PCT  % of transects with water (05's lake rule: <= 75 kept)
   ASSET      NNN of the point asset transect_points_NNN that holds the PA
 
-INPUT:
-- data/05_analysis/pa_level.csv                         (analysis set, R script 05)
-- data/02_pas/pas_selected.gpkg                         (polygons, transect counts; script 02)
-- data/02_transects/upload/transect_points_NNN.zip      (the point assets; script 02)
-- data/04_transect_years/missing_transects.csv          (script 04)
-- results/analysis_counts.json                          (05's totals, cross-checked)
+Inputs:
+  data/05_analysis/pa_level.csv                     analysis set (R script 05)
+  data/02_pas/pas_selected.gpkg                     polygons, transect counts (script 02)
+  data/02_transects/upload/transect_points_NNN.zip  point assets (script 02)
+  data/04_transect_years/missing_transects.csv      script 04
+  results/analysis_counts.json                      05's totals, cross-checked
+Outputs:
+  data/inspection/pas_final.zip   PA polygons
+  data/inspection/checklist.csv   order, WDPA_PID, NAME, ISO3, BIOME_NAME, decision, note
+                                  (UTF-8 with BOM so spreadsheets show names correctly)
+A checklist that already has entries is never overwritten: the script stops before
+writing anything.
 
-OUTPUT:
-- data/inspection/pas_final.zip      (upload to Earth Engine as table asset pas_final)
-- data/inspection/checklist.csv      (order, WDPA_PID, NAME, ISO3, BIOME_NAME, decision, note;
-                                      UTF-8 with BOM so spreadsheet programs show names correctly)
-
-A checklist that already has entries is never overwritten: the script stops
-before writing anything.
+After running: upload pas_final.zip to Earth Engine as table asset pas_final, then
+paste tools/inspection_app.js into the Code Editor and run it.
 """
 
 import sys

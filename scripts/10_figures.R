@@ -1,21 +1,18 @@
-# 10_figures.R: the figures, from the tables written by 06–08 (nothing is fitted here).
+# 10_figures.R: the figures, from the tables of 06–08 (nothing is fitted here).
 #
-#   Fig. 3   A: main-effects coefficients of the mean models in response SDs, against the
-#            reference levels of config ref; right: one panel per supported HMI interaction
-#            of the main analysis (Wald p < 0.05), chosen by fig3_panels(). The panels shown are
-#            listed in fig3_panels.csv (for the caption).
-#   Fig. 4A  standardised change by biome and for all PAs (bootstrap means and 95% CIs); biome
-#            order from config biome_order.
-#   Fig. 4   panel A over panel B: grey placeholders for the 2003 and 2025 satellite images
-#            (added in the layout) beside the annual series of the case-study PAs (config
-#            case_studies, tables from 07); plus one small figure per case PA.
-#   Fig. 2 map layers (styled outside the repo): the analysis-set polygons with PA means,
-#            trends and standardised change (GeoPackage), and the case-study PAs (KML). WDPA
-#            polygons may not be redistributed, so they are written under data/, not results/.
+#   Fig. 3   A: main-effects coefficients of the mean models in response SDs; right: one panel
+#            per supported HMI interaction (Wald p < 0.05, fig3_panels()), listed in
+#            fig3_panels.csv for the caption.
+#   Fig. 4   A, standardised change by biome and for all PAs (bootstrap means, 95% CIs), over
+#            B, the case-study series beside grey placeholders for the satellite images (added
+#            in the layout); Fig. 4A and each case PA are also written alone.
+#   Fig. 2   map layers, styled outside the repository: analysis-set polygons with PA means,
+#            trends and standardised change (GeoPackage) and the case-study PAs (KML). WDPA
+#            polygons may not be redistributed, so they go under data/, not results/.
 #   S fig    per-PA change in edge extent vs edge intensity, with Pearson r.
 #   Diagnostics: Moran's I correlogram of the mean-model residuals; residual plots of the
 #            spatial fits.
-# A figure is skipped (with a message) when its input tables are missing, e.g. before 08 has run.
+# A figure whose input tables are missing (e.g. before 08 has run) is skipped with a message.
 #
 # Run from the repository root:
 #   Rscript scripts/10_figures.R
@@ -103,8 +100,7 @@ if (file.exists(trends_file) && file.exists(pa_file)) {
                                                   guess_max = 1e5, show_col_types = FALSE, progress = FALSE))
   polys <- sf::st_read(CFG$paths$pas_selected, quiet = TRUE)
   ml <- fig2_layers(polys, rd(pa_file), rd(trends_file), CFG$case_studies)
-  # Written in a local temporary folder first (fast), then copied: GeoPackage writes to the
-  # mounted data folder are slow.
+  # Write to a local temporary folder, then copy: GeoPackage writes to a mounted folder are slow.
   tmp <- tempfile("map_layers"); dir.create(tmp)
   sf::st_write(ml$pas, file.path(tmp, "pa_map_layers.gpkg"), layer = "pa_map_layers", quiet = TRUE)
   sf::st_write(ml$cases, file.path(tmp, "case_study_pas.kml"), driver = "KML", quiet = TRUE)
