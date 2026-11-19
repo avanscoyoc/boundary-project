@@ -67,44 +67,102 @@ Scripts 06, 08 and 09 take `--cores K` (fits run in parallel, default 2). At ful
 
 ## What each script does
 
-**01 Collect PAs (Earth Engine).** Filters the WDPA: terrestrial; no Marine Protected Areas or UNESCO-MAB Biosphere Reserves; designated, established or inscribed; ≥ 200 km²; not one of the 32 PIDs excluded by hand in `EXCLUDED_PIDS` (21 of them after the visual inspection: 19 circular polygons and 2 city PAs); single-part polygons. Counts the PAs each filter removes (`results/pipeline_counts.json`, section `01_wdpa`), assigns the RESOLVE Ecoregions 2017 biome with the largest overlap, and exports GeoJSON to Drive.
-The WDPA release is pinned (`WDPA_COLLECTION = "WCMC/WDPA/202508/polygons"`, August 2025): Earth Engine keeps monthly releases, so rerunning 01 reproduces the input; newer releases may change the results. If the release is ever removed, 01 stops with a message; a `WDPA_polygons.geojson` exported earlier from the same release can be used instead, because 02 applies `EXCLUDED_PIDS` again.
+### Data pipeline
 
-**02 Choose PAs and build transects (local).** Part 1 (equal-area Mollweide):
-1. Fill holes smaller than 2.25 km².
-2. Duplicates (overlap > 90% of both PAs): keep the oldest. Nested PAs (> 90% of the smaller only): keep the larger.
-3. Same `ORIG_NAME` + `ISO3`, touching or overlapping: dissolve into one PA (`MERGED_PID` lists the members). It keeps the `WDPA_PID` of its oldest member and the oldest non-zero establishment year; its other attributes (name, IUCN category, `WDPAID`, biome, …) come from the largest member (`ATTR_PID`).
-4. Geodesic area, perimeter and shape ratio, for information (no shape filter).
+#### 01 Collect PAs · Earth Engine
+- Keeps terrestrial PAs of at least 200 km² that are designated, established or inscribed and single-part.
+- Excludes Marine Protected Areas, UNESCO-MAB Biosphere Reserves and the 32 PIDs in `EXCLUDED_PIDS` (21 from the visual inspection: 19 circular polygons, 2 city PAs).
+- Counts the PAs each filter removes (`pipeline_counts.json`).
+- Assigns each PA the RESOLVE 2017 biome with the largest overlap.
+- Exports `WDPA_polygons.geojson` to Drive.
+- Uses a pinned WDPA release (August 2025). If Earth Engine drops it, an earlier export of the same release can be used, because 02 applies `EXCLUDED_PIDS` again.
 
-Part 2, each PA in its own azimuthal equidistant projection (true meters):
-1. Remove PAs with no interior at least 5.5 km from the edge.
-2. Boundary points every 500 m along the outer ring; transects of 5 points 2.5 km apart (2 inner, 1 boundary, 2 outer), perpendicular to the boundary.
-3. Keep a transect only if its inner half lies within the PA and its outer half outside it; PAs left without any transect are removed.
-4. Remove PAs whose longest unsampled stretch is more than 25% of the boundary (`MAX_GAP_PCT_LIMIT`). The rule caps the longest gap only, so a few PAs keep a small share of their transects (`PCT_KEPT`; script 09 has a sensitivity run without them).
-5. Flag transects whose outer points fall inside another PA (`in_other_pa`). "Another PA" is one of script 01's polygons (≥ 200 km², single-part, designated): smaller, multi-part or proposed PAs are not flagged.
-6. Write upload zips of 400 whole PAs each, and every point (with its upload file number) to `transect_points.parquet`.
+#### 02 Choose PAs and build transects · Python
+- Fills holes smaller than 2.25 km².
+- Removes duplicates (> 90% overlap of both PAs; oldest kept) and nested PAs (> 90% of the smaller; larger kept).
+- Merges touching PAs with the same name and country (ID and year of the oldest member, other attributes of the largest).
+- Builds transects in each PA's own equidistant projection: 5 points 2.5 km apart (2 inside, 1 on the boundary, 2 outside), every 500 m of boundary.
+- Keeps a transect only if its inner half lies inside the PA and its outer half outside.
+- Removes PAs with no interior 5.5 km from the edge, no valid transect, or a boundary gap over 25% (the gap rule lets a few PAs keep few transects; see 09).
+- Flags transects whose outer points fall in another of 01's PAs (`in_other_pa`).
+- Writes upload zips of 400 PAs; removed PAs and why are in `pas_removed.gpkg`.
 
-Removed PAs, with the step, the reason and the PA that replaced them, are in `data/02_pas/pas_removed.gpkg`.
+#### 03 Sample imagery · Earth Engine
+- Samples every transect point in every year, 2003–2025.
+- NDVI: gradient magnitude of the annual median MOD13A1 NDVI, on its native ~463 m grid, with no quality or snow masking.
+- Covariates: water (JRC GSW 1.4), human modification (gHM 2016), elevation and slope (Copernicus GLO-30, 2024).
+- Exports CSVs of 50,000 points each to Drive.
 
-**03 Sample imagery (Earth Engine).** The gradient magnitude of each year's median NDVI composite (MOD13A1, all 16-day composites of the year; no quality, cloud or snow masking), on the native MODIS grid (~463 m), plus water (JRC Global Surface Water 1.4, maximum extent), human modification (gHM, 2016) and elevation and slope (Copernicus GLO-30, 2024 release), at every point; exported in parts of 50,000 points.
+#### 04 Edge metrics · Python
+- Checks that every exported point arrived exactly once.
+- Keeps transect-years with values at all 5 points.
+- Computes PA-year edge extent and intensity for four transect versions: all, without water, without other-PA, without either.
+- Groups the RESOLVE biomes into 8 (`modules/biome_groups.csv`): Tropical Grassland, Temperate & Montane Grassland, Tundra, Desert, Mediterranean, Tropical Forest, Temperate Forest, Boreal Forest.
+- Writes `results/pa_edge_metrics_ndvi.csv`.
 
-**04 Edge metrics (local).** Checks that every exported point arrived exactly once, builds one row per complete transect-year (all 5 points have a value), computes PA-year metrics for four transect versions, merges PA attributes, and groups the biomes (`modules/biome_groups.csv`, read by Python and R): 8 groups by vegetation structure and temperature (Tropical Grassland, with flooded grasslands; Temperate & Montane Grassland; Tundra; Desert; Mediterranean; Tropical Forest; Temperate Forest; Boreal Forest), plus Mangrove and RESOLVE's unclassified rock and ice ("N/A", Rock & Ice), which 05 removes. Also lists the transects with a missing value in any year (`data/04_transect_years/missing_transects.csv`).
+### Statistics
 
-**R statistics (05–10)** — settings in [modules/r/config.R](modules/r/config.R), functions in `modules/r/`; each script writes its own tables, which 10 reads.
-- **05** builds the analysis set: drops Mangrove and Rock & Ice, PAs whose boundary is dominated by sea (fewer than 75% of transects complete in a typical year) or by open water (more than 75% of transects with surface water), and PAs missing a covariate or with fewer than 5 years of either metric (`excluded_pas.csv`). Imputes missing establishment years (median of 1,000 draws from the country's known years), z-scores the covariates, and computes point-on-surface coordinates.
-- **06** spatial GLS (exponential correlation in great-circle distance, REML) of mean edge extent and intensity: main effects and HMI interactions. Reference levels: non-strict / Boreal Forest, in every model.
-- **07** per-PA OLS trends with Benjamini–Hochberg classes (Yue–Pilon as a check), standardised change, bootstrap biome means of change (Fig. 4A; descriptive: the bootstrap treats PAs as independent), the lag-1 autocorrelation of trend residuals (diagnostic), and the Fig. 4B case-study series (`case_studies` in the config).
-- **08** spatial GLS of standardised change, unweighted and precision-weighted (Table SZ), and the biome comparison of change with the same spatial correlation (Table SW: pairwise contrasts, Holm, and letters).
-- **09** repeats the headline results on the transect subsets (same PAs; PA-years with at least 60 complete transects in every run) and on three PA subsets: established by 2003, reported establishment year, and keeping ≥ 50% of their transects; spatial ranges fixed at the main estimates.
-- **10** figures (Fig. 3 shows an interaction panel only where its Wald test is significant; Fig. 4 = A, change by biome, over B, case-study series beside placeholders for satellite images) and the Fig. 2 map layers (GeoPackage, KML; styled outside the repository).
+Settings for 05–10 and 14 are in [modules/r/config.R](modules/r/config.R).
 
-**Validation (11–14).** Does the edge signal at PA boundaries exceed what the same transects record in the surrounding landscape?
-- **11 (local):** 50 analysed PAs per biome group (400 in all), drawn at random with 25 reserves in draw order. Each PA's whole transect set is translated by one random vector (no rotation; distance uniform between d and 2d, d = the larger of 50 km and the PA's footprint), with at most 10% of displaced transects having a PA boundary within 2.5 km of their centre point. Like `in_other_pa`, this boundary check knows only script 01's PAs. Up to five candidate copies per PA; the PA polygon moves with its transects.
-- **12 (Earth Engine):** the copies are sampled with script 03's image, and each moved polygon gets its biome as in 01.
-- **13 (local):** each copy is measured with script 04's functions and must pass the rules of an analysed PA (same biome; sea, lake and five-year rules of 05). Per PA the first passing candidate is used; reserves replace PAs with none.
-- **14 (R):** the paired difference PA − copy in the 2003–2025 mean of each metric, per biome and for all validation PAs: mean with a 95% percentile-bootstrap CI, median, share of PAs above their copy, paired Wilcoxon signed-rank test (Holm across biomes). "All PAs" weights every biome equally; the table also gives the estimate weighted by the biomes' shares of the analysed PAs.
+#### 05 Analysis set · R
+- Removes Mangrove and Rock & Ice PAs.
+- Removes PAs dominated by sea (< 75% of transects complete in a typical year) or open water (> 75% of transects with water).
+- Removes PAs missing a covariate or with fewer than 5 years of either metric (all removals in `excluded_pas.csv`).
+- Imputes missing establishment years (median of 1,000 draws from the country's known years).
+- Z-scores the covariates.
 
-**Visual inspection (optional, after the analysis).** `python tools/inspection_export.py` writes `data/inspection/pas_final.zip` (the analysed PAs in review order: biome, country, name) and `checklist.csv` (never overwritten once it has entries). Upload the zip as the table asset `pas_final`, set `ASSET_ROOT` in `tools/inspection_app.js`, and paste the app into the Code Editor (or publish it): one PA at a time with its outline, transect points and an info panel. Record decisions in the checklist (`decision`: blank = keep, `exclude`, `check`; `note`); add PAs to exclude to `EXCLUDED_PIDS` in `modules/config.py` (with a comment) and rerun from script 01.
+#### 06 Mean models · R
+- Spatial GLS of mean edge extent and intensity (exponential correlation over great-circle distance, REML).
+- Main effects and HMI interactions (Tables SX, SY).
+- Reference levels in every model: non-strict IUCN and Boreal Forest.
+
+#### 07 Trends · R
+- Per-PA OLS trends with Benjamini–Hochberg classes; Yue–Pilon as a check.
+- Standardised change and its bootstrap means per biome (Fig. 4A; descriptive, PAs treated as independent).
+- Autocorrelation of the trend residuals (diagnostic).
+- Series of the Fig. 4B case-study PAs.
+
+#### 08 Change models · R
+- Spatial GLS of standardised change, unweighted and precision-weighted (Table SZ).
+- Biome comparison of change, with the same spatial correlation (Table SW).
+
+#### 09 Sensitivity · R
+- Repeats the headline results without water or other-PA transects.
+- Repeats them for PAs established by 2003, with a reported establishment year, or keeping at least 50% of their transects.
+- Fixes the spatial ranges at the main estimates.
+
+#### 10 Figures · R
+- Fig. 3 (interaction panels only where the Wald test is significant) and Fig. 4.
+- Supplementary and diagnostic figures.
+- Fig. 2 map layers (GeoPackage, KML), styled outside the repository.
+
+### Validation
+
+Tests whether the edge signal at the boundary exceeds what the same transects record in the surrounding landscape.
+
+#### 11 Displace transects · Python
+- Draws 50 analysed PAs per biome group, plus 25 reserves.
+- Moves each PA's whole transect set by a random vector (no rotation), d to 2d away (d = the larger of 50 km and the PA's footprint).
+- Keeps a copy if at most 10% of its transects have a boundary of one of 01's PAs within 2.5 km of their centre.
+- Makes up to 5 copies per PA; the PA polygon moves with them.
+
+#### 12 Sample copies · Earth Engine
+- Samples the copies with 03's image.
+- Gives each moved PA polygon its biome, as in 01.
+
+#### 13 Accept copies · Python
+- Measures each copy with 04's functions.
+- Keeps, per PA, the first copy that passes 05's rules (same biome; sea, lake, 5 years); reserves replace PAs without one.
+
+#### 14 Compare · R
+- Compares PA minus copy in the 2003–2025 mean of each metric, per biome and for all PAs.
+- Reports the mean with a bootstrap CI, the median, the share of PAs above their copy, and a Wilcoxon test (Holm across biomes).
+- Weights biomes equally in "All PAs"; the table adds a PA-weighted row.
+
+### Visual inspection (optional, after the analysis)
+- `tools/inspection_export.py` writes the analysed PAs (`data/inspection/pas_final.zip`) and a checklist.
+- Upload the zip as the asset `pas_final`, set `ASSET_ROOT` in `tools/inspection_app.js`, and run the app in the Code Editor.
+- Add PAs to exclude to `EXCLUDED_PIDS` and rerun from 01.
 
 ## Outputs
 
