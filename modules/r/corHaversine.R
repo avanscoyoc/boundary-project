@@ -3,8 +3,9 @@
 # Source: Nate Pope's answer on Stack Overflow,
 #   https://stackoverflow.com/questions/18857443/specifying-a-correlation-structure-for-a-linear-mixed-model-using-the-ramps-pack
 # (also distributed as R/corHaversine.R in https://github.com/biometry/FReibier). Stack Overflow
-# content is licensed under CC BY-SA (https://stackoverflow.com/help/licensing), so this file is
-# shared under CC BY-SA with that attribution, not under the repository's MIT licence.
+# content of that period is licensed under CC BY-SA 3.0 (https://stackoverflow.com/help/licensing),
+# so this file is shared under CC BY-SA 3.0 with that attribution, not under the repository's MIT
+# licence.
 #
 # One change: haversineDist() is vectorised. The original filled an n × n matrix with a double
 # loop over the scalar haversine() (about a minute for a few thousand PAs). This version computes

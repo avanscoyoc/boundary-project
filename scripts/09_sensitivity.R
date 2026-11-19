@@ -90,11 +90,12 @@ run_results <- function(key) {
   r <- runs[[key]]
   d <- run_data(r)
   say("%s: %d PAs, %d PA-years", key, nrow(d), attr(d, "n_pa_years"))
+  # Fixed-range fits take 1–2 min and each would cache ~300 MB of matrices: not cached.
   fit_fixed <- function(response, type, range, ref) {
     dd <- set_model_references(d, ref, names(CFG$iucn_groups), CFG$biome_order)
-    cs <- spatial_setup(dd, value = range, fixed = TRUE, cache_dir = CFG$paths$cache_dir)
+    cs <- spatial_setup(dd, value = range, fixed = TRUE, cache_dir = NULL)
     fit_gls_cached(model_formula(response, type), dd, cs, method = CFG$spatial$method,
-                   max_iter = CFG$spatial$max_iter, cache_dir = CFG$paths$cache_dir)
+                   max_iter = CFG$spatial$max_iter, cache_dir = NULL)
   }
   row <- function(section, metric, term, estimate, lo = NA_real_, hi = NA_real_, p = NA_real_) {
     data.frame(run = key, section = section, metric = metric, term = term, estimate = estimate,
@@ -204,10 +205,10 @@ if (file.exists(sx_file)) {
 say("refit check: noflags, extent, main effects, range optimised from %g km", CFG$spatial$range_start_km)
 d <- set_model_references(run_data(runs$noflags), CFG$ref, names(CFG$iucn_groups), CFG$biome_order)
 f <- model_formula(paste0(CFG$responses[["extent"]], "_mean"), "add")
-cs_fix <- spatial_setup(d, value = range_of("extent", "main effects"), fixed = TRUE, cache_dir = CFG$paths$cache_dir)
+cs_fix <- spatial_setup(d, value = range_of("extent", "main effects"), fixed = TRUE, cache_dir = NULL)
 cs_opt <- spatial_setup(d, value = CFG$spatial$range_start_km, nugget = CFG$spatial$nugget, cache_dir = CFG$paths$cache_dir)
 m_fix <- fit_gls_cached(f, d, cs_fix, method = CFG$spatial$method, max_iter = CFG$spatial$max_iter,
-                        cache_dir = CFG$paths$cache_dir)
+                        cache_dir = NULL)   # quick: not cached; the optimised refit (~1 h) is
 m_opt <- fit_gls_cached(f, d, cs_opt, method = CFG$spatial$method, max_iter = CFG$spatial$max_iter,
                         cache_dir = CFG$paths$cache_dir,
                         label = "noflags extent main effects, optimised")

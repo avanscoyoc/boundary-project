@@ -63,7 +63,7 @@ python scripts/13_validation_edge_metrics.py
 Rscript scripts/14_validation_compare.R
 ```
 
-Scripts 06, 08 and 09 take `--cores K` (fits run in parallel, default 2). At full size each spatial fit takes about an hour and 1.5 GB of memory (8 GB machine: one script at a time). Fits are cached in `data/05_analysis/cache/` by content, so a rerun only refits what changed. **Tests:** `python -m pytest tests/` and `Rscript -e 'testthat::test_dir("tests/r")'`.
+Scripts 06, 08 and 09 take `--cores K` (fits run in parallel, default 2). At full size each spatial fit takes about an hour and 1.5 GB of memory (8 GB machine: one script at a time). Fits are cached in `data/05_analysis/cache/` by content (about 300 MB each), so a rerun only refits what changed; 09's quick fixed-range fits are not cached. **Tests:** `python -m pytest tests/` and `Rscript -e 'testthat::test_dir("tests/r")'`.
 
 ## What each script does
 
@@ -132,7 +132,7 @@ Python settings are in [modules/config.py](modules/config.py) (the defaults repr
 - **"GEE_PROJECT has not been set":** run `earthengine set_project YOUR-PROJECT-ID`, or set the `GEE_PROJECT` environment variable (project IDs are listed at [console.cloud.google.com](https://console.cloud.google.com/)).
 
 ## License
-The code in this project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details, except `modules/r/corHaversine.R`, which is adapted from a Stack Overflow answer by Nate Pope and is shared under CC BY-SA (see its header).
+The code in this project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details, except `modules/r/corHaversine.R`, which is adapted from a Stack Overflow answer by Nate Pope (2013) and is shared under CC BY-SA 3.0 (see its header).
 
 **Data:** Protected area boundaries and attributes come from the World Database on Protected Areas (WDPA) and are not covered by the MIT License. They are subject to the [Protected Planet Terms and Conditions](https://www.protectedplanet.net/en/legal): the data may not be redistributed, sub-licensed (including within derivative works), or put to commercial use (including derivative works) without prior written permission from UNEP-WCMC. Obtain the data from [Protected Planet](https://www.protectedplanet.net) or Earth Engine (`WCMC/WDPA/202508/polygons`), and cite it as:
 
