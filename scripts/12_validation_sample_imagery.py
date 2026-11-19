@@ -16,8 +16,8 @@ Before running: run script 11, then upload every data/11_validation/upload/
 displaced_points_NNN.zip and displaced_polygons_NNN.zip as an Earth Engine table asset
 of the same name in your project.
 
-After running: download all CSVs from the Google Drive folder 'ndvi_gradient_displaced'
-(point parts and displaced_polygons_biome_NNN.csv) to data/12_gee/, then run script 13.
+After running: download the Google Drive folder '12_gee' and put its CSVs (point parts and
+displaced_polygons_biome_NNN.csv) in data/12_gee/, then run script 13.
 """
 
 import sys

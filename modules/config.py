@@ -81,8 +81,8 @@ GEE_SUBCHUNK_SIZE = 50_000     # points per exported CSV part
 GEE_BATCH_SIZE = 10            # export tasks run at once
 UPLOAD_PREFIX = 'transect_points_'                               # {UPLOAD_PREFIX}NNN.zip -> asset
 GEE_ASSET_PREFIX = f'projects/{GEE_PROJECT}/assets/{UPLOAD_PREFIX}'
-GEE_DRIVE_FOLDER = f'{INDEX_NAME}_gradient'                       # Drive folder of 03's CSVs
-GEE_EXPORT_PREFIX = f'{GEE_DRIVE_FOLDER}_'                        # {GEE_EXPORT_PREFIX}NNN_part_N.csv
+GEE_DRIVE_FOLDER = GEE_CSV_DIR.name                               # Drive folder of 03's CSVs: 03_gee, as the local folder
+GEE_EXPORT_PREFIX = f'{INDEX_NAME}_gradient_'                     # {GEE_EXPORT_PREFIX}NNN_part_N.csv
 
 # --- Visual inspection (tools/, optional, after the analysis) -------------------------------
 # PAs excluded after the inspection are added to EXCLUDED_PIDS and the pipeline is rerun.
@@ -120,8 +120,8 @@ VALIDATION_UPLOAD_PREFIX = 'displaced_points_'
 VALIDATION_ASSET_PREFIX = f'projects/{GEE_PROJECT}/assets/{VALIDATION_UPLOAD_PREFIX}'
 VALIDATION_POLY_UPLOAD_PREFIX = 'displaced_polygons_'
 VALIDATION_POLY_ASSET_PREFIX = f'projects/{GEE_PROJECT}/assets/{VALIDATION_POLY_UPLOAD_PREFIX}'
-VALIDATION_DRIVE_FOLDER = f'{INDEX_NAME}_gradient_displaced'
-VALIDATION_EXPORT_PREFIX = f'{VALIDATION_DRIVE_FOLDER}_'         # 12's CSV names
+VALIDATION_DRIVE_FOLDER = VALIDATION_GEE_CSV_DIR.name            # Drive folder of 12's CSVs: 12_gee, as the local folder
+VALIDATION_EXPORT_PREFIX = f'{INDEX_NAME}_gradient_displaced_'   # 12's CSV names
 VALIDATION_BIOME_EXPORT = 'displaced_polygons_biome'             # 12's polygon biomes, same Drive folder
 
 

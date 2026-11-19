@@ -17,8 +17,8 @@ Before running: set your GEE project once (earthengine set_project YOUR-PROJECT-
 README Setup) and upload every data/02_transects/upload/transect_points_NNN.zip as a
 table asset (see script 02 output).
 
-After running: download all CSVs from the Google Drive folder 'ndvi_gradient' to
-data/03_gee/, then run script 04.
+After running: download the Google Drive folder '03_gee' and put its CSVs in data/03_gee/
+(Drive may split the download into several zips), then run script 04.
 """
 
 import sys

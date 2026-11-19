@@ -28,7 +28,7 @@ Every dataset the scripts read is in the public Earth Engine catalog. Uploads (s
 Run from the repository root, in order. Lines starting with `→` are manual steps.
 
 ```bash
-# 01 Protected areas (Earth Engine, ~2 h)
+# 01 Protected areas (Earth Engine, export can take ~12 h)
 python scripts/01_collect_protected_areas.py
 #  → download WDPA_polygons.geojson from Google Drive to data/01_wdpa/
 
@@ -40,12 +40,13 @@ python scripts/02_generate_sampling_points.py
 # 03 Sample NDVI gradients (Earth Engine, ~5 h); --test runs one part of asset 000 first
 python scripts/03_sample_satellite_imagery.py --test
 python scripts/03_sample_satellite_imagery.py
-#  → download every CSV of the Drive folder ndvi_gradient to data/03_gee/ (one copy of each part)
+#  → download the Drive folder 03_gee and put its CSVs in data/03_gee/ (Drive may split the
+#    download into several zips: move the CSVs of each into the one folder)
 
 # 04 Edge metrics (local) → results/pa_edge_metrics_ndvi.csv
 python scripts/04_compute_edge_metrics.py
 
-# 05–10 Statistical analysis (R; 06, 08 and 09 take hours: run them in the background, one at a time)
+# 05–10 Statistical analysis (R; 06, 08 and 09 take hours for spatial fits: run them in the background, one at a time)
 Rscript scripts/05_prepare_analysis_data.R
 Rscript scripts/06_models_mean.R
 Rscript scripts/07_trends.R
@@ -58,7 +59,7 @@ python scripts/11_validation_displace_transects.py
 #  → upload each zip in data/11_validation/upload/ as a table asset of the same name
 python scripts/12_validation_sample_imagery.py --test
 python scripts/12_validation_sample_imagery.py
-#  → download every CSV of the Drive folder ndvi_gradient_displaced to data/12_gee/
+#  → download the Drive folder 12_gee and put its CSVs in data/12_gee/ (as for 03)
 python scripts/13_validation_edge_metrics.py
 Rscript scripts/14_validation_compare.R
 ```
@@ -75,7 +76,7 @@ Scripts 06, 08 and 09 take `--cores K` (fits run in parallel, default 2). At ful
 - Counts the PAs each filter removes (`pipeline_counts.json`).
 - Assigns each PA the RESOLVE 2017 biome with the largest overlap.
 - Exports `WDPA_polygons.geojson` to Drive.
-- Uses a pinned WDPA release (August 2025). If Earth Engine drops it, an earlier export of the same release can be used, because 02 applies `EXCLUDED_PIDS` again.
+- Uses a pinned WDPA release (August 2025). 
 
 #### 02 Choose PAs and build transects · Python
 - Fills holes smaller than 2.25 km².
@@ -90,13 +91,18 @@ Scripts 06, 08 and 09 take `--cores K` (fits run in parallel, default 2). At ful
 #### 03 Sample imagery · Earth Engine
 - Samples every transect point in every year, 2003–2025.
 - NDVI: gradient magnitude of the annual median MOD13A1 NDVI, on its native ~463 m grid, with no quality or snow masking.
-- Covariates: water (JRC GSW 1.4), human modification (gHM 2016), elevation and slope (Copernicus GLO-30, 2024).
+- Covariates: water (JRC GSW 1.4) max_extent at all points, human modification (gHM 2016) at 2 outside points, elevation and slope (Copernicus GLO-30, 2024) at boundary points.
 - Exports CSVs of 50,000 points each to Drive.
 
 #### 04 Edge metrics · Python
 - Checks that every exported point arrived exactly once.
-- Keeps transect-years with values at all 5 points.
-- Computes PA-year edge extent and intensity for four transect versions: all, without water, without other-PA, without either.
+- Keeps transect-years with gradient values at all 5 points.
+- Computes 
+   - `edge`: a transect-year is an edge when the boundary value is higher than at least one point on each side
+   - `edge_extent`: the share of complete transects that are edges
+   - `edge_intensity`: the mean of four Cohen's d values (boundary point vs each other position, pooled SD), computed on edge transects only
+
+- Calculates PA-year edge extent and intensity for sensitivity tests with four transect versions: all, without water, without other-PA, without either.
 - Groups the RESOLVE biomes into 8 (`modules/biome_groups.csv`): Tropical Grassland, Temperate & Montane Grassland, Tundra, Desert, Mediterranean, Tropical Forest, Temperate Forest, Boreal Forest.
 - Writes `results/pa_edge_metrics_ndvi.csv`.
 
@@ -148,7 +154,7 @@ Tests whether the edge signal at the boundary exceeds what the same transects re
 
 #### 12 Sample copies · Earth Engine
 - Samples the copies with 03's image.
-- Gives each moved PA polygon its biome, as in 01.
+- Gives each moved PA polygon its biome, based on largest area.
 
 #### 13 Accept copies · Python
 - Measures each copy with 04's functions.
@@ -159,7 +165,7 @@ Tests whether the edge signal at the boundary exceeds what the same transects re
 - Reports the mean with a bootstrap CI, the median, the share of PAs above their copy, and a Wilcoxon test (Holm across biomes).
 - Weights biomes equally in "All PAs"; the table adds a PA-weighted row.
 
-### Visual inspection (optional, after the analysis)
+### Visual inspection (optional)
 - `tools/inspection_export.py` writes the analysed PAs (`data/inspection/pas_final.zip`) and a checklist.
 - Upload the zip as the asset `pas_final`, set `ASSET_ROOT` in `tools/inspection_app.js`, and run the app in the Code Editor.
 - Add PAs to exclude to `EXCLUDED_PIDS` and rerun from 01.
