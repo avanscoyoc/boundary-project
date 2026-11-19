@@ -1,8 +1,7 @@
 # 05_prepare_analysis_data.R: the analysis data.
 #
 # The analysis set (biomes; PAs whose boundary is dominated by sea or by open water; missing
-# covariates; too few years; when config inspection$apply is TRUE, the PAs marked "exclude"
-# after visual inspection), establishment-year imputation, z-scores on the final set,
+# covariates; too few years), establishment-year imputation, z-scores on the final set,
 # point-on-surface coordinates, the response SDs and the HMI mean and SD, the long PA-year table,
 # the PA set of the transect-subset sensitivity runs, and the counts.
 #
@@ -13,7 +12,6 @@
 # Inputs:  results/pa_edge_metrics_ndvi.csv (04: one row per PA-year)
 #          data/02_pas/pas_selected.gpkg (02: PA polygons; every PA of 02, with its RESOLVE biome)
 #          data/04_transect_years/missing_transects.csv (04: transects with a missing year)
-#          data/inspection/checklist.csv (05b, after visual inspection; read only when inspection$apply)
 # Outputs: data/05_analysis/pa_level.csv   one row per analysis PA, ordered by WDPA_PID: attributes,
 #                                          STATUS_YR (imputed where 0) + STATUS_YR_reported,
 #                                          STATUS_YR_imputed, impute_pool; IUCN_group; z-scores;
@@ -92,15 +90,6 @@ year_cols <- paste0("n_years_", CFG$responses)
 aset <- analysis_set(pa_in, CFG$exclude_biomes, unique(c("IUCN_CAT", "STATUS_YR", unname(CFG$covariates))),
                      year_cols, CFG$min_years, min_complete = CFG$min_complete_pct,
                      max_water = CFG$max_water_pct, start_label = "PAs from script 02")
-if (isTRUE(CFG$inspection$apply)) {
-  cl <- as.data.frame(readr::read_csv(CFG$inspection$checklist, col_types = readr::cols(.default = "c"),
-                                      na = character(), show_col_types = FALSE, progress = FALSE))
-  aset <- apply_inspection(aset, cl)
-  say("visual inspection applied (%s): %d PAs removed", CFG$inspection$checklist,
-      utils::tail(aset$steps$n_removed, 1))
-} else {
-  say("visual inspection not applied (config inspection$apply = FALSE)")
-}
 d <- aset$set
 print(aset$steps, row.names = FALSE)
 
@@ -168,8 +157,8 @@ counts <- list(
   n_analysis = nrow(d),
   final_set = final_set_summary(d$WDPA_PID, polys, py, d$AREA_KM2),
   missing_data = missing_data_summary(d$WDPA_PID, polys$N_TRNST[match(d$WDPA_PID, polys$WDPA_PID)], py, mt,
-                                      d$BIOME_NAME, CFG$years),
-  biome =as.list(table(factor(d$BIOME_NAME, levels = CFG$biome_order))),
+                                      d$BIOME_NAME, CFG$years, biome_levels = CFG$biome_order),
+  biome = as.list(table(factor(d$BIOME_NAME, levels = CFG$biome_order))),
   iucn_group = as.list(table(factor(d$IUCN_group, levels = names(CFG$iucn_groups)))),
   imputation = list(
     n_imputed = nrow(g),

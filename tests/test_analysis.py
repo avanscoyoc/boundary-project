@@ -8,7 +8,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import numpy as np
 import pandas as pd
 
-from modules.analysis import bh_adjust, add_trends, cohens_d, _grouped_cohens_d, PT_COLS
+from modules.analysis import (bh_adjust, add_trends, cohens_d, _grouped_cohens_d, PT_COLS,
+                              recategorize_biome, find_asset_csvs)
 
 
 def test_bh_adjust_matches_statsmodels():
@@ -76,3 +77,43 @@ def test_missing_transects():
     assert out['n_missing_point_years'].tolist() == [3, 1, 2]
     assert out['n_missing_point_years_water'].tolist() == [3, 0, 0]
     assert out[[f'miss_{c}' for c in PT_COLS]].values.tolist() == [[0, 0, 0, 0, 3], [0, 0, 1, 0, 0], [1, 0, 0, 1, 0]]
+
+
+def test_recategorize_biome_all_resolve_biomes():
+    groups = {
+        "Tropical & Subtropical Moist Broadleaf Forests": "Tropical Forest",
+        "Tropical & Subtropical Dry Broadleaf Forests": "Tropical Forest",
+        "Tropical & Subtropical Coniferous Forests": "Tropical Forest",
+        "Temperate Broadleaf & Mixed Forests": "Temperate Forest",
+        "Temperate Conifer Forests": "Temperate Forest",
+        "Boreal Forests/Taiga": "Boreal Forest",
+        "Tropical & Subtropical Grasslands, Savannas & Shrublands": "Tropical Grassland",
+        "Flooded Grasslands & Savannas": "Tropical Grassland",
+        "Temperate Grasslands, Savannas & Shrublands": "Temperate & Montane Grassland",
+        "Montane Grasslands & Shrublands": "Temperate & Montane Grassland",
+        "Tundra": "Tundra",
+        "Mediterranean Forests, Woodlands & Scrub": "Mediterranean",
+        "Deserts & Xeric Shrublands": "Desert",
+        "Mangroves": "Mangrove",
+        "N/A": "Rock & Ice",
+    }
+    for resolve, group in groups.items():
+        assert recategorize_biome(resolve) == group, resolve
+    assert len(set(groups.values()) - {"Mangrove", "Rock & Ice"}) == 8
+    for missing in ["Unknown", "None", "", None, np.nan]:
+        assert recategorize_biome(missing) is None
+
+
+def test_find_asset_csvs_only_this_prefix(tmp_path):
+    names = ["ndvi_gradient_000_part_0.csv", "ndvi_gradient_000_part_1_01.csv",
+             "ndvi_gradient_001_part_0.csv", "ndvi_gradient_000_part_0 (1).csv",
+             "ndvi_gradient_displaced_000_part_0.csv", "other_000_part_0.csv"]
+    for n in names:
+        (tmp_path / n).write_text("x")
+    groups, other = find_asset_csvs(tmp_path, "ndvi_gradient_")
+    assert {a: [f.name for f in fs] for a, fs in groups.items()} == {
+        "000": ["ndvi_gradient_000_part_0.csv", "ndvi_gradient_000_part_1_01.csv"],
+        "001": ["ndvi_gradient_001_part_0.csv"]}
+    assert sorted(other) == sorted(names[3:])
+    groups, other = find_asset_csvs(tmp_path, "ndvi_gradient_displaced_")
+    assert list(groups) == ["000"] and len(other) == 5

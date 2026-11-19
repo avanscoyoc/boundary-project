@@ -35,8 +35,18 @@ config.require_gee_project()
 ee.Authenticate(auth_mode='notebook')  # prompts only if not signed in yet
 ee.Initialize(project=config.GEE_PROJECT)
 
-# Load WDPA dataset
-print("Loading WDPA Release (" + config.WDPA_COLLECTION.split("/")[-2] + ") dataset...")
+# Load WDPA dataset (a pinned monthly release, not WCMC/WDPA/current)
+release = config.WDPA_COLLECTION.split("/")[-2]
+print(f"Loading WDPA release {release} ({config.WDPA_COLLECTION})...")
+try:
+    ee.data.getAsset(config.WDPA_COLLECTION)
+except ee.EEException as e:
+    raise SystemExit(
+        f"WDPA release {release} is not available in Earth Engine ({e}).\n"
+        f"If you have this release's WDPA_polygons.geojson from an earlier run of this script, "
+        f"put it in {config.WDPA_DIR} and continue with script 02, which applies "
+        f"EXCLUDED_PIDS again."
+    )
 wdpa = ee.FeatureCollection(config.WDPA_COLLECTION)
 
 # Add geometry type property

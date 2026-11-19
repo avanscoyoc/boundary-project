@@ -48,13 +48,13 @@ RUN_TAG = ''
 _TAG = f'_{RUN_TAG}' if RUN_TAG else ''
 
 # =====================================================================
-# Google Earth Engine Project - REQUIRED for scripts 01 and 03
+# Google Earth Engine Project - REQUIRED for scripts 01, 03 and 12
 # =====================================================================
 
 # Each person sets their project once, outside the repo, so this file never needs
 # editing. In order of precedence:
 #   1. the GEE_PROJECT environment variable (one-off override)
-#   2. the default saved by `earthengine set_project MY-PROJECT`, which is stored
+#   2. the default saved by `earthengine set_project YOUR-PROJECT-ID`, which is stored
 #      next to the Earth Engine credentials and survives container rebuilds
 # Find your project ID at: https://console.cloud.google.com/
 EE_CREDENTIALS = Path.home() / ".config" / "earthengine" / "credentials"
@@ -68,7 +68,7 @@ def _saved_gee_project():
         return None
 
 
-GEE_PROJECT = os.environ.get("GEE_PROJECT") or _saved_gee_project() or 'YOUR-GEE-PROJECT'
+GEE_PROJECT = os.environ.get("GEE_PROJECT") or _saved_gee_project() or 'YOUR-PROJECT-ID'
 
 # =====================================================================
 # Dataset Parameters
@@ -99,7 +99,7 @@ VALID_STATUS = ["Designated", "Established", "Inscribed"]
 EXCLUDED_PIDS = [
     "555655917", "555656005", "555656013", "555665477", "555656021",
     "555665485", "555556142", "187", "555703455", "555563456", "15894",
-    # Circular polygons (problematic geometries), found in the visual inspection (script 05b)
+    # Circular polygons (problematic geometries), found in the visual inspection
     "6690", "6742", "6738", "6745", "6733", "6744", "6807", "6740", "6736",
     "555682777", "555682773", "555543053", "555512070", "6794", "6737",
     "555592664", "555592665", "555621717", "95418",
@@ -177,12 +177,14 @@ GEE_DRIVE_FOLDER = f'{INDEX_NAME}_gradient{_TAG}'
 GEE_EXPORT_PREFIX = f'{GEE_DRIVE_FOLDER}_'
 
 # =====================================================================
-# Visual inspection of the analysis set (script 05b + scripts/05b_inspection_app.js)
+# Visual inspection of the analysis set, after the analysis
+# (scripts/inspection_export.py + scripts/inspection_app.js). PAs excluded after the
+# inspection are added to EXCLUDED_PIDS (script 01) and the pipeline is rerun.
 # =====================================================================
 INSPECTION_INPUT = DATA_DIR / "05_analysis" / "pa_level.csv"     # the analysis PAs (R script 05)
 INSPECTION_DIR = DATA_DIR / "inspection"
 INSPECTION_ZIP = INSPECTION_DIR / f"pas_final{_TAG}.zip"     # upload as the table asset of the same name
-INSPECTION_CHECKLIST = INSPECTION_DIR / "checklist.csv"         # the inspection decisions (read by 05)
+INSPECTION_CHECKLIST = INSPECTION_DIR / "checklist.csv"         # the inspection notes
 INSPECTION_DECISIONS = ('', 'exclude', 'check')                 # blank = keep
 
 # =====================================================================
@@ -257,8 +259,8 @@ def validate_config():
 
 
 def require_gee_project():
-    """Raise if GEE_PROJECT is still the placeholder. Called by scripts 01 and 03."""
-    if GEE_PROJECT == 'YOUR-GEE-PROJECT':
+    """Raise if GEE_PROJECT is still the placeholder. Called by scripts 01, 03 and 12."""
+    if GEE_PROJECT == 'YOUR-PROJECT-ID':
         raise ValueError(
             "GEE_PROJECT has not been set. Run once in the container terminal:\n"
             "    earthengine authenticate --auth_mode=notebook\n"

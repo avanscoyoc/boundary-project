@@ -47,7 +47,8 @@ import shapely
 from modules import config
 from modules.counts import update_counts
 from modules.preprocessing import (
-    fill_holes, resolve_overlaps, merge_same_name, add_shape_metrics, generate_transects
+    drop_excluded_pids, fill_holes, resolve_overlaps, merge_same_name, add_shape_metrics,
+    generate_transects
 )
 
 # Attribute columns kept in pas_removed.gpkg (plus step, reason, replaced_by)
@@ -78,8 +79,13 @@ print(f"\nLoading {config.WDPA_POLYGONS}...")
 wdpa_ll = gpd.read_file(config.WDPA_POLYGONS, engine='pyogrio', use_arrow=True)
 wdpa_ll['WDPA_PID'] = wdpa_ll['WDPA_PID'].astype(str)
 wdpa_ll = wdpa_ll.drop(columns=['geometry_type'], errors='ignore')
+n_loaded = len(wdpa_ll)
+print(f"Loaded {n_loaded:,} PAs (already filtered by script 01).")
+# config.EXCLUDED_PIDS again: 0 from a current export of script 01; more from an older
+# export made before a PID was added to the list. Also keeps them out of the other-PA flag.
+wdpa_ll, n_excluded = drop_excluded_pids(wdpa_ll, config.EXCLUDED_PIDS)
+print(f"Dropped {n_excluded:,} PAs listed in EXCLUDED_PIDS.")
 n_input = len(wdpa_ll)
-print(f"Loaded {n_input:,} PAs (already filtered by script 01).")
 pas = wdpa_ll.to_crs(config.PROCESSING_CRS)
 
 steps = []
@@ -222,7 +228,8 @@ removed_all[removed_cols].to_crs(config.STORAGE_CRS).to_file(config.PAS_REMOVED,
 
 totals = res['totals']
 update_counts(config.PIPELINE_COUNTS, '02_pas', {
-    'input_from_script_01': n_input,
+    'input_from_script_01': n_loaded,
+    'excluded_pids_dropped': n_excluded,
     'steps': steps,
     'final_pas': len(pas),
 })

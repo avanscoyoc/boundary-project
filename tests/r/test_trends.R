@@ -199,7 +199,7 @@ test_that("cohen_kappa and paired_agreement (sensitivity S1)", {
 })
 
 test_that("case_series and case_summary: panel order, % of the PA's own mean", {
-  cases <- data.frame(WDPA_PID = c("b", "a"), label = c("B, X · Grassland", "A, Y · Desert"), stringsAsFactors = FALSE)
+  cases <- data.frame(WDPA_PID = c("b", "a"), label = c("B, X · Trop. Grass.", "A, Y · Desert"), stringsAsFactors = FALSE)
   py <- expand.grid(WDPA_PID = c("a", "b", "c"), year = 2003:2005, stringsAsFactors = FALSE)
   py$edge_extent <- seq_len(nrow(py)) / 10; py$edge_intensity <- seq_len(nrow(py))
   s <- case_series(py, cases, c(extent = "edge_extent", intensity = "edge_intensity"))

@@ -1,14 +1,15 @@
 # corHaversine: great-circle (Haversine) spatial correlation structure for nlme::gls / lme.
 #
-# Vendored from HaversineLMEfunctions.R of the earlier R implementation of this analysis (not in
-# this repository), which adapts a widely circulated community helper.
+# Adapted from a widely used community helper (HaversineLMEfunctions.R) that adds a
+# great-circle distance correlation structure to nlme.
 #
-# ONE CHANGE: haversineDist() is vectorised. The original filled an n × n matrix with a double R
-# loop over the scalar haversine() (≈ 1 min at n ≈ 3,900) and returned as.dist() of it. The
-# vectorised version computes the same lower triangle in the same column-major (as.dist) order
-# with the same arithmetic, elementwise: min(1, ·) became pmin(1, ·), R = 6371 km. The result is
-# bit-identical (tests/r/test_spatial.R checks it against the original loop). haversine() is kept
-# unchanged as the reference for that test. Everything below the distance functions is verbatim.
+# ONE CHANGE: haversineDist() is vectorised. The helper filled an n × n matrix with a double R
+# loop over the scalar haversine() (about a minute for a few thousand PAs) and returned as.dist()
+# of it. The vectorised version computes the same lower triangle in the same column-major
+# (as.dist) order with the same arithmetic, elementwise: min(1, ·) became pmin(1, ·),
+# R = 6371 km. The result is bit-identical (tests/r/test_spatial.R checks it against the loop).
+# haversine() is kept unchanged as the reference for that test. Everything below the distance
+# functions is as in the helper.
 #
 # MUST BE SOURCED INTO globalenv() (sys.source(..., envir = globalenv())). The constructor, Dim
 # and getCovariate methods have their environment set to the nlme namespace, so they find

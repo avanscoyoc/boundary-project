@@ -77,7 +77,7 @@ test_that("ref_contrasts equal coefficient differences, with Holm p", {
 
 test_that("set_model_references: a refit with another reference is the same model reparametrised", {
   d <- sim_model_data(); m <- fit_ns(d, "add")
-  ref <- list(iucn = "non-strict", biome = "Boreal Forest")
+  ref <- list(iucn = "non-strict", biome = CFG$ref$biome)
   d2 <- set_model_references(d, ref, names(CFG$iucn_groups), CFG$biome_order)
   expect_identical(levels(d2$IUCN_group), c("non-strict", "strict", "unknown"))
   expect_identical(levels(d2$BIOME_NAME), SIM_BIOMES[c(4, 1:3)])

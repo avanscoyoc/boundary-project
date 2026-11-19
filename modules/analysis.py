@@ -38,9 +38,9 @@ VERSIONS = {
     '_noflags': ('water_extent', 'in_other_pa'),
 }
 
-# Earth Engine CSV part names: {prefix}_{asset}_part_{i}[_{retry}].csv
-# (the earlier naming ..._{asset}_chunk_{i}.csv is also accepted)
-_CSV_NAME = re.compile(r'_(\d{3})_(?:part|chunk)_(\d+)(?:_(\d{2}))?\.csv$')
+# Earth Engine CSV part names: {prefix}{asset}_part_{i}[_{retry}].csv, e.g.
+# ndvi_gradient_003_part_7.csv or ndvi_gradient_003_part_7_01.csv (a retried half)
+_CSV_SUFFIX = r'(\d{3})_part_(\d+)(?:_(\d{2}))?\.csv'
 
 
 def cohens_d(x, y):
@@ -68,20 +68,24 @@ def cohens_d(x, y):
     return (np.mean(x) - np.mean(y)) / pooled_std
 
 
-def find_asset_csvs(csv_dir):
+def find_asset_csvs(csv_dir, prefix):
     """
     Group the Earth Engine CSV parts in ``csv_dir`` by asset number.
+
+    Only names ``{prefix}NNN_part_N[_RR].csv`` count (``prefix`` = config.GEE_EXPORT_PREFIX
+    for script 04, config.VALIDATION_EXPORT_PREFIX for script 13).
 
     Returns
     -------
     tuple of (dict, list)
         asset number ('000', ...) -> sorted list of CSV paths (including retry
-        halves), and the names of CSVs whose names don't match the pattern
-        (e.g. Drive duplicates like 'name (1).csv').
+        halves), and the names of the other CSVs in the folder (e.g. Drive
+        duplicates like 'name (1).csv', or another run's exports).
     """
+    pattern = re.compile('^' + re.escape(prefix) + _CSV_SUFFIX + '$')
     groups, unrecognized = defaultdict(list), []
     for f in sorted(Path(csv_dir).glob('*.csv')):
-        m = _CSV_NAME.search(f.name)
+        m = pattern.match(f.name)
         if m:
             groups[m.group(1)].append(f)
         else:
@@ -300,10 +304,10 @@ def pa_year_metrics(ty):
 
 def recategorize_biome(biome):
     """
-    Recategorize RESOLVE biomes into 8 groups (temperature zone x moisture): Tropical Forest,
-    Tropical Grassland (with flooded grasslands), Temperate Forest, Temperate & Montane
-    Grassland, Mediterranean, Boreal Forest, Tundra, Desert; plus Mangrove and Rock & Ice,
-    which the analysis excludes.
+    Recategorize RESOLVE biomes into 8 groups, by vegetation structure and then temperature:
+    Tropical Grassland (with flooded grasslands), Temperate & Montane Grassland, Tundra,
+    Desert, Mediterranean, Tropical Forest, Temperate Forest, Boreal Forest; plus Mangrove
+    and Rock & Ice, which the analysis excludes.
 
     RESOLVE's "N/A" biome (its Rock & Ice areas, e.g. Greenland, the Himalaya)
     becomes "Rock & Ice". "Unknown" (no intersecting ecoregion) and missing

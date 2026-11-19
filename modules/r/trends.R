@@ -5,8 +5,7 @@
 # response column. One call handles one series (one metric, one transect version), so the
 # sensitivity runs are a loop over the same functions.
 #
-# Follows the earlier R implementation of this analysis (not in this repository). The OLS is
-# computed from per-PA sums instead of one lm() per PA; slope, SE, t and p are the same as lm().
+# The OLS is computed from per-PA sums instead of one lm() per PA; slope, SE, t and p are the same as lm().
 
 # Group index in first-appearance order. rowsum() sorts character groups by the locale, which
 # would make the row order depend on the environment.

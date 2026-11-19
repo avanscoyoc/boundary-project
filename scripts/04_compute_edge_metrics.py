@@ -57,14 +57,16 @@ years = list(range(config.START_YEAR, config.END_YEAR + 1))
 for path in [config.TRANSECT_POINTS, config.PAS_SELECTED]:
     if not path.exists():
         raise FileNotFoundError(f"{path} not found; run script 02 first.")
-asset_csvs, unrecognized = find_asset_csvs(config.GEE_CSV_DIR)
+asset_csvs, unrecognized = find_asset_csvs(config.GEE_CSV_DIR, config.GEE_EXPORT_PREFIX)
 if not asset_csvs:
     raise FileNotFoundError(
         f"No CSV files found in {config.GEE_CSV_DIR}. Download them from Google Drive "
         f"folder '{config.GEE_DRIVE_FOLDER}' first (see script 03 output)."
     )
 if unrecognized:
-    print(f"WARNING: skipping {len(unrecognized)} CSVs with unexpected names: {unrecognized[:5]}")
+    raise ValueError(f"{len(unrecognized)} CSVs in {config.GEE_CSV_DIR} are not "
+                     f"{config.GEE_EXPORT_PREFIX}NNN_part_N.csv exports of this run (Drive duplicates "
+                     f"such as 'name (1).csv', or another run's files): {unrecognized[:5]}")
 
 # Expected points (script 02). Upload files hold CHUNK_SIZE whole PAs in order,
 # so a PA's asset number is its position in the file // CHUNK_SIZE.
@@ -118,9 +120,9 @@ for asset, files in asset_csvs.items():
     gc.collect()
 
 if completeness['points_missing'] or completeness['points_unexpected']:
-    print(f"WARNING: {completeness['points_missing']:,} expected points missing and "
-          f"{completeness['points_unexpected']:,} unexpected points in the CSVs. "
-          f"Check that every CSV part was downloaded.")
+    raise ValueError(f"{completeness['points_missing']:,} expected points missing and "
+                     f"{completeness['points_unexpected']:,} unexpected points in the CSVs: "
+                     f"check that every CSV part was downloaded once, and only this run's parts.")
 
 # PA-year table with attributes and trends
 print("\nMerging attributes and computing trends...")

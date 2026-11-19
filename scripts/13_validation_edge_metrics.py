@@ -58,7 +58,7 @@ sample = pd.read_csv(SAMPLE_DIR / 'sample.csv', dtype={'WDPA_PID': str})
 cands = pd.read_csv(SAMPLE_DIR / 'candidates.csv', dtype={'WDPA_PID': str})
 pa_biome = dict(zip(sample['WDPA_PID'], sample['BIOME_NAME']))
 
-groups, unrecognized = find_asset_csvs(CSV_DIR)
+groups, unrecognized = find_asset_csvs(CSV_DIR, config.VALIDATION_EXPORT_PREFIX)
 biome_files = sorted(CSV_DIR.glob(f'{config.VALIDATION_BIOME_EXPORT}_[0-9][0-9][0-9].csv'))
 other = [f for f in unrecognized if not f.startswith(config.VALIDATION_BIOME_EXPORT)]
 if not groups:
@@ -88,6 +88,12 @@ for asset, files in groups.items():
           "candidates with data")
 pa_years = pd.concat(py_parts, ignore_index=True)
 pts_diag = pd.concat(pt_parts, ignore_index=True)
+# a candidate's points are all in one asset: one found in two assets means stale or duplicate files
+dup = pts_diag.duplicated(['WDPA_PID', 'candidate'], keep=False)
+if dup.any():
+    raise ValueError(f"{int(dup.sum())} candidate rows appear in more than one asset "
+                     f"(e.g. {pts_diag.loc[dup, ['WDPA_PID', 'candidate']].head(3).values.tolist()}): "
+                     f"are files from another run in {CSV_DIR}?")
 # every candidate point must have come back (as script 04 checks the PA points)
 exp = cands[['WDPA_PID', 'candidate']].merge(sample[['WDPA_PID', 'n_transects']], on='WDPA_PID')
 exp = exp.merge(pts_diag[['WDPA_PID', 'candidate', 'n_points']], on=['WDPA_PID', 'candidate'], how='left')

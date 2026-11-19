@@ -1,8 +1,7 @@
 # Spatial GLS models of PA means and their tables; the change models reuse the formulas and
 # table builders.
 #
-# Follows the earlier R implementation of this analysis (not in this repository). The residual
-# diagnostic plots are drawn by 10_figures.R.
+# The residual diagnostic plots are drawn by 10_figures.R.
 #
 # Functions take the model data and explicit settings and pass `data =` to emmeans.
 # Model data: one row per PA, in the row order of the correlation structure, with factors

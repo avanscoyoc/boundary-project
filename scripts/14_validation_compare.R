@@ -60,6 +60,15 @@ for (m in metrics) {
 }
 p <- p[order(match(p$BIOME_NAME, CFG$biome_order), p$WDPA_PID, method = "radix"), ]
 say("14: %d validation PAs with a displaced copy (%d in the log as selected)", nrow(p), sum(log$status == "selected"))
+if (nrow(p) != sum(log$status == "selected"))
+  stop("selected validation PAs missing from the analysis set or without a copy: ",
+       paste(utils::head(setdiff(log$WDPA_PID[log$status == "selected"], p$WDPA_PID), 5), collapse = ", "))
+# The "All PAs" row pools the validation PAs, so it weights each biome equally only when every
+# biome has the same number of validation PAs.
+n_val <- table(factor(p$BIOME_NAME, levels = CFG$biome_order))
+if (length(unique(as.vector(n_val))) > 1)
+  warning("validation PAs per biome differ (", paste(names(n_val), n_val, sep = " ", collapse = ", "),
+          "): the 'All PAs' row is then not an equal-weight mean of the biomes", call. = FALSE)
 
 n_pop <- c(table(pa$BIOME_NAME))                     # PAs per biome in the analysis set (weights)
 w_label <- paste0(CFG$pooled_label, ", PA-weighted")

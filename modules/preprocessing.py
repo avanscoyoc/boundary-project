@@ -2,6 +2,7 @@
 Geometry processing and transect generation functions (script 02).
 
 Part 1, choosing PAs:
+- drop_excluded_pids: drop PAs listed in config.EXCLUDED_PIDS
 - fill_holes: fill holes smaller than a threshold
 - resolve_overlaps: drop duplicate and nested PAs (spatial index)
 - merge_same_name: dissolve touching/overlapping PAs with the same name and country
@@ -35,6 +36,23 @@ from shapely.ops import unary_union
 # =====================================================================
 # Part 1: choosing PAs
 # =====================================================================
+
+def drop_excluded_pids(gdf, excluded):
+    """
+    Drop rows whose WDPA_PID (as text) is in `excluded`.
+
+    Script 01 already applies the list in Earth Engine. Applying it again here means a
+    WDPA_polygons.geojson exported before a PID was added to the list gives the same
+    PA set as a fresh export.
+
+    Returns
+    -------
+    (GeoDataFrame, int)
+        The remaining rows and the number dropped.
+    """
+    drop = gdf['WDPA_PID'].astype(str).isin({str(p) for p in excluded})
+    return gdf.loc[~drop].copy(), int(drop.sum())
+
 
 def _fill_small_holes(geom, max_hole_area):
     """Return ``geom`` with interior rings smaller than ``max_hole_area`` removed."""

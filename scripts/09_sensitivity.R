@@ -168,8 +168,12 @@ run_results <- function(key) {
 done <- parallel::mclapply(names(runs), function(key) tryCatch(run_results(key), error = function(e) e),
                            mc.cores = cores, mc.preschedule = FALSE)
 names(done) <- names(runs)
-for (key in names(done)) if (inherits(done[[key]], "error") || inherits(done[[key]], "try-error")) {
-  stop("run ", key, " failed: ", conditionMessage(done[[key]]))
+for (key in names(done)) {
+  # NULL: the worker process died (e.g. killed for memory), so mclapply has no result for it
+  if (is.null(done[[key]])) stop("run ", key, " returned nothing: its worker process died (out of memory?)")
+  if (inherits(done[[key]], "error") || inherits(done[[key]], "try-error")) {
+    stop("run ", key, " failed: ", conditionMessage(done[[key]]))
+  }
 }
 
 # ── 3. S2: each run beside its reference ─────────────────────────────────────

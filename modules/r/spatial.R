@@ -1,8 +1,7 @@
 # Spatial set-up for the GLS models: the corHaversine correlation structure, cached model fits,
 # and Moran's I of residuals (diagnostics).
 #
-# Follows the earlier R implementation of this analysis (not in this repository). Needs
-# modules/r/corHaversine.R in globalenv().
+# Needs modules/r/corHaversine.R in globalenv().
 #
 # Row order matters: the correlation structure, the fits and the Moran weights all refer to the
 # rows of the model data in the order given. Build them from the same data frame.
@@ -40,7 +39,7 @@ jitter_duplicates <- function(d, jitter_deg, seed, tries = 10L) {
 #' `value` is the range in km: the optimiser start (fixed = FALSE) or the fixed range
 #' (fixed = TRUE, used by the sensitivity refits). With nugget = TRUE
 #' the start is c(value, 0.1). Initialisation computes the pairwise distances (≈ 1 s)
-#' and nlme's factor of the n × n correlation matrix (≈ 1 min at n ≈ 4,600), so the initialised
+#' and nlme's factor of the n × n correlation matrix (about a minute for the analysis set), so the initialised
 #' object is cached in `cache_dir` (NULL = no cache) under a key that covers the coordinates in
 #' row order and every setting. Attribute "cache_key" holds that key.
 spatial_setup <- function(coords, value, nugget = FALSE, fixed = FALSE, mimic = "corExp",

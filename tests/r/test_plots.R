@@ -18,17 +18,17 @@ test_that("fig3a_rows: order, reference, response-SD scaling (contrasts or coeff
   r <- fig3a_rows(coef, sdt, bo, ref = list(iucn = "strict", biome = bo[1]))
   expect_equal(nrow(r), 6 + 2 + nb)
   expect_equal(r$est, rep(0.2, nrow(r)))
-  expect_identical(levels(r$term_label)[1], paste0("Biome: ", tolower(utils::tail(bo, 1))))   # bottom row
+  expect_identical(levels(r$term_label)[1], biome_row_label(utils::tail(bo, 1)))   # bottom row
   expect_identical(attr(r, "ref"), list(iucn = "strict", biome = bo[1]))
   expect_equal(unname(attr(r, "n_groups")), c(6, 2, nb))
   ctr <- data.frame(response = "extent", factor = c("IUCN_group", "IUCN_group", rep("BIOME_NAME", nb)),
-                    level = c("strict", "unknown", setdiff(bo, "Boreal Forest")),
-                    reference = c("non-strict", "non-strict", rep("Boreal Forest", nb)),
+                    level = c("strict", "unknown", setdiff(bo, CFG$ref$biome)),
+                    reference = c("non-strict", "non-strict", rep(CFG$ref$biome, nb)),
                     estimate = 0.01, lower.CL = 0, upper.CL = 0.02, p.value = 0.2)
   r2 <- fig3a_rows(coef, sdt, bo, contrasts = ctr)
   expect_true(all(c("Biome: tropical grassland", "Biome: temperate & montane grassland",
                     "Biome: Mediterranean") %in% r2$term_label))   # proper noun kept
-  expect_false("Biome: boreal forest" %in% r2$term_label)
+  expect_false(biome_row_label(CFG$ref$biome) %in% r2$term_label)
 })
 
 test_that("fig4a, slope-correlation and correlogram builders build", {
@@ -53,7 +53,7 @@ test_that("fig4a, slope-correlation and correlogram builders build", {
 test_that("fig3_panels keeps the supported interactions; fig3 builds with 0 to 4 panels", {
   wald <- data.frame(response = rep(c("extent", "intensity"), each = 2),
                      term = rep(c("gHM_mean_z:IUCN_group", "gHM_mean_z:BIOME_NAME"), 2),
-                     numDF = rep(c(2, 5), 2), denDF = 4570, F.value = c(6.6, 5.6, 1.3, 5.1),
+                     numDF = rep(c(2, length(CFG$biome_order) - 1), 2), denDF = 4370, F.value = c(6.6, 5.6, 1.3, 5.1),
                      p.value = c(0.001, 4e-5, 0.27, 1e-4))
   p <- fig3_panels(wald)
   expect_identical(paste(p$factor, p$response),
@@ -98,7 +98,7 @@ test_that("fig3_panels keeps the supported interactions; fig3 builds with 0 to 4
 
 test_that("Fig. 4B: placeholders + series, combined Fig. 4, single panels; values outside the axis kept", {
   set.seed(2)
-  cases <- data.frame(WDPA_PID = c("p1", "p2"), label = c("One, X · Grassland", "Two, Y · Trop. For."), stringsAsFactors = FALSE)
+  cases <- data.frame(WDPA_PID = c("p1", "p2"), label = c("One, X · Trop. Grass.", "Two, Y · Trop. For."), stringsAsFactors = FALSE)
   py <- expand.grid(WDPA_PID = cases$WDPA_PID, year = 2003:2025, stringsAsFactors = FALSE)
   py$edge_extent <- 0.6 + 0.005 * (py$year - 2003) * ifelse(py$WDPA_PID == "p1", 1, -1) + rnorm(nrow(py), 0, 0.02)
   py$edge_intensity <- 1 + 0.01 * (py$year - 2003) + rnorm(nrow(py), 0, 0.05)

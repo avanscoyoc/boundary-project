@@ -1,14 +1,15 @@
 /*
- * Script 05b: Earth Engine app for the visual inspection of the analysis-set PAs
+ * Visual inspection: Earth Engine app for the analysis-set PAs (optional, after the analysis)
  *
  * Shows one PA at a time on satellite imagery: its outline and its transect
  * points (interior, boundary, exterior), with an info panel. PAs come in
  * review order (biome, country, name); the PA number is the `order` column of
  * data/inspection/checklist.csv, where decisions are recorded
- * (blank = keep, exclude, check). Script 05 removes the PAs marked `exclude`.
+ * (blank = keep, exclude, check). PAs to exclude are added to EXCLUDED_PIDS in
+ * modules/config.py, and the pipeline is rerun from script 01.
  *
  * BEFORE RUNNING:
- * 1. Run scripts/05b_inspection_export.py and upload data/inspection/pas_final.zip
+ * 1. Run scripts/inspection_export.py and upload data/inspection/pas_final.zip
  *    as the table asset PAS_ASSET below. The transect points are the existing
  *    assets transect_points_NNN (script 02).
  * 2. Paste this file into the Code Editor (code.earthengine.google.com) and Run.
@@ -21,7 +22,7 @@
 
 // --- Settings ---------------------------------------------------------------
 var ASSET_ROOT = 'projects/YOUR-PROJECT-ID/assets/';   // your Earth Engine project's assets
-var PAS_ASSET = ASSET_ROOT + 'pas_final';                    // script 05b
+var PAS_ASSET = ASSET_ROOT + 'pas_final';                    // inspection_export.py
 var POINTS_PREFIX = ASSET_ROOT + 'transect_points_';         // script 02 (+ NNN)
 var SEA_CUTOFF = 75;    // script 05: removed if median % complete transects < 75
 var LAKE_CUTOFF = 75;   // script 05: removed if % transects with water > 75

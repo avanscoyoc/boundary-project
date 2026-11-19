@@ -1,4 +1,4 @@
-# Dev container: Python pipeline (scripts 01–04) + R statistics (scripts 05–10).
+# Dev container: Python pipeline (scripts 01–04, validation 11–13, inspection export) + R statistics (scripts 05–10, 14).
 # Builds natively on linux/amd64 (Windows with WSL2, Intel Macs, Linux) and linux/arm64 (Apple Silicon).
 # Build context is the repo root (devcontainer.json); .dockerignore limits it to the files copied below.
 

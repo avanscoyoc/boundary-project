@@ -1,13 +1,12 @@
 # Figure builders (10_figures.R). They take TABLES (data frames as written by scripts 06–08) and
 # return ggplot/patchwork objects; nothing is fitted or read here.
 #
-# Follows the figures of the earlier R implementation of this analysis (not in this repository);
-# the Fig. 2 map itself is styled outside the repository. Layout notes:
+# The Fig. 2 map itself is styled outside the repository. Layout notes:
 #   - separator positions (Fig. 3A, Fig. 4A) are computed from the rows present;
 #   - Fig. 4B shows its fixed y range with coord_cartesian(), so no value is dropped and the
 #     dashed trend lines are fitted on every year;
 #   - the font family is set explicitly (Helvetica → Liberation Sans in the container), so PNGs
-#     match the PDFs (DejaVu Sans clipped the Fig. 3 legend).
+#     match the PDFs.
 
 PLOT_FAMILY <- "Helvetica"
 
@@ -230,7 +229,7 @@ fig3 <- function(rows_a, pred_iucn, pred_biome, slopes_iucn, slopes_biome, wald,
       ggplot2::geom_line(linewidth = 1) +
       ggplot2::geom_text(data = ends, aes(label = star), hjust = -0.25, vjust = 0.75, size = 5,
                          family = PLOT_FAMILY, show.legend = FALSE) +
-      ggplot2::annotate("text", x = FIG3_X[1] + 0.35 * diff(FIG3_X), y = Inf, hjust = 0, vjust = 1.5,   # clear of Tundra
+      ggplot2::annotate("text", x = FIG3_X[1] + 0.35 * diff(FIG3_X), y = Inf, hjust = 0, vjust = 1.5,
                         size = annot, family = PLOT_FAMILY,
                         label = paste0("HMI × biome\n", .wald_label(wald, resp, "BIOME"))) +
       ggplot2::scale_color_manual(values = BIOME_COLORS, labels = biome_lab, name = NULL) +
@@ -275,7 +274,8 @@ fig3_axes <- function(d, resp) {
   yl <- FIG3_Y[[resp]]
   pad <- function(l) l + c(-1, 1) * 0.05 * diff(l)
   out <- d$conf.low < pad(yl)[1] | d$conf.high > pad(yl)[2] | d$gHM_mean < pad(FIG3_X)[1] | d$gHM_mean > pad(FIG3_X)[2]
-  if (any(out)) warning(sprintf("Fig. 3 (%s): %d of %d predicted points or CI bounds fall outside the fixed axes and are cut off",
+  if (any(out)) warning(sprintf(paste("Fig. 3 (%s): %d of %d predicted points or CI bounds fall outside the fixed axes",
+                                      "and are drawn beyond the panel (clip off): widen FIG3_X / FIG3_Y"),
                                 resp, sum(out), length(out)), call. = FALSE)
   list(ggplot2::scale_x_continuous(breaks = seq(FIG3_X[1], FIG3_X[2], 0.2)),
        ggplot2::scale_y_continuous(breaks = seq(yl[1], yl[2], FIG3_Y_STEP[[resp]])),
@@ -327,7 +327,7 @@ fig4a <- function(summary, reps, biome_order, pooled_label, pooled_display = "Al
     ggplot2::geom_pointrange(data = s, aes(x = biome_label, y = mean_change_z, ymin = ci_lo_z, ymax = ci_hi_z,
                                            color = metric, alpha = significant,
                                            group = interaction(BIOME_NAME, metric)),
-                             position = dodge, size = 0.6, linewidth = 0.9, fatten = 3) +
+                             position = dodge, size = 0.45, linewidth = 0.9) +   # point 0.45 × fatten 4 = 1.8
     ggplot2::geom_point(data = s, aes(x = biome_label, y = mean_change_z, group = interaction(BIOME_NAME, metric)),
                         position = dodge, shape = 21, fill = "grey15", size = 2.6,
                         alpha = ifelse(s$significant, 1, 0.5)) +
@@ -349,7 +349,7 @@ fig4a <- function(summary, reps, biome_order, pooled_label, pooled_display = "Al
     ggplot2::labs(x = NULL, y = "Change in edge metric, 2003–2025\n(among-PA SD)") +
     theme_pa(base_size = 12) +
     ggplot2::theme(axis.text.x = ggplot2::element_text(face = x_face),
-                   # bottom right, below the forest columns (the centre is Mediterranean's wide CIs)
+                   # bottom right: the centre of the panel is taken by the wide CIs of small biomes
                    legend.position = "inside", legend.position.inside = c(0.82, 0.07),
                    legend.direction = "horizontal", legend.background = ggplot2::element_blank(),
                    legend.key = ggplot2::element_blank(), legend.key.size = grid::unit(0.35, "cm"),
@@ -508,7 +508,7 @@ fig_slope_correlation <- function(pa, cor_tab, biome_order, pooled_label = "All 
     ggplot2::geom_text(data = lab, aes(x = -Inf, y = Inf, label = label), hjust = -0.05, vjust = 1.2,
                        size = 3, family = PLOT_FAMILY, inherit.aes = FALSE) +
     ggplot2::scale_colour_identity() +
-    ggplot2::facet_wrap(~ panel, ncol = 4) +
+    ggplot2::facet_wrap(~ panel, ncol = 3) +   # all PAs + 8 biomes: 3 × 3
     ggplot2::labs(x = "Change in edge extent, 2003–2025 (among-PA SD)",
                   y = "Change in edge intensity, 2003–2025 (among-PA SD)") +
     theme_pa(base_size = 11)

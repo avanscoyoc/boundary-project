@@ -108,7 +108,7 @@ if (!is.null(ts) && file.exists(trends_file)) {
   pa <- as.data.frame(readr::read_csv(trends_file, col_types = readr::cols(WDPA_PID = "c", .default = readr::col_guess()),
                                       show_col_types = FALSE, progress = FALSE))
   save_both(fig_slope_correlation(pa, ts$TableSV_slope_correlation, CFG$biome_order, CFG$pooled_label),
-            "figS_slope_correlation", 10, 5.5)
+            "figS_slope_correlation", 9, 8.5)
 }
 
 # ── Fig. 2 map layers ────────────────────────────────────────────────────────

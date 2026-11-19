@@ -1,11 +1,10 @@
 """
-Script 05b: Export the analysis set for visual inspection
+Visual inspection: export the analysis set (optional, after the analysis)
 
 Writes the analysis-set PAs (R script 05) for the Earth Engine inspection app
-(scripts/05b_inspection_app.js), plus a checklist for the inspection notes.
-Run once, before the inspection. PAs marked `exclude` in the checklist are removed
-by script 05 as a counted step; scripts 02-04 do not rerun (each PA's transects
-and metrics are computed on their own).
+(scripts/inspection_app.js), plus a checklist for the inspection notes. PAs that the
+inspection shows should be excluded (e.g. problematic geometries) are added to
+EXCLUDED_PIDS in modules/config.py, and the pipeline is rerun from script 01.
 
 Review order: biome, country (ISO3), name (case-insensitive), then WDPA_PID.
 The app's PA number is the checklist's `order` column.
@@ -56,7 +55,7 @@ from modules import config
 
 t_start = time.time()
 print("=" * 80)
-print("SCRIPT 05b: Export the analysis set for visual inspection")
+print("Visual inspection: export the analysis set")
 print("=" * 80)
 
 n_years = config.END_YEAR - config.START_YEAR + 1
@@ -165,5 +164,5 @@ for biome, g in pa.groupby('BIOME_NAME', sort=False):
 asset_id = f"projects/{config.GEE_PROJECT}/assets/{zip_path.stem}"
 print("\nMANUAL STEP: upload the zip to Earth Engine as a table asset:")
 print(f"  {zip_path.relative_to(project_root)}  ->  {asset_id}")
-print("  Then paste scripts/05b_inspection_app.js into the Code Editor and run it.")
+print("  Then paste scripts/inspection_app.js into the Code Editor and run it.")
 print(f"\nDone in {time.time() - t_start:.0f} s")

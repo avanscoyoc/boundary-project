@@ -1,4 +1,4 @@
-# R environment for the statistical analysis (scripts/05–10), built into the dev container at /opt/r.
+# R environment for the statistical analysis (scripts/05–10 and 14), built into the dev container at /opt/r.
 # Python is not managed here: it uses the system interpreter (requirements.txt + constraints.txt).
 #
 # pixi.lock pins every package for both Linux architectures, so the container builds the same way on

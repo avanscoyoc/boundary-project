@@ -55,11 +55,6 @@ CFG <- local({
     # years).
     min_complete_pct = 75,
     max_water_pct    = 75,
-    # Visual inspection (checklist written by script 05b). Set apply = TRUE when the inspection is
-    # finished: 05 then removes the PAs marked "exclude" as its last counted step ("removed after
-    # visual inspection") and stops on any PA still marked "check".
-    # FALSE: the checklist is not read and the set is unchanged.
-    inspection = list(checklist = p("data", "inspection", "checklist.csv"), apply = FALSE),
 
     # Biome groups (script 04, recategorize_biome) in their order for tables and figures only:
     # by vegetation structure (grassland and tundra, desert, Mediterranean, forest), then
@@ -132,7 +127,6 @@ CFG <- local({
       range_start_km  = 200,    # optimiser start for the range of corHaversine(mimic = "corExp")
       nugget          = FALSE,
       max_iter        = 200L,   # glsControl(maxIter, msMaxIter)
-      earth_radius_km = 6371,
       jitter_deg      = 1e-4,   # only for PAs with identical coordinates (zero distances stop corHaversine)
       jitter_seed     = 1L,
       jitter_tries    = 10L,
@@ -159,7 +153,7 @@ CFG <- local({
       established_by = 2003L,   # PA subset (a): analysed establishment year ≤ 2003
                                 # PA subset (b): reported year only (STATUS_YR_imputed == FALSE)
       # Transect subsets: a PA-year counts in a version only with ≥ min_transects complete
-      # transects (the fewest transects of any PA; Methods: 60–8,636), and the comparison set is
+      # transects (the fewest transects of any analysed PA, analysis_counts.json final_set), and the comparison set is
       # the PAs with ≥ min_years such years of both metrics in every version.
       min_transects = 60L,
       seed          = 46L   # bootstrap CIs of the paired differences

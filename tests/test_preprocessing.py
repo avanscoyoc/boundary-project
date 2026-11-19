@@ -19,7 +19,7 @@ from shapely.geometry import Polygon, box
 
 from modules.preprocessing import (
     evenspace, extract_coords, make_pa_transects, resolve_overlaps,
-    merge_same_name, add_shape_metrics, flag_other_pa,
+    merge_same_name, add_shape_metrics, flag_other_pa, drop_excluded_pids,
 )
 
 MOLL = 'ESRI:54009'
@@ -119,6 +119,16 @@ def test_narrow_pa_is_skipped_by_inner_buffer():
 
 
 # ---------------------------------------------------------------- overlaps
+
+def test_drop_excluded_pids_matches_as_text():
+    gdf = pas_frame([(1, box(0, 0, 1, 1), 'A', 'AAA', 2000),
+                     ('22', box(2, 0, 3, 1), 'B', 'AAA', 2000),
+                     ('333', box(4, 0, 5, 1), 'C', 'AAA', 2000)])
+    out, n = drop_excluded_pids(gdf, ['1', 22])
+    assert n == 2 and list(out['WDPA_PID']) == ['333']
+    out, n = drop_excluded_pids(gdf, [])
+    assert n == 0 and len(out) == 3
+
 
 def test_resolve_overlaps_duplicates_and_nested():
     gdf = pas_frame([

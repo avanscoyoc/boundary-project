@@ -8,8 +8,8 @@
 #   standardised change = slope × n_span / SD of the metric's PA means over the analysis set
 #   (scaling.csv from 05), with its SE (for the precision weights of 08);
 #   percentile-bootstrap means of change per biome and for all PAs (Fig. 4A), area-weighted means
-#   and Sen-slope means (Table SV); seeds and run order as in the earlier R implementation of
-#   this analysis (config boot$seeds);
+#   and Sen-slope means (Table SV); fixed seeds (config boot$seeds), biomes in config
+#   biome_order;
 #   GLS of change on biome with biome-specific variances, Holm-adjusted pairwise contrasts and
 #   letters (Table SW); % change over the record (diagnostic);
 #   the Fig. 4B case-study PAs (config case_studies): their annual series, trends and % change

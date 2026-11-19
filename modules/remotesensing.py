@@ -34,7 +34,7 @@ def get_pa_filter(type="Polygon"):
     
     Notes
     -----
-    - Excludes marine areas (MARINE == "0")
+    - Keeps terrestrial PAs only (MARINE == "0")
     - Excludes Marine Protected Areas and UNESCO-MAB Biosphere Reserves
     - Only includes areas with status from config.VALID_STATUS
     - Requires minimum area from config.MIN_AREA_KM2
@@ -118,42 +118,6 @@ def get_biome(pa_feature):
         ee.String('Unknown')
     )
     return pa_feature.set('BIOME_NAME', biome_name)
-
-
-def check_task_status(submitted_tasks):
-    """
-    Check status of submitted Earth Engine tasks and filter out completed ones.
-    
-    Prints status messages for completed, failed, or cancelled tasks and returns
-    only tasks that are still running.
-    
-    Parameters
-    ----------
-    submitted_tasks : list of tuple
-        List of tuples where each tuple contains (task_object, year).
-        task_object is an ee.batch.Task instance.
-    
-    Returns
-    -------
-    tuple of (list, int)
-        - active_tasks : list of tuple
-            Filtered list containing only active tasks.
-        - num_active : int
-            Count of active tasks.
-    
-    Notes
-    -----
-    Completed states include: 'COMPLETED', 'FAILED', 'CANCELLED'.
-    Active states include: 'READY', 'RUNNING'.
-    """
-    active_tasks = []
-    for task_obj, year in submitted_tasks:
-        task_status = task_obj.status()
-        if task_status['state'] in ['COMPLETED', 'FAILED', 'CANCELLED']:
-            print(f"Task {year} {task_status['state']}")
-        else:
-            active_tasks.append((task_obj, year))
-    return active_tasks, len(active_tasks)
 
 
 def get_gradient_magnitude(y):

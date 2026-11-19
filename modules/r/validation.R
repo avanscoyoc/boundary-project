@@ -1,6 +1,5 @@
 # Validation (Methods: Validation): each sampled PA against its displaced copy.
-# Follows the earlier R implementation of this analysis (not in this repository): PA means of the
-# copy's yearly metrics (as for a PA), paired differences PA − copy, and per biome and for all PAs
+# PA means of the copy's yearly metrics (as for a PA), paired differences PA − copy, and per biome and for all PAs
 # the mean difference with a percentile-bootstrap CI (resampling PAs within the biome), the median,
 # the share of PAs above their copy, and a paired Wilcoxon signed-rank test (Holm across biomes
 # within a metric). All PAs: the sampled PAs pooled (equal weight per biome; the figure), and the
