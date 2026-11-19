@@ -90,8 +90,13 @@ Scripts 06, 08 and 09 take `--cores K` (fits run in parallel, default 2). At ful
 
 #### 03 Sample imagery · Earth Engine
 - Samples every transect point in every year, 2003–2025.
+<<<<<<< HEAD
 - NDVI: gradient magnitude of the annual median MOD13A1 NDVI, on its native ~463 m grid, with no quality or snow masking.
 - Covariates: water (JRC GSW 1.4) max_extent at all points, human modification (gHM 2016) at 2 outside points, elevation and slope (Copernicus GLO-30, 2024) at boundary points.
+=======
+- NDVI: gradient magnitude of the annual median MOD13A1 NDVI, on its native ~463 m grid.
+- Covariates: water (JRC GSW 1.4), human modification (gHM 2016), elevation and slope (Copernicus GLO-30, 2024).
+>>>>>>> b840fd1e01bfe5be540388b7e395d9d4a003dc95
 - Exports CSVs of 50,000 points each to Drive.
 
 #### 04 Edge metrics · Python
