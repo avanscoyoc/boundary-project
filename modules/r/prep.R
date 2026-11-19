@@ -96,6 +96,31 @@ analysis_set <- function(pa, exclude_biomes, covariates, year_cols, min_years,
   list(set = pa, steps = steps, removed = removed)
 }
 
+#' The runs of 09: per run, `label`, `pids` (the run's PAs), transect `version`, `min_tr` (a
+#' PA-year counts only with ≥ min_tr complete transects) and `vs` (the run it is compared with; NA
+#' for main). `pa`: pa_level.csv with the PA-set flags of 05 (set_transects, set_established,
+#' set_reported, set_coverage); `s`: config sensitivity. The transect subsets and their reference
+#' all_common use the same PAs and the same min_tr, so a difference comes from the transects only.
+sensitivity_runs <- function(pa, s) {
+  stopifnot(all(c("WDPA_PID", "set_transects", "set_established", "set_reported", "set_coverage") %in% names(pa)))
+  run <- function(label, pids, version, min_tr, vs) list(label = label, pids = pids, version = version,
+                                                       min_tr = min_tr, vs = vs)
+  mt <- s$min_transects
+  common <- pa$WDPA_PID[pa$set_transects]
+  list(
+    main        = run("Main analysis (all transects)", pa$WDPA_PID, "all", 0L, NA),
+    all_common  = run(sprintf("All transects, transect-subset PAs (PA-years with >= %d transects)", mt),
+                      common, "all", mt, "main"),
+    nowater     = run("Without water transects", common, "nowater", mt, "all_common"),
+    nootherpa   = run("Without transects bordering other PAs", common, "nootherpa", mt, "all_common"),
+    noflags     = run("Without water or other-PA transects", common, "noflags", mt, "all_common"),
+    established = run(sprintf("PAs established by %d", s$established_by),
+                      pa$WDPA_PID[pa$set_established], "all", 0L, "main"),
+    reported    = run("PAs with a reported establishment year", pa$WDPA_PID[pa$set_reported], "all", 0L, "main"),
+    coverage    = run(sprintf("PAs keeping >= %g%% of their transects", s$min_pct_kept),
+                      pa$WDPA_PID[pa$set_coverage], "all", 0L, "main"))
+}
+
 #' PAs for the transect-subset sensitivity runs.
 #'
 #' In each transect version a PA-year counts only if it has ≥ `min_transects` complete
@@ -224,26 +249,14 @@ final_set_summary <- function(pids, polys, py, area, points_per_transect = 5L) {
 }
 
 #' RESOLVE Ecoregions 2017 biome names -> the groups of script 04 (`recategorize_biome()` in
-#' modules/analysis.py): 8 analysis groups, plus Mangrove and Rock & Ice (excluded by script 05).
-#' RESOLVE's "N/A" (rock and ice) is "Rock & Ice"; a missing name, "Unknown", "None" or "" gives
-#' NA; any other name is kept as it is (as in Python).
-BIOME_GROUPS <- c(
-  "Tropical & Subtropical Moist Broadleaf Forests" = "Tropical Forest",
-  "Tropical & Subtropical Dry Broadleaf Forests" = "Tropical Forest",
-  "Tropical & Subtropical Coniferous Forests" = "Tropical Forest",
-  "Tropical & Subtropical Grasslands, Savannas & Shrublands" = "Tropical Grassland",
-  "Flooded Grasslands & Savannas" = "Tropical Grassland",
-  "Temperate Broadleaf & Mixed Forests" = "Temperate Forest",
-  "Temperate Conifer Forests" = "Temperate Forest",
-  "Temperate Grasslands, Savannas & Shrublands" = "Temperate & Montane Grassland",
-  "Montane Grasslands & Shrublands" = "Temperate & Montane Grassland",
-  "Mediterranean Forests, Woodlands & Scrub" = "Mediterranean",
-  "Boreal Forests/Taiga" = "Boreal Forest",
-  "Tundra" = "Tundra",
-  "Deserts & Xeric Shrublands" = "Desert",
-  "Mangroves" = "Mangrove",
-  "N/A" = "Rock & Ice"
-)
+#' modules/analysis.py), from the one table both read: modules/biome_groups.csv. 8 analysis
+#' groups, plus Mangrove and Rock & Ice (RESOLVE's "N/A"), excluded by script 05. A missing name,
+#' "Unknown", "None" or "" gives NA; any other name is kept as it is (as in Python).
+BIOME_GROUPS <- local({
+  x <- utils::read.csv(file.path(CFG$root, "modules", "biome_groups.csv"), colClasses = "character",
+                       na.strings = character(), check.names = FALSE)
+  stats::setNames(x$group, x$BIOME_NAME)
+})
 
 biome_group <- function(x) {
   x <- as.character(x)

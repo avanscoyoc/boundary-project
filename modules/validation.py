@@ -25,28 +25,15 @@ import pandas as pd
 import pyproj
 import shapely
 
-from modules.analysis import recategorize_biome
+from modules.analysis import biome_groups, recategorize_biome
 
 POINT_IDS = (-2, -1, 0, 1, 2)
 CANDIDATE_SEP = '#'   # upload key: "<WDPA_PID>#<candidate>"
 
-# RESOLVE Ecoregions 2017 BIOME_NUM -> BIOME_NAME (codes outside 1-14, e.g. Rock & Ice, -> None)
-RESOLVE_BIOMES = {
-    1: "Tropical & Subtropical Moist Broadleaf Forests",
-    2: "Tropical & Subtropical Dry Broadleaf Forests",
-    3: "Tropical & Subtropical Coniferous Forests",
-    4: "Temperate Broadleaf & Mixed Forests",
-    5: "Temperate Conifer Forests",
-    6: "Boreal Forests/Taiga",
-    7: "Tropical & Subtropical Grasslands, Savannas & Shrublands",
-    8: "Temperate Grasslands, Savannas & Shrublands",
-    9: "Flooded Grasslands & Savannas",
-    10: "Montane Grasslands & Shrublands",
-    11: "Tundra",
-    12: "Mediterranean Forests, Woodlands & Scrub",
-    13: "Deserts & Xeric Shrublands",
-    14: "Mangroves",
-}
+# RESOLVE Ecoregions 2017 BIOME_NUM -> BIOME_NAME, from modules/biome_groups.csv (numbers 1-14;
+# other codes, e.g. RESOLVE's rock and ice, -> None)
+RESOLVE_BIOMES = {int(n): name for n, name in biome_groups()[['BIOME_NUM', 'BIOME_NAME']].itertuples(index=False)
+                  if n != ''}
 
 
 def biome_from_num(num):

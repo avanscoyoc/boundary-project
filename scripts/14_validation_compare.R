@@ -25,21 +25,14 @@
 #          <diagnostics>/validation_attrition.csv      sampled PAs by biome and status
 #          <figures>/figS_validation.{pdf,png}
 
-source(file.path("modules", "r", "config.R"))
-for (f in setdiff(list.files(file.path("modules", "r"), "\\.R$", full.names = TRUE),
-                  file.path("modules", "r", "config.R"))) {
-  sys.source(f, envir = globalenv())   # corHaversine must live in globalenv()
-}
+source(file.path("modules", "r", "load.R"))   # config.R + every module of modules/r
 
-args <- commandArgs(trailingOnly = TRUE)
-arg <- function(name) if (any(args == name)) args[which(args == name) + 1] else NULL
 src <- if (is.null(arg("--from"))) list(pa_years = CFG$validation$pa_years, log = CFG$validation$log) else
   list(pa_years = file.path(arg("--from"), basename(CFG$validation$pa_years)),
        log = file.path(arg("--from"), basename(CFG$validation$log)))
 out <- if (is.null(arg("--out"))) list(tables = CFG$paths$tables, diagnostics = CFG$paths$diagnostics,
                                        figures = CFG$paths$figures) else
   lapply(c(tables = "tables", diagnostics = "diagnostics", figures = "figures"), function(x) file.path(arg("--out"), x))
-say <- function(...) cat(sprintf("[%s] %s\n", format(Sys.time(), "%H:%M:%S"), sprintf(...)))
 read <- function(path) as.data.frame(readr::read_csv(path, col_types = readr::cols(WDPA_PID = "c", .default = readr::col_guess()),
                                                      guess_max = 1e5, show_col_types = FALSE, progress = FALSE))
 

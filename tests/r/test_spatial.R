@@ -1,8 +1,13 @@
 # Unit tests for modules/r/spatial.R and the vectorised distances in modules/r/corHaversine.R.
 
-# The helper's original distance function (HaversineLMEfunctions.R, from which corHaversine.R
-# is adapted), verbatim, as the reference. It uses the unchanged scalar
-# haversine() from corHaversine.R.
+# The helper's original distance functions (HaversineLMEfunctions.R, from which corHaversine.R
+# is adapted), verbatim, as the reference for the vectorised haversineDist().
+# Great-circle distance between two points (in radians); km, Earth radius 6371 km.
+haversine <- function(x0, x1, y0, y1) {
+  a <- sin((y1 - y0) / 2)^2 + cos(y0) * cos(y1) * sin((x1 - x0) / 2)^2
+  v <- 2 * asin(min(1, sqrt(a)))
+  6371 * v
+}
 haversineDist_loop <- function(xy, radians = FALSE) {
   if (ncol(xy) > 2) stop("Input must have two columns (longitude and latitude)")
   if (!radians) xy <- xy * pi / 180

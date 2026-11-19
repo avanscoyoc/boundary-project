@@ -30,14 +30,8 @@
 #          data/10_map_layers/pa_map_layers.gpkg, case_study_pas.kml;
 #          results/R_sessionInfo.txt (without --out)
 
-source(file.path("modules", "r", "config.R"))
-for (f in setdiff(list.files(file.path("modules", "r"), "\\.R$", full.names = TRUE),
-                  file.path("modules", "r", "config.R"))) {
-  sys.source(f, envir = globalenv())   # corHaversine must live in globalenv()
-}
+source(file.path("modules", "r", "load.R"))   # config.R + every module of modules/r
 
-args <- commandArgs(trailingOnly = TRUE)
-arg <- function(name) if (any(args == name)) args[which(args == name) + 1] else NULL
 src <- if (is.null(arg("--from"))) list(tables = CFG$paths$tables, diagnostics = CFG$paths$diagnostics) else
   list(tables = file.path(arg("--from"), "tables"), diagnostics = file.path(arg("--from"), "diagnostics"))
 out <- if (is.null(arg("--out"))) {
@@ -47,7 +41,6 @@ out <- if (is.null(arg("--out"))) {
        map_layers = file.path(arg("--out"), "map_layers"))
 }
 for (dir in out) dir.create(dir, recursive = TRUE, showWarnings = FALSE)
-say <- function(...) cat(sprintf("[%s] %s\n", format(Sys.time(), "%H:%M:%S"), sprintf(...)))
 
 # Tables by name ("tables/x.csv" or "diagnostics/x.csv"); NULL if any is missing.
 need <- function(...) {

@@ -8,8 +8,8 @@
 # of it. The vectorised version computes the same lower triangle in the same column-major
 # (as.dist) order with the same arithmetic, elementwise: min(1, ·) became pmin(1, ·),
 # R = 6371 km. The result is bit-identical (tests/r/test_spatial.R checks it against the loop).
-# haversine() is kept unchanged as the reference for that test. Everything below the distance
-# functions is as in the helper.
+# The helper's scalar haversine() is in that test, as the reference. Everything below the
+# distance functions is as in the helper.
 #
 # MUST BE SOURCED INTO globalenv() (sys.source(..., envir = globalenv())). The constructor, Dim
 # and getCovariate methods have their environment set to the nlme namespace, so they find
@@ -20,15 +20,6 @@
 #                   data = d)   — coordinates must be columns named lon and lat, in degrees.
 
 # ---- Distance functions ----------------------------------------------------
-# Great-circle distance between two points (in radians) using the Haversine
-# formula. Returns distance in km, assuming Earth radius = 6371 km.
-# (Unchanged; not used by haversineDist(), kept as the reference for its test.)
-haversine <- function(x0, x1, y0, y1) {
-  a <- sin((y1 - y0) / 2)^2 + cos(y0) * cos(y1) * sin((x1 - x0) / 2)^2
-  v <- 2 * asin(min(1, sqrt(a)))
-  6371 * v
-}
-
 # Pairwise great-circle distances (km) for a two-column matrix of longitude/latitude, as a "dist"
 # object (lower triangle, column-major). Input in decimal degrees (default) or radians.
 # Vectorised over pairs, in blocks of columns of at most `block` pairs to bound memory.

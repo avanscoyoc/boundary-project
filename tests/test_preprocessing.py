@@ -19,7 +19,7 @@ from shapely.geometry import Polygon, box
 
 from modules.preprocessing import (
     evenspace, extract_coords, make_pa_transects, resolve_overlaps,
-    merge_same_name, add_shape_metrics, flag_other_pa, drop_excluded_pids,
+    merge_same_name, add_shape_metrics, flag_other_pa, drop_excluded_pids, own_pid_sets,
 )
 
 MOLL = 'ESRI:54009'
@@ -203,6 +203,16 @@ def test_shape_ratio_is_size_neutral():
 
 # ---------------------------------------------------------------- other-PA flag
 
+def test_own_pid_sets_follows_replacement_chains():
+    removed = [pd.DataFrame({'WDPA_PID': ['n1', 'd1', 'x1'], 'replaced_by': ['d1', 'K', 'gone']}),   # step 2
+               pd.DataFrame({'WDPA_PID': ['m1', 'z'], 'replaced_by': ['K', None]})]                 # step 3
+    own = own_pid_sets(['K', 'L'], removed)
+    # nested n1 -> duplicate d1 -> kept K; merged m1 -> K; x1's replacement was not kept
+    assert own == {'K': {'K', 'n1', 'd1', 'm1'}, 'L': {'L'}}
+    # a cycle stops instead of looping forever
+    assert own_pid_sets(['K'], [pd.DataFrame({'WDPA_PID': ['a', 'b'], 'replaced_by': ['b', 'a']})]) == {'K': {'K'}}
+
+
 def test_flag_other_pa_ignores_own_and_merged_pas():
     other = box(10, 0, 11, 1)
     merged_neighbor = box(20, 0, 21, 1)
@@ -233,3 +243,8 @@ def test_generate_transects_removes_pa_with_coverage_gap(tmp_path):
     assert strict['totals']['in_pas_removed_for_coverage_gap'] == strict['n_transects']['U'] > 0
     loose = generate_transects(pas, max_gap_pct_limit=None, **kwargs)
     assert loose['status'] == {'U': 'ok', 'SQ': 'ok'}
+    # the asset column names each PA's upload file (script 04 reads it)
+    one_per_file = generate_transects(pas, max_gap_pct_limit=None, **{**kwargs, 'chunk_size': 1})
+    p = pd.read_parquet(tmp_path / 'p.parquet')
+    assert p.groupby('WDPA_PID')['asset'].unique().map(list).to_dict() == {'U': [0], 'SQ': [1]}
+    assert [Path(z).name for z in one_per_file['zip_files']] == ['t_000.zip', 't_001.zip']

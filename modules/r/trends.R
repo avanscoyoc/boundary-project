@@ -246,8 +246,12 @@ boot_means <- function(d, cols, group, levels, R, seed, weights = NULL,
   out
 }
 
-#' Do the groups differ in mean change? Non-spatial GLS of `response` on `group`
-#' with a separate residual variance per group (varIdent), REML; emmeans with mode "df.error".
+#' Do the groups differ in mean change? GLS of `response` on `group` with a separate residual
+#' variance per group (varIdent), REML; emmeans with mode "df.error". With `correlation` (an
+#' initialised corHaversine from spatial_setup(), script 08: range fixed at the change model's
+#' estimate) the residuals are spatially correlated, as in 06 and 08, and the fit is cached in
+#' `cache_dir`; `d` must then have no missing `response` or `group` and columns lon, lat in the
+#' row order of the correlation structure. Without it, PAs are treated as independent.
 #'
 #' Returns list(omnibus, means, pairs, letters, sigma):
 #'   omnibus  marginal Wald F for the group term (denDF = N − p);
@@ -257,13 +261,23 @@ boot_means <- function(d, cols, group, levels, R, seed, weights = NULL,
 #'   sigma    residual SD per group (sigma × varIdent ratio).
 #' Groups take the order of `levels` (the first is the model's reference); rows with a missing
 #' response or group are left out, the remaining rows keep their order in `d`.
-biome_gls <- function(d, response, group, levels, max_iter = 200L, alpha = 0.05) {
+biome_gls <- function(d, response, group, levels, max_iter = 200L, alpha = 0.05,
+                      correlation = NULL, cache_dir = NULL, label = NULL) {
   stopifnot(all(c(response, group) %in% names(d)))
   dd <- data.frame(y = d[[response]], g = factor(as.character(d[[group]]), levels = levels))
+  if (!is.null(correlation)) {
+    stopifnot(all(c("lon", "lat") %in% names(d)), !anyNA(dd$y), !anyNA(dd$g))
+    dd$lon <- d$lon; dd$lat <- d$lat
+  }
   dd <- dd[!is.na(dd$y) & !is.na(dd$g), , drop = FALSE]
   dd$g <- droplevels(dd$g)
-  m <- nlme::gls(y ~ g, data = dd, weights = nlme::varIdent(form = ~ 1 | g), method = "REML",
-                 control = nlme::glsControl(maxIter = max_iter, msMaxIter = max_iter))
+  m <- if (is.null(correlation)) {
+    nlme::gls(y ~ g, data = dd, weights = nlme::varIdent(form = ~ 1 | g), method = "REML",
+              control = nlme::glsControl(maxIter = max_iter, msMaxIter = max_iter))
+  } else {
+    fit_gls_cached(y ~ g, dd, correlation = correlation, weights = nlme::varIdent(form = ~ 1 | g),
+                   method = "REML", max_iter = max_iter, cache_dir = cache_dir, label = label)
+  }
 
   a <- stats::anova(m, type = "marginal")
   omnibus <- data.frame(term = group, numDF = a["g", "numDF"], denDF = m$dims$N - m$dims$p,

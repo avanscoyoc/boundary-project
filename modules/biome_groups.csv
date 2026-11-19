@@ -1,0 +1,16 @@
+BIOME_NUM,BIOME_NAME,group
+1,Tropical & Subtropical Moist Broadleaf Forests,Tropical Forest
+2,Tropical & Subtropical Dry Broadleaf Forests,Tropical Forest
+3,Tropical & Subtropical Coniferous Forests,Tropical Forest
+4,Temperate Broadleaf & Mixed Forests,Temperate Forest
+5,Temperate Conifer Forests,Temperate Forest
+6,Boreal Forests/Taiga,Boreal Forest
+7,"Tropical & Subtropical Grasslands, Savannas & Shrublands",Tropical Grassland
+8,"Temperate Grasslands, Savannas & Shrublands",Temperate & Montane Grassland
+9,Flooded Grasslands & Savannas,Tropical Grassland
+10,Montane Grasslands & Shrublands,Temperate & Montane Grassland
+11,Tundra,Tundra
+12,"Mediterranean Forests, Woodlands & Scrub",Mediterranean
+13,Deserts & Xeric Shrublands,Desert
+14,Mangroves,Mangrove
+,N/A,Rock & Ice

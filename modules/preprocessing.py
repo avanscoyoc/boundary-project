@@ -12,6 +12,7 @@ Part 2, transects:
 - evenspace / transect / extract_coords: boundary points and perpendicular transects
 - make_pa_transects: one PA, in its own azimuthal equidistant projection, with the
   whole-line check
+- own_pid_sets: the PIDs that count as the same PA (merged, duplicate or nested)
 - flag_other_pa: flag transects whose outer points fall inside another PA
 - generate_transects: loop over PAs, write upload zips and transect_points.parquet
 """
@@ -580,6 +581,47 @@ def make_pa_transects(geom, src_crs, sample_dist, transect_unit, npts, buffer_di
     return result
 
 
+def own_pid_sets(kept_pids, removed_frames):
+    """
+    For each kept PA, the PIDs that count as the same PA for the other-PA flag: itself, plus
+    every PA merged into it or removed as its duplicate or nested PA, following chains
+    (e.g. nested -> duplicate -> kept).
+
+    Parameters
+    ----------
+    kept_pids : iterable of str
+        The PAs left after part 1 of script 02.
+    removed_frames : list of DataFrame
+        The removed PAs of each step, with WDPA_PID and replaced_by (the PA that replaced it,
+        or empty / None).
+
+    Returns
+    -------
+    dict
+        kept PID -> set of PIDs. A removed PA whose chain does not end at a kept PA (e.g. its
+        replacement was itself removed for another reason) is not added anywhere.
+    """
+    replaced = {}
+    for frame in removed_frames:
+        for pid, rep in zip(frame['WDPA_PID'], frame['replaced_by']):
+            if rep:
+                replaced[pid] = rep
+
+    def resolve(pid):
+        seen = set()
+        while pid in replaced and pid not in seen:   # `seen` guards against a cycle
+            seen.add(pid)
+            pid = replaced[pid]
+        return pid
+
+    own = {pid: {pid} for pid in kept_pids}
+    for pid in replaced:
+        root = resolve(pid)
+        if root in own:
+            own[root].add(pid)
+    return own
+
+
 def flag_other_pa(points, tree, tree_pids, own_pids):
     """
     Flag transects whose outer points fall inside another protected area.
@@ -652,7 +694,8 @@ def generate_transects(pas, src_crs, sample_dist, transect_unit, npts, buffer_di
     PAs are processed one at a time (make_pa_transects). Every ``chunk_size`` PAs
     that have at least one kept transect, the chunk is flagged for other-PA
     overlap, written as one upload zip ``{upload_prefix}{NNN}.zip``, and
-    appended to ``points_path`` (Parquet). Each upload file holds whole PAs only.
+    appended to ``points_path`` (Parquet, with the column ``asset``: the NNN of the PA's
+    upload file, read by script 04). Each upload file holds whole PAs only.
     Old upload zips with the same prefix are deleted first.
 
     If ``max_gap_pct_limit`` is set, a PA whose longest run of dropped
@@ -688,11 +731,14 @@ def generate_transects(pas, src_crs, sample_dist, transect_unit, npts, buffer_di
         nonlocal writer
         pts = pd.concat(chunk_frames, ignore_index=True)
         pts['in_other_pa'] = flag_other_pa(pts, tree, tree_pids, own_pids)
-        zip_path = upload_dir / f'{upload_prefix}{len(zip_files):03d}.zip'
+        asset = len(zip_files)                  # the upload file / Earth Engine asset NNN
+        zip_path = upload_dir / f'{upload_prefix}{asset:03d}.zip'
         write_upload_zip(pts, zip_path)
         zip_files.append(str(zip_path))
+        pts['asset'] = np.int16(asset)
         table = pa.Table.from_pandas(
-            pts[['WDPA_PID', 'transectID', 'pointID', 'lon', 'lat', 'in_other_pa']], preserve_index=False
+            pts[['WDPA_PID', 'transectID', 'pointID', 'lon', 'lat', 'in_other_pa', 'asset']],
+            preserve_index=False
         )
         if writer is None:
             writer = pq.ParquetWriter(points_path, table.schema)

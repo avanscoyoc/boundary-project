@@ -67,15 +67,15 @@ if unrecognized:
                      f"{config.GEE_EXPORT_PREFIX}NNN_part_N.csv exports of this run (Drive duplicates "
                      f"such as 'name (1).csv', or another run's files): {unrecognized[:5]}")
 
-# Expected points (script 02). Upload files hold CHUNK_SIZE whole PAs in order,
-# so a PA's asset number is its position in the file // CHUNK_SIZE.
+# Expected points (script 02), with each PA's upload file / asset number (column 'asset')
 print(f"\nReading {config.TRANSECT_POINTS}...")
-points = pd.read_parquet(config.TRANSECT_POINTS, columns=['WDPA_PID', 'transectID', 'pointID', 'in_other_pa'])
-pa_order = pd.unique(points['WDPA_PID'])
-asset_of_pa = pd.Series([f'{i // config.CHUNK_SIZE:03d}' for i in range(len(pa_order))], index=pa_order)
-points['asset'] = points['WDPA_PID'].map(asset_of_pa)
-n_generated = int((points['pointID'] == 0).sum())
-print(f"Expected: {len(points):,} points, {n_generated:,} transects, {len(pa_order):,} PAs, "
+points = pd.read_parquet(config.TRANSECT_POINTS,
+                         columns=['WDPA_PID', 'transectID', 'pointID', 'in_other_pa', 'asset'])
+points['asset'] = points['asset'].map(lambda a: f'{a:03d}')
+if (points.groupby('WDPA_PID')['asset'].nunique() > 1).any():
+    raise ValueError(f"{config.TRANSECT_POINTS}: a PA's points are in more than one asset")
+n_kept_by_02 = int((points['pointID'] == 0).sum())
+print(f"Expected: {len(points):,} points, {n_kept_by_02:,} transects, {points['WDPA_PID'].nunique():,} PAs, "
       f"{points['asset'].nunique()} assets")
 
 missing_assets = sorted(set(points['asset']) - set(asset_csvs))
@@ -91,7 +91,7 @@ metrics, missing = [], []
 completeness = {'points_expected': len(points), 'points_received': 0, 'points_missing': 0,
                 'points_unexpected': 0}
 per_year = {y: 0 for y in years}
-transect_counts = {'kept_by_02': n_generated, 'received': 0, 'missing_points': 0}
+transect_counts = {'kept_by_02': n_kept_by_02, 'received': 0, 'missing_points': 0}
 key = ['WDPA_PID', 'transectID', 'pointID']
 
 for asset, files in asset_csvs.items():
@@ -148,7 +148,7 @@ update_counts(config.PIPELINE_COUNTS, '04_ndvi', {
         'flagged_in_other_pa': int(flag_counts.get(1, 0)),
     },
     'per_year': {str(y): {'complete': per_year[y],
-                          'dropped_missing_data': n_generated - per_year[y]} for y in years},
+                          'dropped_missing_data': n_kept_by_02 - per_year[y]} for y in years},
     'pa_years': len(pa),
     'pas': int(pa['WDPA_PID'].nunique()),
 })

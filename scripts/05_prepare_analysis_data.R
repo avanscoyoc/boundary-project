@@ -29,20 +29,14 @@
 #                                          transect-years without data at all 5 points)
 # Coordinates are written only to data/05_analysis/, never to results/.
 
-source(file.path("modules", "r", "config.R"))
-for (f in setdiff(list.files(file.path("modules", "r"), "\\.R$", full.names = TRUE),
-                  file.path("modules", "r", "config.R"))) {
-  sys.source(f, envir = globalenv())   # corHaversine must live in globalenv()
-}
+source(file.path("modules", "r", "load.R"))   # config.R + every module of modules/r
 
-args <- commandArgs(trailingOnly = TRUE)
-out_root <- if (any(args == "--out")) args[which(args == "--out") + 1] else NULL
+out_root <- arg("--out")
 out <- if (is.null(out_root)) {
   list(dir = CFG$paths$analysis_dir, counts = CFG$paths$counts)
 } else {
   list(dir = file.path(out_root, "05_analysis"), counts = file.path(out_root, "analysis_counts.json"))
 }
-say <- function(...) cat(sprintf(...), "\n", sep = "")
 
 # ── 1. Inputs ────────────────────────────────────────────────────────────────
 m <- readr::read_csv(CFG$paths$pa_metrics, guess_max = 1e6, show_col_types = FALSE, progress = FALSE,
@@ -144,6 +138,8 @@ if (min(n_tr) != CFG$sensitivity$min_transects)
           "any analysed PA (", min(n_tr), "): check it before running 09", call. = FALSE)
 d$set_established <- d$STATUS_YR <= CFG$sensitivity$established_by  # analysed (imputed) year
 d$set_reported    <- !d$STATUS_YR_imputed
+d$set_coverage    <- polys$PCT_KEPT[match(d$WDPA_PID, polys$WDPA_PID)] >= CFG$sensitivity$min_pct_kept
+stopifnot(!anyNA(d$set_coverage))
 
 # ── 8. Write ─────────────────────────────────────────────────────────────────
 dir.create(out$dir, recursive = TRUE, showWarnings = FALSE)
@@ -181,7 +177,8 @@ counts <- list(
   pa_sets = list(main = nrow(d),
                  transects = list(n = sum(d$set_transects), min_transects = CFG$sensitivity$min_transects),
                  established_by = list(year = CFG$sensitivity$established_by, n = sum(d$set_established)),
-                 reported_year = sum(d$set_reported)),
+                 reported_year = sum(d$set_reported),
+                 coverage = list(min_pct_kept = CFG$sensitivity$min_pct_kept, n = sum(d$set_coverage))),
   transect_versions = as.list(vapply(stats::setNames(CFG$transects, CFG$transects),
                                      function(v) sum(ts[[paste0("ok_", v)]]), integer(1))),
   scaling = scaling)

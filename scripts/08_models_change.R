@@ -5,7 +5,10 @@
 #   A  primary: unweighted (Table SZ);
 #   B  precision-weighted: varFixed(~ v), v = se² + τ², τ² from A by the method of moments
 #      (Table SZ, sensitivity);
-#   non-spatial analogue of A → diagnostics (AICc, Moran's I).
+#   non-spatial analogue of A → diagnostics (AICc, Moran's I);
+#   Table SW: do the biomes differ in change? GLS of change on biome alone, with a residual
+#   variance per biome and the spatial correlation of A (range fixed at A's estimate);
+#   omnibus Wald F, all pairwise contrasts (Holm) and compact letters.
 # Reference levels: config ref (non-strict / Boreal Forest), fitted directly, so the
 # categorical rows of Table SZ are the coefficients of the fit.
 #
@@ -22,23 +25,17 @@
 # Inputs:  data/05_analysis/pa_level.csv (05), data/05_analysis/pa_trends.csv (07)
 # Outputs: <tables>/TableSZ_change_models.csv   long: continuous terms (per 1 SD) and categorical
 #                                               contrasts vs the reference, models A and B
+#          <tables>/TableSW_biome_{omnibus,contrasts,letters}.csv
 #          <diagnostics>/change_models_{coef,wald,contrasts,tau2,spatial_params,moran,
-#                         residuals,ranges}.csv
+#                         residuals,ranges}.csv, biome_change_gls_{means,sigma}.csv (Table SW fits)
 
-source(file.path("modules", "r", "config.R"))
-for (f in setdiff(list.files(file.path("modules", "r"), "\\.R$", full.names = TRUE),
-                  file.path("modules", "r", "config.R"))) {
-  sys.source(f, envir = globalenv())   # corHaversine must live in globalenv()
-}
+source(file.path("modules", "r", "load.R"))   # config.R + every module of modules/r
 
-args <- commandArgs(trailingOnly = TRUE)
-arg <- function(name) if (any(args == name)) args[which(args == name) + 1] else NULL
 pilot <- as.integer(arg("--pilot") %||% NA)
 cores <- as.integer(arg("--cores") %||% 2L)
 out_root <- arg("--out") %||% if (!is.na(pilot)) file.path(CFG$paths$analysis_dir, paste0("pilot_", pilot))
 out <- if (is.null(out_root)) list(tables = CFG$paths$tables, diagnostics = CFG$paths$diagnostics) else
   list(tables = file.path(out_root, "tables"), diagnostics = file.path(out_root, "diagnostics"))
-say <- function(...) cat(sprintf("[%s] %s\n", format(Sys.time(), "%H:%M:%S"), sprintf(...)))
 read <- function(name) {
   as.data.frame(readr::read_csv(file.path(CFG$paths$analysis_dir, name), guess_max = 1e5,
                                 col_types = readr::cols(WDPA_PID = "c", .default = readr::col_guess()),
@@ -97,6 +94,19 @@ tabs <- lapply(stats::setNames(metrics, metrics), function(m) {
 })
 stack <- function(field) { x <- do.call(rbind, lapply(tabs, `[[`, field)); rownames(x) <- NULL; x }
 
+# Table SW: biome comparison of change, spatial (range fixed at model A's estimate)
+sw <- lapply(stats::setNames(metrics, RESPONSE_LABELS[metrics]), function(m) {
+  cm <- fit_one(m)   # cached
+  cs_m <- spatial_setup(d, value = rg(cm$fits$A), fixed = TRUE, cache_dir = CFG$paths$cache_dir)
+  biome_gls(d, resp[[m]][["response"]], "BIOME_NAME", CFG$biome_order, CFG$spatial$max_iter,
+            correlation = cs_m, cache_dir = CFG$paths$cache_dir, label = paste(m, "biome GLS (Table SW)"))
+})
+sw_stack <- function(field) {
+  x <- do.call(rbind, lapply(names(sw), function(m) cbind(metric = m, sw[[m]][[field]], stringsAsFactors = FALSE)))
+  rownames(x) <- NULL
+  x
+}
+
 # ── 4. Write ─────────────────────────────────────────────────────────────────
 for (dir in out) dir.create(dir, recursive = TRUE, showWarnings = FALSE)
 write <- function(field, dir, name) readr::write_csv(stack(field), file.path(dir, name), na = "")
@@ -109,6 +119,14 @@ write("spatial_params", out$diagnostics, "change_models_spatial_params.csv")
 write("moran",          out$diagnostics, "change_models_moran.csv")
 write("residuals",      out$diagnostics, "change_models_residuals.csv")
 write("ranges",         out$diagnostics, "change_models_ranges.csv")   # fixed ranges of 09
+readr::write_csv(sw_stack("omnibus"), file.path(out$tables, "TableSW_biome_omnibus.csv"), na = "")
+readr::write_csv(sw_stack("pairs"), file.path(out$tables, "TableSW_biome_contrasts.csv"), na = "")
+readr::write_csv(sw_stack("letters"), file.path(out$tables, "TableSW_biome_letters.csv"), na = "")
+readr::write_csv(sw_stack("means"), file.path(out$diagnostics, "biome_change_gls_means.csv"), na = "")
+readr::write_csv(sw_stack("sigma"), file.path(out$diagnostics, "biome_change_gls_sigma.csv"), na = "")
+om <- sw_stack("omnibus")
+for (i in seq_len(nrow(om))) say("%s biome GLS (Table SW, spatial): F(%d, %d) = %.2f, p = %.3g", om$metric[i],
+                                 om$numDF[i], om$denDF[i], om$F_value[i], om$p_value[i])
 
 sp <- stack("spatial_params")
 for (i in seq_len(nrow(sp))) say("%s model A: range %.2f km (%.2f–%.2f), ΔAICc (non-spatial − spatial) %.1f, pseudo-R² %.3f",

@@ -9,9 +9,9 @@
 #   (scaling.csv from 05), with its SE (for the precision weights of 08);
 #   percentile-bootstrap means of change per biome and for all PAs (Fig. 4A), area-weighted means
 #   and Sen-slope means (Table SV); fixed seeds (config boot$seeds), biomes in config
-#   biome_order;
-#   GLS of change on biome with biome-specific variances, Holm-adjusted pairwise contrasts and
-#   letters (Table SW); % change over the record (diagnostic);
+#   biome_order. The bootstraps resample PAs as independent: descriptive summaries (the spatial
+#   tests of biome differences in change are 08's: Table SZ and Table SW);
+#   % change over the record (diagnostic);
 #   the Fig. 4B case-study PAs (config case_studies): their annual series, trends and % change
 #   of their own mean;
 #   lag-1 autocorrelation of each PA's OLS trend residuals (diagnostic).
@@ -29,30 +29,23 @@
 #                                                    area-weighted, % per class, Yue–Pilon
 #                                                    agreement, Sen-slope change (unrounded)
 #          <tables>/TableSV_slope_correlation.csv
-#          <tables>/TableSW_biome_{omnibus,contrasts,letters}.csv
 #          <tables>/fig4a_change_summary.csv, fig4a_boot_replicates.csv
 #          <tables>/fig4b_case_series.csv (one row per case PA × year), fig4b_case_pas.csv (one
 #                         row per case PA: trends, change over the record, % of its own mean)
 #          <diagnostics>/trend_{class_counts,yuepilon_agreement,yuepilon_crosstab,
-#                         percent_change_biome}.csv, biome_change_gls_{means,sigma}.csv,
+#                         percent_change_biome}.csv,
 #                         trend_residual_autocorrelation{,_summary}.csv (per PA; per biome and
 #                         all PAs)
 
-source(file.path("modules", "r", "config.R"))
-for (f in setdiff(list.files(file.path("modules", "r"), "\\.R$", full.names = TRUE),
-                  file.path("modules", "r", "config.R"))) {
-  sys.source(f, envir = globalenv())   # corHaversine must live in globalenv()
-}
+source(file.path("modules", "r", "load.R"))   # config.R + every module of modules/r
 
-args <- commandArgs(trailingOnly = TRUE)
-out_root <- if (any(args == "--out")) args[which(args == "--out") + 1] else NULL
+out_root <- arg("--out")
 out <- if (is.null(out_root)) {
   list(data = CFG$paths$analysis_dir, tables = CFG$paths$tables, diagnostics = CFG$paths$diagnostics)
 } else {
   list(data = file.path(out_root, "05_analysis"), tables = file.path(out_root, "tables"),
        diagnostics = file.path(out_root, "diagnostics"))
 }
-say <- function(...) cat(sprintf("[%s] %s\n", format(Sys.time(), "%H:%M:%S"), sprintf(...)))
 read <- function(name, ...) {
   as.data.frame(readr::read_csv(file.path(CFG$paths$analysis_dir, name), guess_max = 1e5,
                                 show_col_types = FALSE, progress = FALSE, ...))
@@ -133,20 +126,13 @@ reps <- data.frame(metric = reps$metric, BIOME_NAME = reps$BIOME_NAME, rep = rep
                    change_z = reps$mean * k[reps$metric], stringsAsFactors = FALSE)
 say("bootstraps: %d resamples per group", CFG$boot$R)
 
-# ── 4. Classes, agreement, correlation, biome GLS, % change ──────────────────
+# ── 4. Classes, agreement, correlation, % change ─────────────────────────────
 groups <- c(CFG$biome_order, CFG$pooled_label)
 cc <- class_counts(d, cols("trend_"), "BIOME_NAME", CFG$biome_order, CFG$trend$levels, CFG$pooled_label)
 pairs <- stats::setNames(lapply(metrics, function(m) c(paste0("trend_", m), paste0("trend_", m, "_zyp"))), labels)
 ag <- trend_agreement(d, pairs, "BIOME_NAME", CFG$biome_order, CFG$trend$levels, CFG$pooled_label)
 cor_tab <- slope_correlation(d, "slope_extent", "slope_intensity", "BIOME_NAME", CFG$biome_order,
                              CFG$pooled_label)
-gls <- lapply(stats::setNames(paste0("change_", metrics, "_z"), labels), function(r)
-  biome_gls(d, r, "BIOME_NAME", CFG$biome_order, CFG$spatial$max_iter))
-gstack <- function(field) {
-  x <- do.call(rbind, lapply(names(gls), function(m) cbind(metric = m, gls[[m]][[field]], stringsAsFactors = FALSE)))
-  rownames(x) <- NULL
-  x
-}
 pct <- percent_change(rbind(B$biome$summary, B$pooled$summary), d, cols("slope_"),
                       stats::setNames(paste0(CFG$responses, "_mean"), labels), "BIOME_NAME", CFG$n_span,
                       CFG$pooled_label)
@@ -180,9 +166,6 @@ w_csv(d[c("WDPA_PID", "BIOME_NAME", setdiff(names(d), c("WDPA_PID", "BIOME_NAME"
       out$data, "pa_trends.csv")
 w_csv(sv, out$tables, "TableSV_biome_trend_summary.csv")
 w_csv(cor_tab, out$tables, "TableSV_slope_correlation.csv")
-w_csv(gstack("omnibus"), out$tables, "TableSW_biome_omnibus.csv")
-w_csv(gstack("pairs"), out$tables, "TableSW_biome_contrasts.csv")
-w_csv(gstack("letters"), out$tables, "TableSW_biome_letters.csv")
 w_csv(main, out$tables, "fig4a_change_summary.csv")
 w_csv(reps, out$tables, "fig4a_boot_replicates.csv")
 w_csv(case_ser, out$tables, "fig4b_case_series.csv")
@@ -191,14 +174,9 @@ w_csv(cc, out$diagnostics, "trend_class_counts.csv")
 w_csv(ag$agreement, out$diagnostics, "trend_yuepilon_agreement.csv")
 w_csv(ag$crosstab, out$diagnostics, "trend_yuepilon_crosstab.csv")
 w_csv(pct, out$diagnostics, "trend_percent_change_biome.csv")
-w_csv(gstack("means"), out$diagnostics, "biome_change_gls_means.csv")
-w_csv(gstack("sigma"), out$diagnostics, "biome_change_gls_sigma.csv")
 w_csv(ac, out$diagnostics, "trend_residual_autocorrelation.csv")
 w_csv(ac_sum, out$diagnostics, "trend_residual_autocorrelation_summary.csv")
 
-om <- gstack("omnibus")
-for (i in seq_len(nrow(om))) say("%s biome GLS: F(%d, %d) = %.2f, p = %.3g", om$metric[i], om$numDF[i],
-                                 om$denDF[i], om$F_value[i], om$p_value[i])
 pm <- main[main$BIOME_NAME == CFG$pooled_label, ]
 for (i in seq_len(nrow(pm))) say("%s, all PAs: mean change %.3f (%.3f, %.3f) SD", pm$metric[i],
                                  pm$mean_change_z[i], pm$ci_lo_z[i], pm$ci_hi_z[i])

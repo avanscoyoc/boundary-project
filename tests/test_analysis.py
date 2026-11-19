@@ -8,8 +8,32 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import numpy as np
 import pandas as pd
 
-from modules.analysis import (cohens_d, _grouped_cohens_d, PT_COLS, recategorize_biome,
-                              find_asset_csvs)
+from modules.analysis import _grouped_cohens_d, PT_COLS, recategorize_biome, find_asset_csvs
+
+
+# Reference implementation of Cohen's d; pa_year_metrics computes the same values with
+# grouped statistics (_grouped_cohens_d).
+def cohens_d(x, y):
+    """
+    Cohen's d between two samples, with pooled standard deviation ((n-1) df).
+
+    Returns NaN if either sample has < 2 values or the pooled SD is 0.
+    """
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    x = x[~np.isnan(x)]
+    y = y[~np.isnan(y)]
+
+    nx, ny = len(x), len(y)
+    if nx < 2 or ny < 2:
+        return np.nan
+
+    dof = nx + ny - 2
+    pooled_std = np.sqrt(((nx-1)*np.var(x, ddof=1) + (ny-1)*np.var(y, ddof=1)) / dof)
+    if pooled_std == 0 or np.isnan(pooled_std):
+        return np.nan
+
+    return (np.mean(x) - np.mean(y)) / pooled_std
 
 
 def test_grouped_cohens_d_matches_reference():

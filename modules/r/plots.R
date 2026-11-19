@@ -30,12 +30,15 @@ IUCN_LEVELS <- c("strict", "non-strict", "unknown")
 IUCN_LABELS <- c("Strict", "Non-strict", "Unknown")
 IUCN_COLORS <- c("Strict" = "#99000d", "Non-strict" = "#e5736b", "Unknown" = "#8c8c8c")
 IUCN_LTYPES <- c("Strict" = "solid", "Non-strict" = "dashed", "Unknown" = "dotted")
-# Fig. 3 interaction panels: fixed axes, the same for every panel of a response.
+# Fig. 3 interaction panels: fixed axes, the same for every panel of a response. Set from the
+# results, so that panels of one response compare directly; fig3_axes() warns when a line or CI
+# falls outside them (then widen them here).
 FIG3_X <- c(0, 0.8)
 FIG3_Y <- list(extent = c(0.5, 0.65), intensity = c(0.5, 1))
 FIG3_Y_STEP <- c(extent = 0.05, intensity = 0.1)
 # Fig. 4B: edge extent axis (left); edge intensity (right) is rescaled so that its range over
-# the case PAs spans extent's.
+# the case PAs spans extent's. Set from the case PAs' series; .fig4b_long() warns when a value
+# falls outside.
 FIG4B_Y <- c(0.30, 0.98)
 FIG4B_Y_BREAKS <- c(0.30, 0.60, 0.90)
 FIG4B_X_BREAKS <- c(2003, 2010, 2017, 2025)
@@ -68,34 +71,23 @@ p_stars <- function(p, alpha = 0.05) {
 
 #' Rows of Fig. 3A: additive-model effects in response-SD units.
 #'
-#' Continuous terms from `coef` (coef_table of the additive models). Categorical rows: from
-#' `contrasts` (ref_contrasts tables: each level vs a reference) if given, otherwise the IUCN_group
-#' and BIOME_NAME coefficients of `coef` (each level vs the model's reference level, which must
-#' then be given as `ref` = list(iucn, biome)). Estimates and CIs are divided by the response SD
-#' (`response_sd`: response, sd_response). `p_col` = the p-value column of the contrasts.
-fig3a_rows <- function(coef, response_sd, biome_order, contrasts = NULL, ref = NULL,
-                       p_col = "p.value") {
+#' Continuous terms from `coef` (coef_table of the additive models). Categorical rows: the
+#' IUCN_group and BIOME_NAME coefficients of `coef`, each level vs the model's reference level
+#' `ref` = list(iucn, biome). Estimates and CIs are divided by the response SD (`response_sd`:
+#' response, sd_response).
+fig3a_rows <- function(coef, response_sd, biome_order, ref) {
   cont <- coef[coef$term %in% names(TERM_LABELS), ]
   cont <- data.frame(response = cont$response, term_label = unname(TERM_LABELS[cont$term]),
                      estimate = cont$estimate, conf.low = cont$conf.low,
                      conf.high = cont$conf.high, p = cont$p.value, stringsAsFactors = FALSE)
-  if (!is.null(contrasts)) {
-    cat_rows <- data.frame(response = contrasts$response, factor = contrasts$factor,
-                           level = contrasts$level, reference = contrasts$reference,
-                           estimate = contrasts$estimate, conf.low = contrasts$lower.CL,
-                           conf.high = contrasts$upper.CL, p = contrasts[[p_col]],
-                           stringsAsFactors = FALSE)
-  } else {
-    stopifnot(!is.null(ref))
-    k <- grepl("^(IUCN_group|BIOME_NAME)", coef$term) & !grepl(":", coef$term)
-    cc <- coef[k, ]
-    fac <- ifelse(startsWith(cc$term, "IUCN_group"), "IUCN_group", "BIOME_NAME")
-    cat_rows <- data.frame(response = cc$response, factor = fac,
-                           level = substring(cc$term, nchar(fac) + 1),
-                           reference = ifelse(fac == "IUCN_group", ref$iucn, ref$biome),
-                           estimate = cc$estimate, conf.low = cc$conf.low,
-                           conf.high = cc$conf.high, p = cc$p.value, stringsAsFactors = FALSE)
-  }
+  k <- grepl("^(IUCN_group|BIOME_NAME)", coef$term) & !grepl(":", coef$term)
+  cc <- coef[k, ]
+  fac <- ifelse(startsWith(cc$term, "IUCN_group"), "IUCN_group", "BIOME_NAME")
+  cat_rows <- data.frame(response = cc$response, factor = fac,
+                         level = substring(cc$term, nchar(fac) + 1),
+                         reference = ifelse(fac == "IUCN_group", ref$iucn, ref$biome),
+                         estimate = cc$estimate, conf.low = cc$conf.low,
+                         conf.high = cc$conf.high, p = cc$p.value, stringsAsFactors = FALSE)
   ref_iucn  <- unique(cat_rows$reference[cat_rows$factor == "IUCN_group"])
   ref_biome <- unique(cat_rows$reference[cat_rows$factor == "BIOME_NAME"])
   stopifnot(length(ref_iucn) == 1, length(ref_biome) == 1)

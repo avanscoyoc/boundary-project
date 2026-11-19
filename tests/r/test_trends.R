@@ -136,6 +136,29 @@ test_that("biome_gls: group means, contrasts, letters and sigma", {
                    strsplit(paste(r2$letters$letters[1:2], collapse = ""), "")[[1]]))
 })
 
+test_that("biome_gls with a fixed spatial correlation (Table SW, script 08)", {
+  d <- sim_pa(150, seed = 6)
+  d$y <- d$s1 * 100
+  set.seed(7); d$lon <- runif(nrow(d), -60, 60); d$lat <- runif(nrow(d), -40, 40)
+  r0 <- biome_gls(d, "y", "group", c("B", "A", "C"))
+  # a negligible range: independent residuals, so the same fit as the non-spatial one
+  tiny <- spatial_setup(d, value = 1e-6, fixed = TRUE)
+  r1 <- biome_gls(d, "y", "group", c("B", "A", "C"), correlation = tiny)
+  expect_equal(r1$means$emmean, r0$means$emmean, tolerance = 1e-6)
+  expect_equal(r1$pairs$p.value, r0$pairs$p.value, tolerance = 1e-4)
+  # a real range: still the same tables, and the cache returns the same fit
+  cache <- tempfile(); on.exit(unlink(cache, recursive = TRUE))
+  cs <- spatial_setup(d, value = 2000, fixed = TRUE)
+  r2 <- biome_gls(d, "y", "group", c("B", "A", "C"), correlation = cs, cache_dir = cache)
+  r3 <- biome_gls(d, "y", "group", c("B", "A", "C"), correlation = cs, cache_dir = cache)
+  expect_identical(names(r2), names(r0))
+  expect_identical(r2$pairs$contrast, c("B - A", "B - C", "A - C"))
+  expect_equal(r3, r2)
+  # rows must line up with the correlation structure: no missing responses allowed
+  d$y[1] <- NA
+  expect_error(biome_gls(d, "y", "group", c("B", "A", "C"), correlation = cs))
+})
+
 test_that("slope_correlation equals cor.test, pooled first", {
   d <- sim_pa(); d$s2 <- d$s2 + d$s1; d$s2[5] <- NA
   r <- slope_correlation(d, "s1", "s2", "group", c("A", "B", "C"), pooled_label = "All")

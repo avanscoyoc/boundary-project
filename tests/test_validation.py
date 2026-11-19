@@ -239,8 +239,53 @@ def test_biome_from_num_and_split_key():
     assert list(pid) == ['314990_A', '100017'] and list(cand) == [2, 5]
 
 
+def test_script_04_path_on_synthetic_exports(tmp_path):
+    """Earth Engine-style CSVs -> script 04's metrics, with known answers; the validation path
+    (displaced_metrics) gives the same PA-years. Runs without pipeline data."""
+    from modules.analysis import (find_asset_csvs, read_asset_csvs, build_transect_years,
+                                  pa_year_metrics, POINT_IDS)
+    years = [2003, 2004]
+    rows = []
+    # PA "A": transects 1-2 are edges (boundary highest on both sides), 3 is not; transect 3 has
+    # water at its outer point. PA "B": 2 edge transects; one boundary value masked in 2004.
+    spec = {('A', 1): (1.0, 0.5), ('A', 2): (1.2, 0.6), ('A', 3): (0.1, 0.5),
+            ('B', 1): (0.9, 0.3), ('B', 2): (1.1, 0.4)}
+    for (pid, t), (p0, other) in spec.items():
+        for k in POINT_IDS:
+            v = {str(y): (p0 if k == 0 else other + 0.01 * k) + 0.001 * (y - 2003) for y in years}
+            if (pid, t, k) == ('B', 2, 0):
+                v['2004'] = -9999                                       # masked pixel
+            rows.append({'WDPA_PID': pid, 'transectID': t, 'pointID': k,
+                         'max_extent': int((pid, t, k) == ('A', 3, 2)), 'gHM': 0.2, 'elevation': 100.0,
+                         'terrain_slope': 1.0, **v})
+    df_all = pd.DataFrame(rows)
+    df_all.iloc[:12].to_csv(tmp_path / 'ndvi_gradient_000_part_0.csv', index=False)  # two parts, as exported
+    df_all.iloc[12:].to_csv(tmp_path / 'ndvi_gradient_000_part_1.csv', index=False)
+    groups, other = find_asset_csvs(tmp_path, 'ndvi_gradient_')
+    assert list(groups) == ['000'] and not other
+    df = read_asset_csvs(groups['000'], years)
+    assert df['2004'].isna().sum() == 1                                 # -9999 -> NaN
+
+    flags = pd.DataFrame({'WDPA_PID': ['A', 'A', 'A', 'B', 'B'], 'transectID': [1, 2, 3, 1, 2],
+                          'in_other_pa': [0, 0, 0, 0, 0]})
+    ty, counts = build_transect_years(df, years, flags)
+    m = pa_year_metrics(ty).sort_values(['WDPA_PID', 'year']).reset_index(drop=True)
+    assert m[['WDPA_PID', 'year']].values.tolist() == [['A', 2003], ['A', 2004], ['B', 2003], ['B', 2004]]
+    np.testing.assert_array_equal(m['n_trnst'], [3, 3, 2, 1])            # B 2004: transect 2 incomplete
+    np.testing.assert_allclose(m['edge_extent'], [2 / 3, 2 / 3, 1, 1])
+    np.testing.assert_allclose(m['water_extent_pct'], [100 / 3, 100 / 3, 0, 0])
+    # without water transects A has only its two edge transects
+    np.testing.assert_allclose(m.loc[m['WDPA_PID'] == 'A', 'edge_extent_nowater'], [1, 1])
+    assert (m.loc[:1, 'edge_intensity'] > 0).all() and np.isnan(m.loc[3, 'edge_intensity'])  # 1 edge transect: no d
+
+    got = displaced_metrics(df, years)
+    for col in ['n_trnst', 'edge_extent', 'edge_intensity', 'water_extent_pct']:
+        np.testing.assert_allclose(got[col].to_numpy(dtype=float), m[col].to_numpy(dtype=float), rtol=1e-12)
+
+
 def test_displaced_metrics_reproduce_script_04():
-    """With no displacement, the validation metric path gives 04's PA-year metrics exactly."""
+    """With no displacement, the validation metric path gives 04's PA-year metrics exactly, on
+    the real exports (skips without pipeline data; the synthetic test above always runs)."""
     from modules.analysis import read_asset_csvs
     # an asset's export is ordered by point position, so a PA's points span all its parts
     files = sorted(config.GEE_CSV_DIR.glob(f'{config.GEE_EXPORT_PREFIX}000_part_*.csv'))

@@ -48,7 +48,7 @@ from modules import config
 from modules.counts import update_counts
 from modules.preprocessing import (
     drop_excluded_pids, fill_holes, resolve_overlaps, merge_same_name, add_shape_metrics,
-    generate_transects
+    own_pid_sets, generate_transects
 )
 
 # Attribute columns kept in pas_removed.gpkg (plus step, reason, replaced_by)
@@ -140,28 +140,9 @@ print("=" * 80)
 tree = shapely.STRtree(np.asarray(wdpa_ll.geometry.values, dtype=object))
 tree_pids = wdpa_ll['WDPA_PID'].to_numpy()
 
-# PIDs that count as the same PA: itself, plus PAs merged into it or removed as
-# its duplicate or nested PA (following chains, e.g. nested -> duplicate -> kept)
-replaced = {}
-for frame in removed_frames:
-    for pid, rep in zip(frame['WDPA_PID'], frame['replaced_by']):
-        if rep:
-            replaced[pid] = rep
-
-
-def resolve(pid):
-    seen = set()
-    while pid in replaced and pid not in seen:
-        seen.add(pid)
-        pid = replaced[pid]
-    return pid
-
-
-own_pids = {pid: {pid} for pid in pas['WDPA_PID']}
-for pid in replaced:
-    root = resolve(pid)
-    if root in own_pids:
-        own_pids[root].add(pid)
+# PIDs that count as the same PA for the other-PA flag: itself, plus PAs merged into it or
+# removed as its duplicate or nested PA (following chains, e.g. nested -> duplicate -> kept)
+own_pids = own_pid_sets(pas['WDPA_PID'], removed_frames)
 
 print(f"\nGenerating transects for {len(pas):,} PAs...")
 print(f"  Boundary point spacing: {config.BOUNDARY_SPACING} m")

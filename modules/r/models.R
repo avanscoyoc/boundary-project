@@ -179,12 +179,11 @@ fit_mean_models <- function(data, response, correlation, method = "REML", max_it
   )
 }
 
-#' All tables of one response's mean models. `fits` from fit_mean_models();
-#' `contrast_ref` = list(iucn, biome) for ref_contrasts() (NULL = skip); `moran` = weights from
+#' All tables of one response's mean models. `fits` from fit_mean_models(); `moran` = weights from
 #' moran_weights() (NULL = skip) with `moran_settings` = list(nsim, seed);
 #' `pred_by` = factors to predict across HMI for.
 mean_model_tables <- function(fits, data, response, label, hmi_mean, hmi_sd,
-                              contrast_ref = NULL, moran = NULL, moran_settings = NULL,
+                              moran = NULL, moran_settings = NULL,
                               pred_by = c("IUCN_group", "BIOME_NAME")) {
   y <- data[[response]]
   s_sp <- hmi_slopes(fits$full, data, label, "spatial")
@@ -202,10 +201,6 @@ mean_model_tables <- function(fits, data, response, label, hmi_mean, hmi_sd,
     response_sd = data.frame(response = label, n = length(y), mean_response = mean(y),
                              sd_response = stats::sd(y))
   )
-  if (!is.null(contrast_ref)) {
-    out$contrasts_add <- rbind(ref_contrasts(fits$add, data, "IUCN_group", contrast_ref$iucn, label),
-                               ref_contrasts(fits$add, data, "BIOME_NAME", contrast_ref$biome, label))
-  }
   if (!is.null(moran)) {
     m1 <- moran_residuals(stats::resid(fits$full_nosp, type = "pearson"), moran,
                           moran_settings$nsim, moran_settings$seed, paste0(label, ": non-spatial"))

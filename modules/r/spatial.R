@@ -34,6 +34,15 @@ jitter_duplicates <- function(d, jitter_deg, seed, tries = 10L) {
   file.path(cache_dir, sprintf("%s_%s.rds", prefix, rlang::hash(key_obj)))
 }
 
+#' saveRDS() to a temporary file next to `path`, then rename it: a run killed while writing
+#' (out of memory, full disk) leaves no truncated cache file for the next run to read.
+save_atomic <- function(x, path) {
+  tmp <- paste0(path, ".tmp", Sys.getpid())
+  saveRDS(x, tmp)
+  if (!file.rename(tmp, path)) { unlink(tmp); stop("could not write ", path) }
+  invisible(path)
+}
+
 #' Initialised corHaversine structure (exponential, great-circle km) for the rows of `coords`.
 #'
 #' `value` is the range in km: the optimiser start (fixed = FALSE) or the fixed range
@@ -58,7 +67,7 @@ spatial_setup <- function(coords, value, nugget = FALSE, fixed = FALSE, mimic = 
   attr(cs, "cache_key") <- basename(path %||% "")
   if (!is.null(path)) {
     dir.create(cache_dir, recursive = TRUE, showWarnings = FALSE)
-    saveRDS(cs, path)
+    save_atomic(cs, path)
   }
   cs
 }
@@ -111,7 +120,7 @@ fit_gls_cached <- function(formula, data, correlation = NULL, weights = NULL, me
   attr(m, "fit_minutes") <- mins
   if (!is.null(path)) {
     dir.create(cache_dir, recursive = TRUE, showWarnings = FALSE)
-    saveRDS(m, path)
+    save_atomic(m, path)
   }
   m
 }

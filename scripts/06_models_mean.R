@@ -36,20 +36,13 @@
 #          <diagnostics>/mean_models_ranges.csv           estimated range of each spatial fit (09
 #                                                         fixes the sensitivity refits at these)
 
-source(file.path("modules", "r", "config.R"))
-for (f in setdiff(list.files(file.path("modules", "r"), "\\.R$", full.names = TRUE),
-                  file.path("modules", "r", "config.R"))) {
-  sys.source(f, envir = globalenv())   # corHaversine must live in globalenv()
-}
+source(file.path("modules", "r", "load.R"))   # config.R + every module of modules/r
 
-args <- commandArgs(trailingOnly = TRUE)
-arg <- function(name) if (any(args == name)) args[which(args == name) + 1] else NULL
 pilot <- as.integer(arg("--pilot") %||% NA)
 cores <- as.integer(arg("--cores") %||% 2L)
 out_root <- arg("--out") %||% if (!is.na(pilot)) file.path(CFG$paths$analysis_dir, paste0("pilot_", pilot))
 out <- if (is.null(out_root)) list(tables = CFG$paths$tables, diagnostics = CFG$paths$diagnostics) else
   list(tables = file.path(out_root, "tables"), diagnostics = file.path(out_root, "diagnostics"))
-say <- function(...) cat(sprintf("[%s] %s\n", format(Sys.time(), "%H:%M:%S"), sprintf(...)))
 
 # ── 1. Model data ────────────────────────────────────────────────────────────
 pa <- as.data.frame(readr::read_csv(file.path(CFG$paths$analysis_dir, "pa_level.csv"),
@@ -99,7 +92,7 @@ tabs <- lapply(stats::setNames(names(resp_cols), names(resp_cols)), function(r) 
   fits <- fit_mean_models(d, resp_cols[[r]], cs, CFG$spatial$method, CFG$spatial$max_iter,
                           cache_dir = CFG$paths$cache_dir, label = r)
   say("%s: tables", r)
-  tb <- mean_model_tables(fits, d, resp_cols[[r]], r, hmi$mean, hmi$sd, contrast_ref = NULL, moran = w,
+  tb <- mean_model_tables(fits, d, resp_cols[[r]], r, hmi$mean, hmi$sd, moran = w,
                           moran_settings = list(nsim = CFG$spatial$moran_nsim, seed = CFG$spatial$moran_seed),
                           pred_by = c("IUCN_group", "BIOME_NAME"))
   rg <- function(m) stats::coef(m$modelStruct$corStruct, unconstrained = FALSE)[["range"]]

@@ -8,7 +8,7 @@ Edge metric functions (script 04).
 - pa_year_metrics: PA-year edge extent, Cohen's d values, and edge intensity, for
   four transect subsets (all, no water, no other-PA, neither)
 - missing_transects: transects with a missing value in any year
-- cohens_d (reference implementation, for the tests), recategorize_biome
+- recategorize_biome
 
 Per-PA trends are computed in R (script 07) on the analysis set.
 
@@ -41,31 +41,6 @@ VERSIONS = {
 # Earth Engine CSV part names: {prefix}{asset}_part_{i}[_{retry}].csv, e.g.
 # ndvi_gradient_003_part_7.csv or ndvi_gradient_003_part_7_01.csv (a retried half)
 _CSV_SUFFIX = r'(\d{3})_part_(\d+)(?:_(\d{2}))?\.csv'
-
-
-def cohens_d(x, y):
-    """
-    Cohen's d between two samples, with pooled standard deviation ((n-1) df).
-
-    Reference implementation; pa_year_metrics computes the same values with
-    grouped statistics. Returns NaN if either sample has < 2 values or the
-    pooled SD is 0.
-    """
-    x = np.asarray(x, dtype=float)
-    y = np.asarray(y, dtype=float)
-    x = x[~np.isnan(x)]
-    y = y[~np.isnan(y)]
-
-    nx, ny = len(x), len(y)
-    if nx < 2 or ny < 2:
-        return np.nan
-
-    dof = nx + ny - 2
-    pooled_std = np.sqrt(((nx-1)*np.var(x, ddof=1) + (ny-1)*np.var(y, ddof=1)) / dof)
-    if pooled_std == 0 or np.isnan(pooled_std):
-        return np.nan
-
-    return (np.mean(x) - np.mean(y)) / pooled_std
 
 
 def find_asset_csvs(csv_dir, prefix):
@@ -302,53 +277,29 @@ def pa_year_metrics(ty):
     return metrics.join(out, how='left').reset_index()
 
 
+def biome_groups():
+    """
+    The biome table (config.BIOME_GROUPS_CSV): BIOME_NUM (RESOLVE number, empty for "N/A"),
+    BIOME_NAME (RESOLVE name), group. Read as text, so "N/A" stays a name.
+    """
+    from modules import config
+    return pd.read_csv(config.BIOME_GROUPS_CSV, dtype=str, keep_default_na=False)
+
+
+_BIOME_GROUP = dict(zip(biome_groups()['BIOME_NAME'], biome_groups()['group']))
+
+
 def recategorize_biome(biome):
     """
-    Recategorize RESOLVE biomes into 8 groups, by vegetation structure and then temperature:
-    Tropical Grassland (with flooded grasslands), Temperate & Montane Grassland, Tundra,
-    Desert, Mediterranean, Tropical Forest, Temperate Forest, Boreal Forest; plus Mangrove
-    and Rock & Ice, which the analysis excludes.
-
-    RESOLVE's "N/A" biome (its Rock & Ice areas, e.g. Greenland, the Himalaya)
-    becomes "Rock & Ice". "Unknown" (no intersecting ecoregion) and missing
-    values become None.
-
-    Parameters
-    ----------
-    biome : str
-        Original RESOLVE Ecoregions biome name
-
-    Returns
-    -------
-    str
-        Recategorized biome name
+    Group a RESOLVE Ecoregions 2017 biome name (modules/biome_groups.csv): 8 groups, by
+    vegetation structure and then temperature (Tropical Grassland, with flooded grasslands;
+    Temperate & Montane Grassland; Tundra; Desert; Mediterranean; Tropical Forest; Temperate
+    Forest; Boreal Forest), plus Mangrove and Rock & Ice (RESOLVE's "N/A"), which the analysis
+    excludes. "Unknown" (no intersecting ecoregion) and missing values give None; a name not in
+    the table is returned unchanged.
     """
-    if biome == "N/A":
-        return "Rock & Ice"
-    if pd.isna(biome) or biome in ("Unknown", "None", ""):
+    if not isinstance(biome, str) and pd.isna(biome):
         return None
-    if biome == "Mangroves":
-        return "Mangrove"
-    elif biome in ["Tundra"]:
-        return "Tundra"
-    elif biome in ["Deserts & Xeric Shrublands"]:
-        return "Desert"
-    elif biome in ["Tropical & Subtropical Coniferous Forests",
-                   "Tropical & Subtropical Moist Broadleaf Forests",
-                   "Tropical & Subtropical Dry Broadleaf Forests"]:
-        return "Tropical Forest"
-    elif biome in ["Temperate Conifer Forests",
-                   "Temperate Broadleaf & Mixed Forests"]:
-        return "Temperate Forest"
-    elif biome in ["Mediterranean Forests, Woodlands & Scrub"]:
-        return "Mediterranean"
-    elif biome in ["Boreal Forests/Taiga"]:
-        return "Boreal Forest"
-    elif biome in ["Tropical & Subtropical Grasslands, Savannas & Shrublands",
-                   "Flooded Grasslands & Savannas"]:
-        return "Tropical Grassland"
-    elif biome in ["Temperate Grasslands, Savannas & Shrublands",
-                   "Montane Grasslands & Shrublands"]:
-        return "Temperate & Montane Grassland"
-    else:
-        return biome
+    if biome in ("Unknown", "None", ""):
+        return None
+    return _BIOME_GROUP.get(biome, biome)

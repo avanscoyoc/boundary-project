@@ -77,7 +77,7 @@ CFG <- local({
     # ── Trends ───────────────────────────────────────────────────────────────
     trend = list(
       fdr    = 0.05,                                  # Benjamini–Hochberg across PAs, per metric
-      levels = c("increase", "no_trend", "decrease")  # the same codes as Python's trend_* columns
+      levels = c("increase", "no_trend", "decrease")  # trend classes of 07 (pa_trends.csv trend_*)
     ),
 
     # ── Analysis data (05) ───────────────────────────────────────────────────
@@ -110,8 +110,10 @@ CFG <- local({
 
     # ── Fig. 4B case studies (07 tables, 10 figures and the KML) ─────────────
     # One PA per panel, top to bottom. `label`: panel title; `expect`: the trend classes
-    # (extent/intensity) the panel illustrates (07 warns if they differ). Pô-Nazinga-Sissili
-    # includes Sissili (28556), merged into the complex by script 02.
+    # (extent/intensity) the panel illustrates (07 warns if they differ). The PAs were chosen
+    # as examples after seeing the results, so after any rerun check 07's warnings (and 07
+    # stops if a case PA is no longer analysed). Pô-Nazinga-Sissili includes Sissili (28556),
+    # merged into the complex by script 02.
     case_studies = data.frame(
       WDPA_PID = c("555705201", "36531", "34032", "19667"),
       label    = c("Pô-Nazinga-Sissili, Burkina Faso · Trop. Grass.",
@@ -156,6 +158,9 @@ CFG <- local({
       # transects (the fewest transects of any analysed PA, analysis_counts.json final_set), and the comparison set is
       # the PAs with ≥ min_years such years of both metrics in every version.
       min_transects = 60L,
+      # PA subset (c): PAs keeping ≥ min_pct_kept % of the transects 02 generated (PCT_KEPT); 02's
+      # coverage rule caps only the longest unsampled stretch, so some PAs keep few transects.
+      min_pct_kept  = 50,
       seed          = 46L   # bootstrap CIs of the paired differences
     )
   )

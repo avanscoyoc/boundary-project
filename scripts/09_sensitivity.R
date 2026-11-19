@@ -10,6 +10,9 @@
 #                with ≥ config sensitivity$min_transects complete transects in the subset
 #   established  all transects, PAs established by config sensitivity$established_by (analysed year)
 #   reported     all transects, PAs with a reported establishment year
+#   coverage     all transects, PAs keeping ≥ config sensitivity$min_pct_kept % of their generated
+#                transects (PCT_KEPT)
+# The runs are defined by sensitivity_runs() (modules/r/prep.R).
 # Each run is compared with a reference: the transect subsets with all_common (same PAs, so a
 # difference comes from the transects); all_common and the PA subsets with main.
 #
@@ -29,28 +32,21 @@
 # --pilot N   N randomly chosen analysis PAs (seed config pilot_seed); outputs go to
 #             data/05_analysis/pilot_N/ unless --out is given; no refit check.
 # --cores K   runs fitted in parallel, K at a time (default 2; ~1.5 GB each at full size).
-# Full size: 7 runs × 6 fixed-range spatial fits (≈ 1–2 min each) plus the refit (≈ 1 h).
+# Full size: 8 runs × 6 fixed-range spatial fits (≈ 1–2 min each) plus the refit (≈ 1 h).
 #
 # Inputs:  data/05_analysis/pa_level.csv, pa_year.csv, scaling.csv (05);
 #          results/diagnostics/mean_models_ranges.csv (06), change_models_ranges.csv (08)
 # Outputs: <tables>/TableS_sensitivity_metrics.csv, TableS_sensitivity_models.csv;
 #          <diagnostics>/sensitivity_runs.csv, sensitivity_main_check.csv, sensitivity_refit_check.csv
 
-source(file.path("modules", "r", "config.R"))
-for (f in setdiff(list.files(file.path("modules", "r"), "\\.R$", full.names = TRUE),
-                  file.path("modules", "r", "config.R"))) {
-  sys.source(f, envir = globalenv())   # corHaversine must live in globalenv()
-}
+source(file.path("modules", "r", "load.R"))   # config.R + every module of modules/r
 
-args <- commandArgs(trailingOnly = TRUE)
-arg <- function(name) if (any(args == name)) args[which(args == name) + 1] else NULL
 pilot <- as.integer(arg("--pilot") %||% NA)
 cores <- as.integer(arg("--cores") %||% 2L)
-do_refit <- is.na(pilot) && !any(args == "--no-refit")
+do_refit <- is.na(pilot) && !has_flag("--no-refit")
 out_root <- arg("--out") %||% if (!is.na(pilot)) file.path(CFG$paths$analysis_dir, paste0("pilot_", pilot))
 out <- if (is.null(out_root)) list(tables = CFG$paths$tables, diagnostics = CFG$paths$diagnostics) else
   list(tables = file.path(out_root, "tables"), diagnostics = file.path(out_root, "diagnostics"))
-say <- function(...) cat(sprintf("[%s] %s\n", format(Sys.time(), "%H:%M:%S"), sprintf(...)))
 read <- function(path, ...) as.data.frame(readr::read_csv(path, guess_max = 1e5, show_col_types = FALSE,
                                                           progress = FALSE, ...))
 ids <- readr::cols(WDPA_PID = "c", .default = readr::col_guess())
@@ -80,20 +76,8 @@ if (!is.na(pilot)) {
 }
 
 # ── 2. Runs ──────────────────────────────────────────────────────────────────
-common <- pa$WDPA_PID[pa$set_transects]
-run_def <- function(label, pids, version, min_tr, vs) list(label = label, pids = pids, version = version,
-                                                            min_tr = min_tr, vs = vs)
-mt <- CFG$sensitivity$min_transects
-runs <- list(
-  main        = run_def("Main analysis (all transects)", pa$WDPA_PID, "all", 0L, NA),
-  all_common  = run_def(sprintf("All transects, transect-subset PAs (PA-years with >= %d transects)", mt),
-                        common, "all", mt, "main"),
-  nowater     = run_def("Without water transects", common, "nowater", mt, "all_common"),
-  nootherpa   = run_def("Without transects bordering other PAs", common, "nootherpa", mt, "all_common"),
-  noflags     = run_def("Without water or other-PA transects", common, "noflags", mt, "all_common"),
-  established = run_def(sprintf("PAs established by %d", CFG$sensitivity$established_by),
-                        pa$WDPA_PID[pa$set_established], "all", 0L, "main"),
-  reported    = run_def("PAs with a reported establishment year", pa$WDPA_PID[pa$set_reported], "all", 0L, "main"))
+runs <- sensitivity_runs(pa, CFG$sensitivity)
+common <- runs$all_common$pids
 say("09: %d runs; %d PAs in the main set, %d in the transect-subset comparison%s", length(runs), nrow(pa),
     length(common), if (!is.na(pilot)) sprintf(" (pilot, seed %d)", CFG$pilot_seed) else "")
 

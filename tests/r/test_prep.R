@@ -255,3 +255,28 @@ test_that("config covariates match the model formula; exclusion settings are set
   expect_true(all(CFG$log_covariates %in% names(CFG$covariates)))
   expect_equal(c(CFG$min_complete_pct, CFG$max_water_pct, CFG$sensitivity$min_transects), c(75, 75, 60))
 })
+
+test_that("sensitivity_runs: references, transect thresholds and PA subsets of 09", {
+  pa <- data.frame(WDPA_PID = c("a", "b", "c", "d"), set_transects = c(TRUE, TRUE, FALSE, TRUE),
+                   set_established = c(TRUE, FALSE, TRUE, FALSE), set_reported = c(TRUE, TRUE, TRUE, FALSE),
+                   set_coverage = c(FALSE, TRUE, TRUE, TRUE), stringsAsFactors = FALSE)
+  s <- list(min_transects = 60L, established_by = 2003L, min_pct_kept = 50)
+  r <- sensitivity_runs(pa, s)
+  expect_identical(names(r), c("main", "all_common", "nowater", "nootherpa", "noflags", "established",
+                               "reported", "coverage"))
+  expect_identical(vapply(r, `[[`, "", "version"),
+                   c(main = "all", all_common = "all", nowater = "nowater", nootherpa = "nootherpa",
+                     noflags = "noflags", established = "all", reported = "all", coverage = "all"))
+  # transect subsets vs all_common: same PAs, same threshold (like for like)
+  for (v in c("nowater", "nootherpa", "noflags")) {
+    expect_identical(r[[v]]$vs, "all_common")
+    expect_identical(r[[v]]$pids, r$all_common$pids)
+    expect_identical(r[[v]]$min_tr, r$all_common$min_tr)
+  }
+  expect_identical(r$all_common$pids, c("a", "b", "d")); expect_identical(r$all_common$min_tr, 60L)
+  # PA subsets vs main, all transects, no threshold
+  for (v in c("all_common", "established", "reported", "coverage")) expect_identical(r[[v]]$vs, "main")
+  expect_identical(r$coverage$pids, c("b", "c", "d")); expect_identical(r$coverage$min_tr, 0L)
+  expect_true(is.na(r$main$vs)); expect_identical(r$main$pids, pa$WDPA_PID)
+  expect_error(sensitivity_runs(pa[setdiff(names(pa), "set_coverage")], s))
+})

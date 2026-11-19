@@ -29,6 +29,8 @@ TRANSECT_YEARS_DIR = DATA_DIR / "04_transect_years" # script 04: one row per tra
 MISSING_TRANSECTS = TRANSECT_YEARS_DIR / "missing_transects.csv"   # script 04: transects with missing years
 
 RESULTS_DIR = PROJECT_ROOT / "results"              # final outputs only
+# RESOLVE biome number and name -> biome group: the one table used by Python (scripts 04, 13) and R (05)
+BIOME_GROUPS_CSV = PROJECT_ROOT / "modules" / "biome_groups.csv"
 
 WDPA_POLYGONS = WDPA_DIR / "WDPA_polygons.geojson"
 PAS_SELECTED = PAS_DIR / "pas_selected.gpkg"
