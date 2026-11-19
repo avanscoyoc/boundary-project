@@ -39,17 +39,10 @@ from shapely.ops import unary_union
 # =====================================================================
 
 def drop_excluded_pids(gdf, excluded):
-    """
-    Drop rows whose WDPA_PID (as text) is in `excluded`.
+    """Drop rows whose WDPA_PID (as text) is in `excluded`; returns (rows left, number dropped).
 
-    Script 01 already applies the list in Earth Engine. Applying it again here means a
-    WDPA_polygons.geojson exported before a PID was added to the list gives the same
-    PA set as a fresh export.
-
-    Returns
-    -------
-    (GeoDataFrame, int)
-        The remaining rows and the number dropped.
+    Script 01 applies the same list in Earth Engine; applying it here as well makes an export made
+    before a PID was added to the list give the same PA set as a fresh one.
     """
     drop = gdf['WDPA_PID'].astype(str).isin({str(p) for p in excluded})
     return gdf.loc[~drop].copy(), int(drop.sum())
@@ -68,21 +61,8 @@ def _fill_small_holes(geom, max_hole_area):
 
 
 def fill_holes(gdf, max_hole_area=2250000):  # 1500m * 1500m = 2250000 sq meters
-    """
-    Fill small holes in polygon geometries while preserving large holes.
-
-    Parameters
-    ----------
-    gdf : GeoDataFrame
-        Polygons in a projected CRS with units of meters.
-    max_hole_area : float, optional
-        Holes with area (m²) at or below this are filled. Default 2,250,000 m²
-        (1500 m × 1500 m, a 3 × 3 MODIS pixel window).
-
-    Returns
-    -------
-    tuple of (GeoDataFrame, int)
-        Copy of ``gdf`` with filled geometries, and the number of PAs changed.
+    """Fill holes of at most `max_hole_area` m² (default 1,500 m × 1,500 m, a 3 × 3 MODIS pixel
+    window); larger holes stay. `gdf` in a metric CRS. Returns (copy, number of PAs changed).
     """
     filled = [_fill_small_holes(g, max_hole_area) for g in gdf.geometry]
     n_changed = int(sum(not a.equals(b) for a, b in zip(gdf.geometry, filled)))
@@ -92,22 +72,7 @@ def fill_holes(gdf, max_hole_area=2250000):  # 1500m * 1500m = 2250000 sq meters
 
 
 def get_min_year_from_group(group_df):
-    """
-    Select the oldest protected area from a group based on establishment year.
-
-    Returns the row with the minimum non-zero STATUS_YR value. If all STATUS_YR
-    values are 0 (unknown), returns the first row.
-
-    Parameters
-    ----------
-    group_df : DataFrame
-        Group of protected areas with a 'STATUS_YR' column.
-
-    Returns
-    -------
-    Series
-        Row of the oldest protected area (its ``.name`` is the row label).
-    """
+    """The row of `group_df` with the oldest non-zero STATUS_YR (the first row if all are 0)."""
     non_zero = group_df[group_df['STATUS_YR'] != 0]
     if len(non_zero) > 0:
         return non_zero.loc[non_zero['STATUS_YR'].idxmin()]
@@ -132,33 +97,14 @@ def _components(n, pairs):
 
 
 def resolve_overlaps(gdf, overlap_threshold=90):
-    """
-    Remove duplicate and nested protected areas.
+    """Remove duplicate and nested PAs (candidate pairs from a spatial index; `gdf` equal-area).
 
-    Candidate pairs come from a spatial index. For each intersecting pair, the
-    intersection area is compared with each polygon's area:
+    - Duplicates (overlap > `overlap_threshold` % of both PAs): grouped transitively (A~B, B~C);
+      the oldest non-zero STATUS_YR is kept.
+    - Nested (> threshold of the smaller only): the smaller is removed; a PA inside several larger
+      ones is assigned to the largest.
 
-    - **Duplicates**: overlap > threshold of BOTH polygons. Duplicates are grouped
-      transitively (A~B and B~C puts A, B, C in one group) and the oldest
-      non-zero STATUS_YR is kept (get_min_year_from_group).
-    - **Nested**: overlap > threshold of the smaller polygon only. The smaller
-      polygon is removed and the larger one kept. If a polygon sits inside
-      several larger ones, it is assigned to the largest.
-
-    Parameters
-    ----------
-    gdf : GeoDataFrame
-        Polygons in an equal-area CRS, with 'WDPA_PID' (str) and 'STATUS_YR'.
-    overlap_threshold : float, optional
-        Percent overlap threshold. Default 90.
-
-    Returns
-    -------
-    tuple of (GeoDataFrame, DataFrame, dict)
-        - kept PAs (index reset)
-        - removed rows: original columns plus 'reason' ('duplicate' or 'nested')
-          and 'replaced_by' (PID of the PA kept in its place)
-        - counts: n_in, n_invalid_fixed, removed_duplicate, removed_nested, n_out
+    Returns (kept PAs, removed rows with 'reason' and 'replaced_by', counts).
     """
     gdf = gdf.reset_index(drop=True)
     geoms = np.asarray(gdf.geometry.values, dtype=object)
@@ -217,37 +163,13 @@ def resolve_overlaps(gdf, overlap_threshold=90):
 
 
 def merge_same_name(gdf, max_hole_area=2250000):
-    """
-    Dissolve protected areas that share a name and country and touch or overlap.
+    """Dissolve PAs with the same ORIG_NAME + ISO3 that touch or overlap (directly or through each
+    other). The merged PA takes the oldest member's WDPA_PID and the oldest non-zero STATUS_YR; its
+    other attributes come from the largest member ('ATTR_PID'); 'MERGED_PID' lists the other
+    members. Members that don't touch, or whose union is not a single Polygon, stay separate. Small
+    holes are filled again (`max_hole_area`).
 
-    PAs are grouped by ORIG_NAME + ISO3. Within a group, members that touch or
-    overlap (directly or through each other) are dissolved into one polygon:
-
-    - WDPA_PID: the oldest member's (oldest non-zero STATUS_YR)
-    - STATUS_YR: the oldest non-zero establishment year among the members
-    - all other attributes (designation, IUCN category, ...): the LARGEST
-      member's, recorded in 'ATTR_PID'
-    - 'MERGED_PID': the other members' PIDs (';'-separated)
-
-    Members that don't touch stay separate PAs. If a union isn't a single
-    Polygon, its members are left separate. Small holes in each union are
-    filled again.
-
-    Parameters
-    ----------
-    gdf : GeoDataFrame
-        Polygons in a projected CRS (meters), with 'WDPA_PID', 'ORIG_NAME',
-        'ISO3', 'STATUS_YR'.
-    max_hole_area : float, optional
-        Hole-filling threshold (m²) applied to each union.
-
-    Returns
-    -------
-    tuple of (GeoDataFrame, DataFrame, dict)
-        - PAs after merging (index reset), with 'MERGED_PID' and 'ATTR_PID'
-        - removed (merged-away) rows with 'reason' = 'same_name_merged' and
-          'replaced_by'
-        - counts: n_in, groups_merged, pas_merged_away, groups_not_single_polygon, n_out
+    Returns (PAs after merging, merged-away rows with 'reason' and 'replaced_by', counts).
     """
     gdf = gdf.reset_index(drop=True).copy()
     gdf['MERGED_PID'] = ''
@@ -303,27 +225,8 @@ def merge_same_name(gdf, max_hole_area=2250000):
 
 
 def add_shape_metrics(gdf):
-    """
-    Add geodesic area, perimeter, and shape ratio columns.
-
-    Computed on the WGS84 ellipsoid (pyproj.Geod), so no projection distortion.
-    Perimeter includes interior rings (holes).
-
-    - AREA_KM2: area in km²
-    - PERIM_KM: perimeter in km
-    - SHAPE_RATIO: perimeter / sqrt(area), dimensionless and size-neutral
-      (a circle is 3.54, a square 4.0; higher = more convoluted). Reported
-      for information; no PAs are removed on shape.
-
-    Parameters
-    ----------
-    gdf : GeoDataFrame
-        Polygons in any CRS.
-
-    Returns
-    -------
-    GeoDataFrame
-        Copy with the three columns added.
+    """Add geodesic AREA_KM2, PERIM_KM (holes included) and SHAPE_RATIO = perimeter / sqrt(area)
+    (circle 3.54, square 4.0), on the WGS84 ellipsoid. For information: no PA is removed on shape.
     """
     geod = Geod(ellps='WGS84')
     lonlat = gdf.geometry.to_crs('EPSG:4326')
@@ -342,26 +245,11 @@ def add_shape_metrics(gdf):
 # =====================================================================
 
 def evenspace(xy, sep, start=0):
-    """
-    Generate evenly spaced points along a polyline at specified intervals.
-
-    Parameters
-    ----------
-    xy : array-like of shape (N, 2)
-        Polyline vertices [x, y] (a closed ring has first == last).
-    sep : float
-        Separation between consecutive points along the line (map units).
-    start : float, optional
-        Distance along the line of the first point. Default 0.
-
-    Returns
-    -------
-    DataFrame
-        Columns x, y (points on the line), x0, y0, x1, y1 (the segment each
-        point lies on), theta (segment angle, radians). The last point before
-        the end of the line is dropped, so on a closed ring the gap between the
-        last and the first point is more than sep and at most 2 * sep (never shorter
-        than sep; points closer than sep at the seam would give near-duplicate transects).
+    """Points every `sep` map units along polyline `xy` (N x 2; a closed ring has first == last),
+    starting at distance `start`. Returns x, y, the segment each point lies on (x0, y0, x1, y1) and
+    its angle theta. The last point before the end is dropped, so on a closed ring the gap between
+    the last and the first point is more than `sep` and at most 2 * `sep` (never shorter: points
+    closer than `sep` at the seam would give near-duplicate transects).
     """
     xy = np.asarray(xy, dtype=float)
 
@@ -393,26 +281,11 @@ def evenspace(xy, sep, start=0):
 
 
 def transect(tpts, tlen, npts=1):
-    """
-    Generate perpendicular transect points from boundary sample points.
-
-    Parameters
-    ----------
-    tpts : DataFrame
-        Output of evenspace() (x, y, theta).
-    tlen : float
-        Distance between consecutive points along each transect (map units).
-    npts : int, optional
-        Points on each side of the boundary point. Total per transect = 2*npts + 1.
-
-    Returns
-    -------
-    DataFrame
-        Columns transectID (int, 1-indexed), pointID (int: negative = inward,
-        0 = boundary, positive = outward), x, y; sorted by transectID, pointID.
-        Inner points are on the right of the direction of travel along the ring
-        (x0, y0 -> x1, y1), which is inside the PA for a clockwise ring (see
-        extract_coords); theta points the opposite way (x1 -> x0).
+    """Transect points perpendicular to the boundary at each evenspace() point: `npts` points on each
+    side, `tlen` apart. Returns transectID (1-based), pointID (negative = inward, 0 = boundary,
+    positive = outward), x, y. Inner points are on the right of the direction of travel along the
+    ring (x0, y0 -> x1, y1), i.e. inside the PA for a clockwise ring (extract_coords); theta points
+    the opposite way (x1 -> x0).
     """
     if len(tpts) == 0:
         return pd.DataFrame(columns=['transectID', 'pointID', 'x', 'y'])
@@ -437,17 +310,8 @@ def transect(tpts, tlen, npts=1):
 
 
 def extract_coords(geom):
-    """
-    Extract exterior boundary coordinates from a polygon geometry.
-
-    For MultiPolygon geometries, uses the largest component polygon by area.
-    The exterior ring is forced clockwise (orient sign=-1.0) so that transect()
-    places inner points inside the PA, regardless of the input file format.
-
-    Returns
-    -------
-    numpy.ndarray or None
-        (N, 2) clockwise exterior coordinates, or None for other geometry types.
+    """Clockwise exterior-ring coordinates (N x 2) of a Polygon, or of a MultiPolygon's largest part,
+    so that transect() puts inner points inside the PA; None for other geometry types.
     """
     if geom.geom_type == 'Polygon':
         return np.array(orient(geom, sign=-1.0).exterior.coords)
@@ -471,44 +335,17 @@ def _transform(geom, transformer):
 
 
 def make_pa_transects(geom, src_crs, sample_dist, transect_unit, npts, buffer_dist, eps=1.0):
-    """
-    Build and check the transects of one protected area.
+    """Build and check the transects of one PA, in an azimuthal equidistant projection centred on it
+    (true distances in meters, truly perpendicular transects).
 
-    The PA is projected into an azimuthal equidistant (AEQD) projection centered
-    on its centroid, so the boundary spacing, transect spacing, and inner buffer
-    are true distances in meters and the transects are truly perpendicular.
+    The PA is skipped if no interior point is farther than `buffer_dist` from the boundary (largest
+    inscribed circle). Whole-line check: a transect is kept only if its inner half (up to `eps` m
+    before pt_0) lies within the PA and its outer half (from `eps` m past pt_0) does not touch it,
+    so the line crosses the boundary once.
 
-    Whole-line check: a transect is kept only if its inner half (pt_-npts to
-    1 m before pt_0) lies within the PA, and its outer half (1 m past pt_0 to
-    pt_+npts) does not touch the PA. Together these mean the inner points are
-    inside, the outer points are outside, and the line crosses the boundary
-    once.
-
-    Parameters
-    ----------
-    geom : shapely Polygon
-        PA geometry in ``src_crs``.
-    src_crs : str or pyproj.CRS
-        CRS of ``geom``.
-    sample_dist, transect_unit : float
-        Boundary point spacing and transect point spacing (meters).
-    npts : int
-        Points on each side of the boundary.
-    buffer_dist : float
-        Inner buffer distance (meters). The PA is skipped if no interior point is
-        farther than this from the boundary (radius of the largest inscribed
-        circle <= buffer_dist), i.e. the inward buffer would be empty.
-    eps : float, optional
-        Gap (meters) left around pt_0 in the whole-line check. Default 1.
-
-    Returns
-    -------
-    dict
-        status ('ok', 'empty_inner_buffer', 'no_boundary_points'), df (kept
-        points: transectID, pointID, lon, lat), n_generated, n_bad_inner,
-        n_bad_outer, and max_gap_pct: the longest run of consecutive dropped
-        transects as a percentage of all transect positions on the boundary
-        (0 = full coverage; NaN when none are kept).
+    Returns a dict: status ('ok', 'empty_inner_buffer', 'no_boundary_points'), df (kept points:
+    transectID, pointID, lon, lat), n_generated, n_bad_inner, n_bad_outer, and max_gap_pct (the
+    longest run of dropped transects, % of all positions; NaN when none are kept).
     """
     empty = pd.DataFrame(columns=['transectID', 'pointID', 'lon', 'lat'])
     result = {'status': 'ok', 'df': empty, 'n_generated': 0, 'n_bad_inner': 0, 'n_bad_outer': 0,
@@ -582,24 +419,9 @@ def make_pa_transects(geom, src_crs, sample_dist, transect_unit, npts, buffer_di
 
 
 def own_pid_sets(kept_pids, removed_frames):
-    """
-    For each kept PA, the PIDs that count as the same PA for the other-PA flag: itself, plus
-    every PA merged into it or removed as its duplicate or nested PA, following chains
-    (e.g. nested -> duplicate -> kept).
-
-    Parameters
-    ----------
-    kept_pids : iterable of str
-        The PAs left after part 1 of script 02.
-    removed_frames : list of DataFrame
-        The removed PAs of each step, with WDPA_PID and replaced_by (the PA that replaced it,
-        or empty / None).
-
-    Returns
-    -------
-    dict
-        kept PID -> set of PIDs. A removed PA whose chain does not end at a kept PA (e.g. its
-        replacement was itself removed for another reason) is not added anywhere.
+    """For each kept PA, the PIDs that count as the same PA for the other-PA flag: itself and every PA
+    merged into it or removed as its duplicate or nested PA, following the 'replaced_by' chains of
+    `removed_frames` (nested -> duplicate -> kept). A chain that does not end at a kept PA is ignored.
     """
     replaced = {}
     for frame in removed_frames:
@@ -623,26 +445,8 @@ def own_pid_sets(kept_pids, removed_frames):
 
 
 def flag_other_pa(points, tree, tree_pids, own_pids):
-    """
-    Flag transects whose outer points fall inside another protected area.
-
-    Parameters
-    ----------
-    points : DataFrame
-        Transect points with WDPA_PID, transectID, pointID, lon, lat.
-    tree : shapely.STRtree
-        Index of reference PA polygons (EPSG:4326).
-    tree_pids : numpy.ndarray of str
-        WDPA_PID of each polygon in ``tree``.
-    own_pids : dict
-        PID -> set of PIDs that count as the same PA (itself, and PAs merged
-        into it or removed as its duplicate or nested PA).
-
-    Returns
-    -------
-    numpy.ndarray of int8
-        1 if any outer point (pointID > 0) of the row's transect lies within a
-        PA that is not one of its own PIDs, else 0; one value per row of ``points``.
+    """1 for each row of `points` whose transect has an outer point (pointID > 0) inside a PA of `tree`
+    (EPSG:4326, PIDs `tree_pids`) that is not one of its own PIDs (`own_pids`), else 0.
     """
     outer = points[points['pointID'] > 0]
     pt_idx, poly_idx = tree.query(
@@ -688,32 +492,15 @@ def write_upload_zip(points, zip_path):
 def generate_transects(pas, src_crs, sample_dist, transect_unit, npts, buffer_dist,
                        chunk_size, upload_dir, upload_prefix, points_path,
                        tree, tree_pids, own_pids, max_gap_pct_limit=None):
-    """
-    Generate transects for every PA and write the upload zips and points table.
+    """Transects for every PA (make_pa_transects), written as upload zips of `chunk_size` whole PAs
+    (`{upload_prefix}NNN.zip`, flagged for other-PA overlap) and appended to `points_path`
+    (Parquet, with each PA's upload file number in column 'asset', read by script 04). Old zips
+    with the prefix are deleted first. With `max_gap_pct_limit`, a PA whose longest unsampled
+    stretch exceeds that % of its boundary is removed ('coverage_gap') before anything is written.
 
-    PAs are processed one at a time (make_pa_transects). Every ``chunk_size`` PAs
-    that have at least one kept transect, the chunk is flagged for other-PA
-    overlap, written as one upload zip ``{upload_prefix}{NNN}.zip``, and
-    appended to ``points_path`` (Parquet, with the column ``asset``: the NNN of the PA's
-    upload file, read by script 04). Each upload file holds whole PAs only.
-    Old upload zips with the same prefix are deleted first.
-
-    If ``max_gap_pct_limit`` is set, a PA whose longest run of dropped
-    transects exceeds that percentage of its boundary is removed (status
-    'coverage_gap') before anything is written, so its boundary isn't sampled
-    unevenly.
-
-    Returns
-    -------
-    dict
-        status (PID -> 'ok', 'empty_inner_buffer', 'no_boundary_points',
-        'no_valid_transects' or 'coverage_gap'), n_transects (PID -> transects
-        that passed the whole-line check; written only for status 'ok'),
-        n_generated (PID -> transects generated before the whole-line check),
-        max_gap_pct (PID -> longest boundary gap between kept transects, % of boundary),
-        zip_files, and transect counts: generated, removed_inner_half_leaves_pa,
-        removed_outer_half_enters_pa, in_pas_removed_for_coverage_gap, kept,
-        flagged_in_other_pa, points.
+    Returns a dict: status, n_transects (passed the whole-line check), n_generated and max_gap_pct
+    per PID; zip_files; and the transect totals (generated, removed_inner_half_leaves_pa,
+    removed_outer_half_enters_pa, in_pas_removed_for_coverage_gap, kept, flagged_in_other_pa, points).
     """
     upload_dir = Path(upload_dir)
     upload_dir.mkdir(parents=True, exist_ok=True)

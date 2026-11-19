@@ -1,7 +1,10 @@
 # corHaversine: great-circle (Haversine) spatial correlation structure for nlme::gls / lme.
 #
-# Adapted from a widely used community helper (HaversineLMEfunctions.R) that adds a
-# great-circle distance correlation structure to nlme.
+# Source: Nate Pope's answer on Stack Overflow,
+#   https://stackoverflow.com/questions/18857443/specifying-a-correlation-structure-for-a-linear-mixed-model-using-the-ramps-pack
+# (also distributed as R/corHaversine.R in https://github.com/biometry/FReibier). Stack Overflow
+# content is licensed under CC BY-SA (https://stackoverflow.com/help/licensing), so this file is
+# shared under CC BY-SA with that attribution, not under the repository's MIT licence.
 #
 # ONE CHANGE: haversineDist() is vectorised. The helper filled an n × n matrix with a double R
 # loop over the scalar haversine() (about a minute for a few thousand PAs) and returned as.dist()

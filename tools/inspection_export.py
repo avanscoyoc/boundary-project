@@ -2,7 +2,7 @@
 Visual inspection: export the analysis set (optional, after the analysis)
 
 Writes the analysis-set PAs (R script 05) for the Earth Engine inspection app
-(scripts/inspection_app.js), plus a checklist for the inspection notes. PAs that the
+(tools/inspection_app.js), plus a checklist for the inspection notes. PAs that the
 inspection shows should be excluded (e.g. problematic geometries) are added to
 EXCLUDED_PIDS in modules/config.py, and the pipeline is rerun from script 01.
 
@@ -164,5 +164,5 @@ for biome, g in pa.groupby('BIOME_NAME', sort=False):
 asset_id = f"projects/{config.GEE_PROJECT}/assets/{zip_path.stem}"
 print("\nMANUAL STEP: upload the zip to Earth Engine as a table asset:")
 print(f"  {zip_path.relative_to(project_root)}  ->  {asset_id}")
-print("  Then paste scripts/inspection_app.js into the Code Editor and run it.")
+print("  Then paste tools/inspection_app.js into the Code Editor and run it.")
 print(f"\nDone in {time.time() - t_start:.0f} s")

@@ -26,7 +26,7 @@
 #          fig4_trends.{pdf,png}, fig4b_case_<WDPA_PID>.{pdf,png}, figS_slope_correlation.{pdf,png};
 #          results/diagnostics/fig_moran_correlogram_mean_models.png, fig_residuals_<model>_<response>.png;
 #          data/10_map_layers/pa_map_layers.gpkg, case_study_pas.kml;
-#          results/R_sessionInfo.txt, results/tables.zip
+#          results/R_sessionInfo.txt
 
 source(file.path("modules", "r", "load.R"))   # config.R, every module of modules/r, arg() / say()
 
@@ -143,5 +143,3 @@ for (r in c("mean_models_residuals", "change_models_residuals")) {
 
 writeLines(utils::capture.output(utils::sessionInfo()), CFG$paths$session_info)
 say("wrote %s", CFG$paths$session_info)
-z <- zip_tables(CFG$paths$tables)
-if (!is.null(z)) say("wrote %s", z)

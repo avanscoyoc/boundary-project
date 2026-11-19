@@ -10,5 +10,3 @@ This package contains domain-specific logic organized into:
 - counts: Pipeline counts written to results/pipeline_counts.json
 The R statistics (scripts 05-10, 14) are in modules/r/.
 """
-
-__version__ = "1.0.0"

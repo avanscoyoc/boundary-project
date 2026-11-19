@@ -21,15 +21,3 @@ test_that("config settings are consistent", {
   expect_true(all(cs$expect %in% ok))
   expect_false(anyNA(cs))
 })
-
-test_that("zip_tables zips the CSV tables of a folder (results/tables.zip)", {
-  skip_if(!nzchar(Sys.which("python3")), "python3 not available")
-  d <- file.path(tempfile(), "tables"); dir.create(d, recursive = TRUE)
-  on.exit(unlink(dirname(d), recursive = TRUE))
-  writeLines("a,b\n1,2", file.path(d, "TableSX_x.csv")); writeLines("c\n3", file.path(d, "fig4a_y.csv"))
-  writeLines("not a table", file.path(d, "notes.txt"))
-  z <- zip_tables(d)
-  expect_true(file.exists(file.path(dirname(d), "tables.zip")))
-  expect_setequal(utils::unzip(z, list = TRUE)$Name, c("TableSX_x.csv", "fig4a_y.csv"))
-  expect_false(file.exists(paste0(z, ".tmp")))
-})

@@ -31,7 +31,7 @@
 #          <tables>/fig4a_change_summary.csv, fig4a_boot_replicates.csv
 #          <tables>/fig4b_case_series.csv (one row per case PA × year), fig4b_case_pas.csv (one
 #                         row per case PA: trends, change over the record, % of its own mean)
-#          <diagnostics>/trend_{class_counts,yuepilon_agreement,yuepilon_crosstab,
+#          <diagnostics>/trend_{yuepilon_agreement,yuepilon_crosstab,
 #                         percent_change_biome}.csv,
 #                         trend_residual_autocorrelation{,_summary}.csv (per PA; per biome and
 #                         all PAs)
@@ -163,7 +163,6 @@ w_csv(main, out$tables, "fig4a_change_summary.csv")
 w_csv(reps, out$tables, "fig4a_boot_replicates.csv")
 w_csv(case_ser, out$tables, "fig4b_case_series.csv")
 w_csv(case_pas, out$tables, "fig4b_case_pas.csv")
-w_csv(cc, out$diagnostics, "trend_class_counts.csv")
 w_csv(ag$agreement, out$diagnostics, "trend_yuepilon_agreement.csv")
 w_csv(ag$crosstab, out$diagnostics, "trend_yuepilon_crosstab.csv")
 w_csv(pct, out$diagnostics, "trend_percent_change_biome.csv")

@@ -1,54 +1,32 @@
-"""
-Configuration file for the Protected Area Edge Analysis workflow (NDVI).
-
-This module centralizes all configurable parameters:
-- Time period and NDVI source
-- Protected area filtering and transect geometry parameters
-- Folder layout and file paths
-- Google Earth Engine settings
-"""
+"""Settings and paths of the Python scripts (01-04, 11-13, the inspection tool)."""
 
 import json
 import os
 from pathlib import Path
 
-# =====================================================================
-# Project Paths
-# =====================================================================
-# Each data folder is named after the script that fills it.
-
+# --- Paths: each data folder is named after the script that fills it -------------------------
 PROJECT_ROOT = Path(__file__).parent.parent
-
 DATA_DIR = PROJECT_ROOT / "data"
-WDPA_DIR = DATA_DIR / "01_wdpa"                     # script 01 export (download from Drive)
-PAS_DIR = DATA_DIR / "02_pas"                       # script 02 Part 1: selected / removed PAs
-TRANSECTS_DIR = DATA_DIR / "02_transects"           # script 02 Part 2: transect points
-UPLOAD_DIR = TRANSECTS_DIR / "upload"               # zipped shapefiles to upload to Earth Engine
-GEE_CSV_DIR = DATA_DIR / "03_gee"                   # script 03 CSVs (download from Drive)
-TRANSECT_YEARS_DIR = DATA_DIR / "04_transect_years" # script 04: one row per transect-year
-MISSING_TRANSECTS = TRANSECT_YEARS_DIR / "missing_transects.csv"   # script 04: transects with missing years
-
-RESULTS_DIR = PROJECT_ROOT / "results"              # final outputs only
-# RESOLVE biome number and name -> biome group: the one table used by Python (scripts 04, 13) and R (05)
-BIOME_GROUPS_CSV = PROJECT_ROOT / "modules" / "biome_groups.csv"
+WDPA_DIR = DATA_DIR / "01_wdpa"                      # 01 export (downloaded from Drive)
+PAS_DIR = DATA_DIR / "02_pas"                        # 02 part 1: selected / removed PAs
+TRANSECTS_DIR = DATA_DIR / "02_transects"            # 02 part 2: transect points
+UPLOAD_DIR = TRANSECTS_DIR / "upload"                # zips to upload to Earth Engine
+GEE_CSV_DIR = DATA_DIR / "03_gee"                    # 03 CSVs (downloaded from Drive)
+TRANSECT_YEARS_DIR = DATA_DIR / "04_transect_years"  # 04: one row per transect-year
+MISSING_TRANSECTS = TRANSECT_YEARS_DIR / "missing_transects.csv"
+RESULTS_DIR = PROJECT_ROOT / "results"               # final outputs only
+BIOME_GROUPS_CSV = PROJECT_ROOT / "modules" / "biome_groups.csv"  # RESOLVE biome -> group (Python and R)
 
 WDPA_POLYGONS = WDPA_DIR / "WDPA_polygons.geojson"
 PAS_SELECTED = PAS_DIR / "pas_selected.gpkg"
 PAS_REMOVED = PAS_DIR / "pas_removed.gpkg"
 TRANSECT_POINTS = TRANSECTS_DIR / "transect_points.parquet"
-PA_METRICS = RESULTS_DIR / "pa_edge_metrics_ndvi.csv"    # FINAL: one row per PA-year
+PA_METRICS = RESULTS_DIR / "pa_edge_metrics_ndvi.csv"  # final: one row per PA-year
 PIPELINE_COUNTS = RESULTS_DIR / "pipeline_counts.json"
 
-# =====================================================================
-# Google Earth Engine Project - REQUIRED for scripts 01, 03 and 12
-# =====================================================================
-
-# Each person sets their project once, outside the repo, so this file never needs
-# editing. In order of precedence:
-#   1. the GEE_PROJECT environment variable (one-off override)
-#   2. the default saved by `earthengine set_project YOUR-PROJECT-ID`, which is stored
-#      next to the Earth Engine credentials and survives container rebuilds
-# Find your project ID at: https://console.cloud.google.com/
+# --- Earth Engine project (scripts 01, 03, 12) ----------------------------------------------
+# Set once outside the repo: the GEE_PROJECT environment variable, else the project saved by
+# `earthengine set_project YOUR-PROJECT-ID` (stored with the credentials).
 EE_CREDENTIALS = Path.home() / ".config" / "earthengine" / "credentials"
 
 
@@ -62,32 +40,18 @@ def _saved_gee_project():
 
 GEE_PROJECT = os.environ.get("GEE_PROJECT") or _saved_gee_project() or 'YOUR-PROJECT-ID'
 
-# =====================================================================
-# Dataset Parameters
-# =====================================================================
-
-# World Database on Protected Areas collection year - month
-WDPA_COLLECTION = "WCMC/WDPA/202508/polygons"
+# --- Data -----------------------------------------------------------------------------------
+WDPA_COLLECTION = "WCMC/WDPA/202508/polygons"   # pinned WDPA release (August 2025)
 START_YEAR = 2003
 END_YEAR = 2025
-
-# NDVI source (MODIS Terra Vegetation Indices 16-Day Global 500 m)
-INDEX_NAME = 'ndvi'  # used in file and export names
-NDVI_COLLECTION = 'MODIS/061/MOD13A1'
+INDEX_NAME = 'ndvi'                             # used in file and export names
+NDVI_COLLECTION = 'MODIS/061/MOD13A1'           # MODIS Terra vegetation indices, 16-day, 500 m
 NDVI_BAND = 'NDVI'
 NDVI_SCALE_FACTOR = 0.0001
 
-# =====================================================================
-# Protected Area Filtering Parameters
-# =====================================================================
-
-# Minimum protected area size (km²)
+# --- PA selection (01, 02) ------------------------------------------------------------------
 MIN_AREA_KM2 = 200
-
-# Protected area status to include
 VALID_STATUS = ["Designated", "Established", "Inscribed"]
-
-# Problematic WDPA_PIDs to exclude
 EXCLUDED_PIDS = [
     "555655917", "555656005", "555656013", "555665477", "555656021",
     "555665485", "555556142", "187", "555703455", "555563456", "15894",
@@ -98,157 +62,72 @@ EXCLUDED_PIDS = [
     # City PAs (the Haram of Al-Madinah and the Haram of Makkah), found in the visual inspection
     "101853", "101854",
 ]
+OVERLAP_THRESHOLD = 90         # % overlap: of both PAs = duplicates (oldest kept); of the smaller only = nested (larger kept)
+MAX_HOLE_AREA = 2_250_000      # m² (1,500 m x 1,500 m): smaller holes are filled
+MAX_GAP_PCT_LIMIT = 25         # PAs whose longest unsampled stretch exceeds this % of the boundary are removed
 
-# =====================================================================
-# Coordinate Reference Systems
-# =====================================================================
+PROCESSING_CRS = 'ESRI:54009'  # Mollweide (equal area): areas and overlaps in 02 part 1 (transects: per-PA AEQD)
+STORAGE_CRS = 'EPSG:4326'      # geographic coordinates: stored files and Earth Engine
 
-# Equal-area projection (Mollweide) for area and overlap calculations in script 02
-# Part 1. Transects are built in a per-PA azimuthal equidistant projection.
-PROCESSING_CRS = 'ESRI:54009'
+# --- Transects (02) -------------------------------------------------------------------------
+BOUNDARY_SPACING = 500         # m between boundary points
+TRANSECT_SPACING = 2500        # m between points along a transect
+POINTS_PER_SIDE = 2            # points on each side of the boundary point (5 per transect)
+BUFFER_DIST = TRANSECT_SPACING * POINTS_PER_SIDE + 500  # PAs with no interior this far from the edge are removed
 
-# Storage/GEE CRS (geographic coordinates)
-STORAGE_CRS = 'EPSG:4326'  # WGS84
-
-# =====================================================================
-# Transect Geometry Parameters
-# =====================================================================
-
-# Distance between sample points along protected area boundary (meters)
-BOUNDARY_SPACING = 500
-
-# Distance between points along each transect (meters)
-TRANSECT_SPACING = 2500
-
-# Number of points on each side of the boundary (not including boundary point)
-# Total points per transect = 2 * POINTS_PER_SIDE + 1
-POINTS_PER_SIDE = 2
-
-# Inner buffer distance (meters). PAs with no interior at least this far from
-# their edge (i.e., narrower than ~11 km everywhere) are removed.
-BUFFER_DIST = TRANSECT_SPACING * POINTS_PER_SIDE + 500  # 500m beyond last point
-
-# Maximum hole area to fill in polygons (square meters)
-# Holes smaller than this will be filled, larger ones preserved
-MAX_HOLE_AREA = 2_250_000  # 1500m × 1500m
-
-# Coverage limit (percent of the boundary). PAs whose longest run of dropped
-# transects (MAX_GAP_PCT) exceeds this are removed, so no PA has a large part of
-# its boundary unsampled.
-MAX_GAP_PCT_LIMIT = 25
-
-# Overlap threshold (percent). Two PAs overlapping by more than this share of
-# BOTH polygons are duplicates (oldest kept); by more than this share of the
-# smaller polygon only, the smaller is nested in the larger (larger kept).
-OVERLAP_THRESHOLD = 90
-
-# =====================================================================
-# Chunking Parameters
-# =====================================================================
-
-# Protected areas per Earth Engine upload file (whole PAs only)
-CHUNK_SIZE = 400  # ~1 million points per file
-
-# Points per exported CSV part in script 03
-GEE_SUBCHUNK_SIZE = 50_000
-
-# Number of export tasks run at once in script 03
-GEE_BATCH_SIZE = 10
-
-# =====================================================================
-# Google Earth Engine Settings
-# =====================================================================
-
-# Upload files written by script 02 ({UPLOAD_PREFIX}000.zip, ...) and the Earth
-# Engine table assets they are uploaded as ({GEE_ASSET_PREFIX}000, ...)
-UPLOAD_PREFIX = 'transect_points_'
+# --- Earth Engine uploads and exports (02, 03) ----------------------------------------------
+CHUNK_SIZE = 400               # whole PAs per upload file (~1 million points)
+GEE_SUBCHUNK_SIZE = 50_000     # points per exported CSV part
+GEE_BATCH_SIZE = 10            # export tasks run at once
+UPLOAD_PREFIX = 'transect_points_'                               # {UPLOAD_PREFIX}NNN.zip -> asset
 GEE_ASSET_PREFIX = f'projects/{GEE_PROJECT}/assets/{UPLOAD_PREFIX}'
+GEE_DRIVE_FOLDER = f'{INDEX_NAME}_gradient'                       # Drive folder of 03's CSVs
+GEE_EXPORT_PREFIX = f'{GEE_DRIVE_FOLDER}_'                        # {GEE_EXPORT_PREFIX}NNN_part_N.csv
 
-# Google Drive folder that script 03 exports CSVs to, and the CSV names ({GEE_EXPORT_PREFIX}NNN_part_N.csv)
-GEE_DRIVE_FOLDER = f'{INDEX_NAME}_gradient'
-GEE_EXPORT_PREFIX = f'{GEE_DRIVE_FOLDER}_'
-
-# =====================================================================
-# Visual inspection of the analysis set, after the analysis
-# (scripts/inspection_export.py + scripts/inspection_app.js). PAs excluded after the
-# inspection are added to EXCLUDED_PIDS (script 01) and the pipeline is rerun.
-# =====================================================================
-INSPECTION_INPUT = DATA_DIR / "05_analysis" / "pa_level.csv"     # the analysis PAs (R script 05)
+# --- Visual inspection (tools/, optional, after the analysis) -------------------------------
+# PAs excluded after the inspection are added to EXCLUDED_PIDS and the pipeline is rerun.
+INSPECTION_INPUT = DATA_DIR / "05_analysis" / "pa_level.csv"     # the analysed PAs (R script 05)
 INSPECTION_DIR = DATA_DIR / "inspection"
-INSPECTION_ZIP = INSPECTION_DIR / "pas_final.zip"     # upload as the table asset of the same name
-INSPECTION_CHECKLIST = INSPECTION_DIR / "checklist.csv"         # the inspection notes
-INSPECTION_DECISIONS = ('', 'exclude', 'check')                 # blank = keep
+INSPECTION_ZIP = INSPECTION_DIR / "pas_final.zip"                # upload as the table asset pas_final
+INSPECTION_CHECKLIST = INSPECTION_DIR / "checklist.csv"
+INSPECTION_DECISIONS = ('', 'exclude', 'check')                  # blank = keep
 
-# =====================================================================
-# Validation: displaced-transect null model (scripts 11-13)
-# =====================================================================
-# Each sampled PA's full transect set is translated by one random vector (no rotation) in a
-# local azimuthal equidistant projection.
-
-VALIDATION_DIR = DATA_DIR / "11_validation"                  # script 11: sample, candidates, log
-VALIDATION_UPLOAD_DIR = VALIDATION_DIR / "upload"            # zipped shapefiles to upload to Earth Engine
-VALIDATION_GEE_CSV_DIR = DATA_DIR / "12_gee"                 # script 12 CSVs (download from Drive)
-VALIDATION_SAMPLE_FRAME = DATA_DIR / "05_analysis" / "pa_level.csv"   # the analysis PAs (R script 05)
-
-VALIDATION_N_PER_BIOME = 50        # PAs per biome
-VALIDATION_RESERVE = 25            # extra PAs drawn per biome, used in draw order to replace PAs
-                                   # without an accepted displacement
-VALIDATION_N_CANDIDATES = 5        # displacements per PA passing the local checks, sent to Earth
-                                   # Engine; the first that passes the imagery checks is accepted
-VALIDATION_MAX_ATTEMPTS = 200      # vectors drawn per PA for the local checks
-VALIDATION_MIN_DIST_KM = 50        # PA size d = the larger of this and the PA's footprint
-                                   # (bounding-box diagonal of its transects: the copy cannot overlap)
-VALIDATION_DIST_MULT = 2           # distance drawn uniformly in [d, mult × d]
-VALIDATION_MAX_BOUNDARY_SHARE = 0.10   # a vector passes if at most this share of displaced
-                                   # transects has a PA boundary between points -1 and 1 (within
-                                   # one TRANSECT_SPACING, 2.5 km, of the centre point)
-VALIDATION_SEED = 20261108
-
-VALIDATION_UPLOAD_PREFIX = 'displaced_points_'
-VALIDATION_ASSET_PREFIX = f'projects/{GEE_PROJECT}/assets/{VALIDATION_UPLOAD_PREFIX}'
-VALIDATION_DRIVE_FOLDER = f'{INDEX_NAME}_gradient_displaced'
-VALIDATION_EXPORT_PREFIX = f'{VALIDATION_DRIVE_FOLDER}_'                    # script 12 CSV names
-VALIDATION_OUT_DIR = DATA_DIR / "13_validation"                            # script 13 (read by R script 14)
+# --- Validation: displaced transects (11-13) ------------------------------------------------
+VALIDATION_DIR = DATA_DIR / "11_validation"                      # 11: sample, candidates
+VALIDATION_UPLOAD_DIR = VALIDATION_DIR / "upload"
+VALIDATION_GEE_CSV_DIR = DATA_DIR / "12_gee"                     # 12 CSVs (downloaded from Drive)
+VALIDATION_SAMPLE_FRAME = DATA_DIR / "05_analysis" / "pa_level.csv"
+VALIDATION_OUT_DIR = DATA_DIR / "13_validation"                  # 13 (read by R script 14)
 VALIDATION_PA_METRICS = VALIDATION_OUT_DIR / "validation_displaced_pa_years.csv"
 VALIDATION_LOG = VALIDATION_OUT_DIR / "validation_displacement_log.csv"
 VALIDATION_CHECKS = VALIDATION_OUT_DIR / "validation_candidate_checks.csv"
 
-# The displaced copy must pass the analysis-set rules of R script 05. The
-# values are those of modules/r/config.R (min_complete_pct, max_water_pct, min_years);
-# tests/test_validation.py checks that they agree.
-VALIDATION_MIN_COMPLETE_PCT = 75   # sea rule: median over years of the % of transects complete
-VALIDATION_MAX_WATER_PCT = 75      # lake rule: mean over years of the % of transects with water
+VALIDATION_N_PER_BIOME = 50        # PAs per biome group
+VALIDATION_RESERVE = 25            # extra PAs per biome, used in draw order for PAs without a copy
+VALIDATION_N_CANDIDATES = 5        # copies per PA sent to Earth Engine; the first that passes is used
+VALIDATION_MAX_ATTEMPTS = 200      # vectors drawn per PA for the local checks
+VALIDATION_MIN_DIST_KM = 50        # d = the larger of this and the PA's footprint (no overlap with it)
+VALIDATION_DIST_MULT = 2           # distance uniform in [d, mult x d]
+VALIDATION_MAX_BOUNDARY_SHARE = 0.10   # max share of copied transects with a PA boundary within 2.5 km of their centre
+VALIDATION_SEED = 20261108
+# The copy passes the analysis-set rules of R script 05 (same values as modules/r/config.R;
+# tests/test_validation.py checks that they agree), and keeps the PA's biome (as script 01).
+VALIDATION_MIN_COMPLETE_PCT = 75   # sea rule: median % of complete transects
+VALIDATION_MAX_WATER_PCT = 75      # lake rule: mean % of transects with water
 VALIDATION_MIN_YEARS = 5           # years with both edge metrics
-# Biome of the copy as of the PA (script 01): RESOLVE ecoregion with the largest area of the PA
-# polygon displaced by the same vector, grouped as in script 04
+
+VALIDATION_UPLOAD_PREFIX = 'displaced_points_'
+VALIDATION_ASSET_PREFIX = f'projects/{GEE_PROJECT}/assets/{VALIDATION_UPLOAD_PREFIX}'
 VALIDATION_POLY_UPLOAD_PREFIX = 'displaced_polygons_'
 VALIDATION_POLY_ASSET_PREFIX = f'projects/{GEE_PROJECT}/assets/{VALIDATION_POLY_UPLOAD_PREFIX}'
-VALIDATION_BIOME_EXPORT = 'displaced_polygons_biome'   # script 12 export, same Drive folder
+VALIDATION_DRIVE_FOLDER = f'{INDEX_NAME}_gradient_displaced'
+VALIDATION_EXPORT_PREFIX = f'{VALIDATION_DRIVE_FOLDER}_'         # 12's CSV names
+VALIDATION_BIOME_EXPORT = 'displaced_polygons_biome'             # 12's polygon biomes, same Drive folder
 
 
 def get_num_chunks():
-    """
-    Count the upload zips written by script 02 (one Earth Engine asset each).
-
-    Counted when called (not on import), so the result reflects the files
-    on disk at that moment rather than when config was first imported.
-    """
+    """Number of upload zips written by script 02 (one Earth Engine asset each), counted on call."""
     return len(list(UPLOAD_DIR.glob(f'{UPLOAD_PREFIX}*.zip')))
-
-# =====================================================================
-# Validation
-# =====================================================================
-
-def validate_config():
-    """Validate configuration settings (runs on import; no Earth Engine checks)."""
-    if START_YEAR > END_YEAR:
-        raise ValueError(f"START_YEAR ({START_YEAR}) must be <= END_YEAR ({END_YEAR})")
-
-    if POINTS_PER_SIDE < 1:
-        raise ValueError("POINTS_PER_SIDE must be >= 1")
-
-    if CHUNK_SIZE < 1:
-        raise ValueError("CHUNK_SIZE must be >= 1")
 
 
 def require_gee_project():
@@ -260,6 +139,3 @@ def require_gee_project():
             "    earthengine set_project YOUR-PROJECT-ID\n"
             "or set the GEE_PROJECT environment variable."
         )
-
-# Run validation on import
-validate_config()

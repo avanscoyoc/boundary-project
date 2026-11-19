@@ -99,5 +99,3 @@ for (i in which(summ$BIOME_NAME == w_label)) {
       summ$p_stratified_t[i])
 }
 say("wrote %s, %s, %s", out$tables, out$diagnostics, out$figures)
-z <- zip_tables(CFG$paths$tables)   # tables.zip, now with TableS_validation
-if (!is.null(z)) say("wrote %s", z)

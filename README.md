@@ -104,7 +104,7 @@ Removed PAs, with the step, the reason and the PA that replaced them, are in `da
 - **13 (local):** each copy is measured with script 04's functions and must pass the rules of an analysed PA (same biome; sea, lake and five-year rules of 05). Per PA the first passing candidate is used; reserves replace PAs with none.
 - **14 (R):** the paired difference PA − copy in the 2003–2025 mean of each metric, per biome and for all validation PAs: mean with a 95% percentile-bootstrap CI, median, share of PAs above their copy, paired Wilcoxon signed-rank test (Holm across biomes). "All PAs" weights every biome equally; the table also gives the estimate weighted by the biomes' shares of the analysed PAs.
 
-**Visual inspection (optional, after the analysis).** `python scripts/inspection_export.py` writes `data/inspection/pas_final.zip` (the analysed PAs in review order: biome, country, name) and `checklist.csv` (never overwritten once it has entries). Upload the zip as the table asset `pas_final`, set `ASSET_ROOT` in `scripts/inspection_app.js`, and paste the app into the Code Editor (or publish it): one PA at a time with its outline, transect points and an info panel. Record decisions in the checklist (`decision`: blank = keep, `exclude`, `check`; `note`); add PAs to exclude to `EXCLUDED_PIDS` in `modules/config.py` (with a comment) and rerun from script 01.
+**Visual inspection (optional, after the analysis).** `python tools/inspection_export.py` writes `data/inspection/pas_final.zip` (the analysed PAs in review order: biome, country, name) and `checklist.csv` (never overwritten once it has entries). Upload the zip as the table asset `pas_final`, set `ASSET_ROOT` in `tools/inspection_app.js`, and paste the app into the Code Editor (or publish it): one PA at a time with its outline, transect points and an info panel. Record decisions in the checklist (`decision`: blank = keep, `exclude`, `check`; `note`); add PAs to exclude to `EXCLUDED_PIDS` in `modules/config.py` (with a comment) and rerun from script 01.
 
 ## Outputs
 
@@ -132,7 +132,7 @@ Python settings are in [modules/config.py](modules/config.py) (the defaults repr
 - **"GEE_PROJECT has not been set":** run `earthengine set_project YOUR-PROJECT-ID`, or set the `GEE_PROJECT` environment variable (project IDs are listed at [console.cloud.google.com](https://console.cloud.google.com/)).
 
 ## License
-The code in this project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+The code in this project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details, except `modules/r/corHaversine.R`, which is adapted from a Stack Overflow answer by Nate Pope and is shared under CC BY-SA (see its header).
 
 **Data:** Protected area boundaries and attributes come from the World Database on Protected Areas (WDPA) and are not covered by the MIT License. They are subject to the [Protected Planet Terms and Conditions](https://www.protectedplanet.net/en/legal): the data may not be redistributed, sub-licensed (including within derivative works), or put to commercial use (including derivative works) without prior written permission from UNEP-WCMC. Obtain the data from [Protected Planet](https://www.protectedplanet.net) or Earth Engine (`WCMC/WDPA/202508/polygons`), and cite it as:
 

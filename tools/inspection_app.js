@@ -9,7 +9,7 @@
  * modules/config.py, and the pipeline is rerun from script 01.
  *
  * BEFORE RUNNING:
- * 1. Run scripts/inspection_export.py and upload data/inspection/pas_final.zip
+ * 1. Run tools/inspection_export.py and upload data/inspection/pas_final.zip
  *    as the table asset PAS_ASSET below. The transect points are the existing
  *    assets transect_points_NNN (script 02).
  * 2. Paste this file into the Code Editor (code.earthengine.google.com) and Run.

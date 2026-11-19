@@ -223,7 +223,7 @@ def test_python_r_and_app_settings_agree():
     first, last = map(int, re.search(r'\byears\s*=\s*(\d{4}):(\d{4})', r).groups())
     assert (config.START_YEAR, config.END_YEAR) == (first, last)
     # the 05 cut-offs shown in the inspection app
-    app = (Path(__file__).parent.parent / 'scripts' / 'inspection_app.js').read_text()
+    app = (Path(__file__).parent.parent / 'tools' / 'inspection_app.js').read_text()
     assert float(re.search(r'SEA_CUTOFF\s*=\s*(\d+)', app).group(1)) == get('min_complete_pct')
     assert float(re.search(r'LAKE_CUTOFF\s*=\s*(\d+)', app).group(1)) == get('max_water_pct')
 

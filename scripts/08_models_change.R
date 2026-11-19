@@ -23,7 +23,7 @@
 # Outputs: <tables>/TableSZ_change_models.csv   long: continuous terms (per 1 SD) and categorical
 #                                               contrasts vs the reference, models A and B
 #          <tables>/TableSW_biome_{omnibus,contrasts,letters}.csv
-#          <diagnostics>/change_models_{coef,wald,contrasts,tau2,spatial_params,moran,
+#          <diagnostics>/change_models_{wald,tau2,spatial_params,moran,
 #                         residuals,ranges}.csv, biome_change_gls_{means,sigma}.csv (Table SW fits)
 
 source(file.path("modules", "r", "load.R"))   # config.R, every module of modules/r, arg() / say()
@@ -99,9 +99,7 @@ sw_stack <- function(field) {
 for (dir in out) dir.create(dir, recursive = TRUE, showWarnings = FALSE)
 write <- function(field, dir, name) readr::write_csv(stack(field), file.path(dir, name), na = "")
 write("sz",             out$tables, "TableSZ_change_models.csv")
-write("coef",           out$diagnostics, "change_models_coef.csv")
 write("wald",           out$diagnostics, "change_models_wald.csv")
-write("contrasts",      out$diagnostics, "change_models_contrasts.csv")
 write("tau",            out$diagnostics, "change_models_tau2.csv")
 write("spatial_params", out$diagnostics, "change_models_spatial_params.csv")
 write("moran",          out$diagnostics, "change_models_moran.csv")
