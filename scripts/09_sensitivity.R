@@ -28,9 +28,7 @@
 # change uses the main analysis's response SDs; covariate z-scores are the main ones.
 #
 # Run from the repository root, after 06–08:
-#   Rscript scripts/09_sensitivity.R [--pilot N] [--cores K] [--out DIR] [--no-refit]
-# --pilot N   N randomly chosen analysis PAs (seed config pilot_seed); outputs go to
-#             data/05_analysis/pilot_N/ unless --out is given; no refit check.
+#   Rscript scripts/09_sensitivity.R [--cores K]
 # --cores K   runs fitted in parallel, K at a time (default 2; ~1.5 GB each at full size).
 # Full size: 8 runs × 6 fixed-range spatial fits (≈ 1–2 min each) plus the refit (≈ 1 h).
 #
@@ -41,12 +39,8 @@
 
 source(file.path("modules", "r", "load.R"))   # config.R, every module of modules/r, arg() / say()
 
-pilot <- as.integer(arg("--pilot") %||% NA)
 cores <- as.integer(arg("--cores") %||% 2L)
-do_refit <- is.na(pilot) && !has_flag("--no-refit")
-out_root <- arg("--out") %||% if (!is.na(pilot)) file.path(CFG$paths$analysis_dir, paste0("pilot_", pilot))
-out <- if (is.null(out_root)) list(tables = CFG$paths$tables, diagnostics = CFG$paths$diagnostics) else
-  list(tables = file.path(out_root, "tables"), diagnostics = file.path(out_root, "diagnostics"))
+out <- list(tables = CFG$paths$tables, diagnostics = CFG$paths$diagnostics)
 read <- function(path, ...) as.data.frame(readr::read_csv(path, guess_max = 1e5, show_col_types = FALSE,
                                                           progress = FALSE, ...))
 ids <- readr::cols(WDPA_PID = "c", .default = readr::col_guess())
@@ -61,25 +55,15 @@ labels  <- RESPONSE_LABELS[metrics]
 sd_resp <- stats::setNames(vapply(metrics, function(m) scaling$sd[scaling$variable == paste0(CFG$responses[[m]], "_mean")],
                                   numeric(1)), metrics)
 rng_file <- file.path(CFG$paths$diagnostics, c("mean_models_ranges.csv", "change_models_ranges.csv"))  # 06, 08
-if (all(file.exists(rng_file))) {
-  rng <- do.call(rbind, lapply(rng_file, read))
-} else if (!is.na(pilot)) {
-  say("pilot: no range tables from 06/08 yet, fixing every range at %g km", CFG$spatial$range_start_km)
-  rng <- expand.grid(response = metrics, model = c("main effects", "interaction", CHANGE_MODEL_LABELS[["A"]]),
-                     stringsAsFactors = FALSE)
-  rng$range_km <- CFG$spatial$range_start_km
-} else stop("Run 06 and 08 first: ", paste(rng_file[!file.exists(rng_file)], collapse = ", "))
+if (!all(file.exists(rng_file))) stop("Run 06 and 08 first: ", paste(rng_file[!file.exists(rng_file)], collapse = ", "))
+rng <- do.call(rbind, lapply(rng_file, read))
 range_of <- function(r, model) { x <- rng$range_km[rng$response == r & rng$model == model]; stopifnot(length(x) == 1); x }
-if (!is.na(pilot)) {
-  set.seed(CFG$pilot_seed)
-  pa <- pa[sort(sample.int(nrow(pa), min(pilot, nrow(pa)))), ]
-}
 
 # ── 2. Runs ──────────────────────────────────────────────────────────────────
 runs <- sensitivity_runs(pa, CFG$sensitivity)
 common <- runs$all_common$pids
-say("09: %d runs; %d PAs in the main set, %d in the transect-subset comparison%s", length(runs), nrow(pa),
-    length(common), if (!is.na(pilot)) sprintf(" (pilot, seed %d)", CFG$pilot_seed) else "")
+say("09: %d runs; %d PAs in the main set, %d in the transect-subset comparison", length(runs), nrow(pa),
+    length(common))
 
 # Per-PA data of a run: PA means, OLS trends (BH over the run's PAs), standardised change.
 run_data <- function(r) {
@@ -209,7 +193,7 @@ s1 <- do.call(rbind, lapply(c("nowater", "nootherpa", "noflags"), function(v) {
 # ── 5. Checks: the main run reproduces 06's main-effects coefficients; one optimised refit ─
 checks <- list()
 sx_file <- file.path(CFG$paths$tables, "TableSX_mean_models_main_effects.csv")
-if (is.na(pilot) && file.exists(sx_file)) {
+if (file.exists(sx_file)) {
   sx <- read(sx_file)
   x <- res[res$run == "main" & res$section == "Mean model, main effects", ]
   i <- match(paste(x$metric, x$term), paste(sx$response, sx$term))
@@ -218,28 +202,26 @@ if (is.na(pilot) && file.exists(sx_file)) {
                             max_rel_diff_estimate = max(abs(x$estimate - sx$estimate[i]) / pmax(abs(sx$estimate[i]), 1e-8)),
                             max_abs_diff_p = max(abs(x$p.value - sx$p.value[i])))
 }
-refit <- NULL
-if (do_refit) {
-  say("refit check: noflags, extent, main effects, range optimised from %g km", CFG$spatial$range_start_km)
-  d <- set_model_references(run_data(runs$noflags), CFG$ref, names(CFG$iucn_groups), CFG$biome_order)
-  f <- model_formula(paste0(CFG$responses[["extent"]], "_mean"), "add")
-  cs_fix <- spatial_setup(d, value = range_of("extent", "main effects"), fixed = TRUE, cache_dir = CFG$paths$cache_dir)
-  cs_opt <- spatial_setup(d, value = CFG$spatial$range_start_km, nugget = CFG$spatial$nugget, cache_dir = CFG$paths$cache_dir)
-  m_fix <- fit_gls_cached(f, d, cs_fix, method = CFG$spatial$method, max_iter = CFG$spatial$max_iter,
-                          cache_dir = CFG$paths$cache_dir)
-  m_opt <- fit_gls_cached(f, d, cs_opt, method = CFG$spatial$method, max_iter = CFG$spatial$max_iter,
-                          cache_dir = CFG$paths$cache_dir,
-                          label = "noflags extent main effects, optimised")
-  a <- coef_table(m_fix, "extent"); b <- coef_table(m_opt, "extent")
-  refit <- data.frame(term = a$term, estimate_fixed = a$estimate, estimate_optimised = b$estimate,
-                      se_fixed = a$std.error, se_optimised = b$std.error,
-                      diff_in_se = (a$estimate - b$estimate) / b$std.error,
-                      p_fixed = a$p.value, p_optimised = b$p.value,
-                      range_fixed_km = range_of("extent", "main effects"),
-                      range_optimised_km = stats::coef(m_opt$modelStruct$corStruct, unconstrained = FALSE)[["range"]])
-  say("refit: range %.2f km (fixed at %.2f); max |coef difference| = %.3f SE", refit$range_optimised_km[1],
-      refit$range_fixed_km[1], max(abs(refit$diff_in_se)))
-}
+# Optimised refit check: one transect-subset fit with its range optimised, vs the fixed range
+say("refit check: noflags, extent, main effects, range optimised from %g km", CFG$spatial$range_start_km)
+d <- set_model_references(run_data(runs$noflags), CFG$ref, names(CFG$iucn_groups), CFG$biome_order)
+f <- model_formula(paste0(CFG$responses[["extent"]], "_mean"), "add")
+cs_fix <- spatial_setup(d, value = range_of("extent", "main effects"), fixed = TRUE, cache_dir = CFG$paths$cache_dir)
+cs_opt <- spatial_setup(d, value = CFG$spatial$range_start_km, nugget = CFG$spatial$nugget, cache_dir = CFG$paths$cache_dir)
+m_fix <- fit_gls_cached(f, d, cs_fix, method = CFG$spatial$method, max_iter = CFG$spatial$max_iter,
+                        cache_dir = CFG$paths$cache_dir)
+m_opt <- fit_gls_cached(f, d, cs_opt, method = CFG$spatial$method, max_iter = CFG$spatial$max_iter,
+                        cache_dir = CFG$paths$cache_dir,
+                        label = "noflags extent main effects, optimised")
+a <- coef_table(m_fix, "extent"); b <- coef_table(m_opt, "extent")
+refit <- data.frame(term = a$term, estimate_fixed = a$estimate, estimate_optimised = b$estimate,
+                    se_fixed = a$std.error, se_optimised = b$std.error,
+                    diff_in_se = (a$estimate - b$estimate) / b$std.error,
+                    p_fixed = a$p.value, p_optimised = b$p.value,
+                    range_fixed_km = range_of("extent", "main effects"),
+                    range_optimised_km = stats::coef(m_opt$modelStruct$corStruct, unconstrained = FALSE)[["range"]])
+say("refit: range %.2f km (fixed at %.2f); max |coef difference| = %.3f SE", refit$range_optimised_km[1],
+    refit$range_fixed_km[1], max(abs(refit$diff_in_se)))
 
 # ── 6. Write ─────────────────────────────────────────────────────────────────
 for (dir in out) dir.create(dir, recursive = TRUE, showWarnings = FALSE)
@@ -248,7 +230,7 @@ w(s1, out$tables, "TableS_sensitivity_metrics.csv")
 w(s2, out$tables, "TableS_sensitivity_models.csv")
 w(do.call(rbind, lapply(done, `[[`, "info")), out$diagnostics, "sensitivity_runs.csv")
 if (length(checks)) w(do.call(rbind, checks), out$diagnostics, "sensitivity_main_check.csv")
-if (!is.null(refit)) w(refit, out$diagnostics, "sensitivity_refit_check.csv")
+w(refit, out$diagnostics, "sensitivity_refit_check.csv")
 for (i in seq_len(nrow(s1))) say("%s %s: r(means) %.3f, diff %.3f SD; r(change) %.3f; classes %.1f%% (kappa %.2f)",
                                  s1$subset[i], s1$metric[i], s1$r_mean[i], s1$mean_diff_sd[i], s1$r_change[i],
                                  s1$pct_class_agreement[i], s1$kappa_class[i])

@@ -63,7 +63,7 @@ python scripts/13_validation_edge_metrics.py
 Rscript scripts/14_validation_compare.R
 ```
 
-Scripts 06, 08 and 09 take `--pilot N` (a random subset of PAs, for a quick check) and `--cores K`. At full size each spatial fit takes about an hour and 1.5 GB of memory (8 GB machine: one script at a time). Fits are cached in `data/05_analysis/cache/` by content, so a rerun only refits what changed. **Tests:** `python -m pytest tests/` and `Rscript -e 'testthat::test_dir("tests/r")'`.
+Scripts 06, 08 and 09 take `--cores K` (fits run in parallel, default 2). At full size each spatial fit takes about an hour and 1.5 GB of memory (8 GB machine: one script at a time). Fits are cached in `data/05_analysis/cache/` by content, so a rerun only refits what changed. **Tests:** `python -m pytest tests/` and `Rscript -e 'testthat::test_dir("tests/r")'`.
 
 ## What each script does
 
@@ -86,7 +86,7 @@ Part 2, each PA in its own azimuthal equidistant projection (true meters):
 
 Removed PAs, with the step, the reason and the PA that replaced them, are in `data/02_pas/pas_removed.gpkg`.
 
-**03 Sample imagery (Earth Engine).** The gradient magnitude of each year's median NDVI composite (MOD13A1, all 16-day composites of the year; no quality, cloud or snow masking), on the native MODIS grid (~463 m), plus water (JRC Global Surface Water max extent), human modification (gHM) and elevation and slope (Copernicus GLO-30), at every point; exported in parts of 50,000 points.
+**03 Sample imagery (Earth Engine).** The gradient magnitude of each year's median NDVI composite (MOD13A1, all 16-day composites of the year; no quality, cloud or snow masking), on the native MODIS grid (~463 m), plus water (JRC Global Surface Water 1.4, maximum extent), human modification (gHM, 2016) and elevation and slope (Copernicus GLO-30, 2024 release), at every point; exported in parts of 50,000 points.
 
 **04 Edge metrics (local).** Checks that every exported point arrived exactly once, builds one row per complete transect-year (all 5 points have a value), computes PA-year metrics for four transect versions, merges PA attributes, and groups the biomes (`modules/biome_groups.csv`, read by Python and R): 8 groups by vegetation structure and temperature (Tropical Grassland, with flooded grasslands; Temperate & Montane Grassland; Tundra; Desert; Mediterranean; Tropical Forest; Temperate Forest; Boreal Forest), plus Mangrove and RESOLVE's unclassified rock and ice ("N/A", Rock & Ice), which 05 removes. Also lists the transects with a missing value in any year (`data/04_transect_years/missing_transects.csv`).
 
@@ -122,7 +122,7 @@ Removed PAs, with the step, the reason and the PA that replaced them, are in `da
 
 ## Configuration
 
-Python settings are in [modules/config.py](modules/config.py) (the defaults reproduce the analysis): `START_YEAR`/`END_YEAR` (2003–2025), `BOUNDARY_SPACING` (500 m), `TRANSECT_SPACING` (2,500 m), `POINTS_PER_SIDE` (2), `CHUNK_SIZE` (400 PAs per upload file), `EXCLUDED_PIDS`, `VALIDATION_*`, and `RUN_TAG` (optional tag added to asset, Drive folder and file names, e.g. `run2`, so the outputs of a new full run never mix with old ones). R settings (analysis set, reference levels, seeds, spatial model, sensitivity, validation) are in [modules/r/config.R](modules/r/config.R).
+Python settings are in [modules/config.py](modules/config.py) (the defaults reproduce the analysis): `START_YEAR`/`END_YEAR` (2003–2025), `BOUNDARY_SPACING` (500 m), `TRANSECT_SPACING` (2,500 m), `POINTS_PER_SIDE` (2), `CHUNK_SIZE` (400 PAs per upload file), `EXCLUDED_PIDS`, `VALIDATION_*`. R settings (analysis set, reference levels, seeds, spatial model, sensitivity, validation) are in [modules/r/config.R](modules/r/config.R).
 
 ## Troubleshooting
 

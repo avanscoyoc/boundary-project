@@ -14,9 +14,7 @@
 # values) is a reference line.
 #
 # Run from the repository root, after 05 and Python scripts 11–13:
-#   Rscript scripts/14_validation_compare.R [--from DIR] [--out DIR]
-# --from DIR  read validation_displaced_pa_years.csv and validation_displacement_log.csv from DIR
-# --out DIR   write tables, diagnostics and figures under DIR instead of results/
+#   Rscript scripts/14_validation_compare.R
 #
 # Inputs:  data/05_analysis/pa_level.csv, scaling.csv (05); data/13_validation/
 #          validation_displaced_pa_years.csv, validation_displacement_log.csv (13)
@@ -27,12 +25,8 @@
 
 source(file.path("modules", "r", "load.R"))   # config.R, every module of modules/r, arg() / say()
 
-src <- if (is.null(arg("--from"))) list(pa_years = CFG$validation$pa_years, log = CFG$validation$log) else
-  list(pa_years = file.path(arg("--from"), basename(CFG$validation$pa_years)),
-       log = file.path(arg("--from"), basename(CFG$validation$log)))
-out <- if (is.null(arg("--out"))) list(tables = CFG$paths$tables, diagnostics = CFG$paths$diagnostics,
-                                       figures = CFG$paths$figures) else
-  lapply(c(tables = "tables", diagnostics = "diagnostics", figures = "figures"), function(x) file.path(arg("--out"), x))
+src <- list(pa_years = CFG$validation$pa_years, log = CFG$validation$log)
+out <- list(tables = CFG$paths$tables, diagnostics = CFG$paths$diagnostics, figures = CFG$paths$figures)
 read <- function(path) as.data.frame(readr::read_csv(path, col_types = readr::cols(WDPA_PID = "c", .default = readr::col_guess()),
                                                      guess_max = 1e5, show_col_types = FALSE, progress = FALSE))
 
@@ -105,7 +99,5 @@ for (i in which(summ$BIOME_NAME == w_label)) {
       summ$p_stratified_t[i])
 }
 say("wrote %s, %s, %s", out$tables, out$diagnostics, out$figures)
-if (is.null(arg("--out"))) {
-  z <- zip_tables(CFG$paths$tables)   # tables.zip, now with TableS_validation
-  if (!is.null(z)) say("wrote %s", z)
-}
+z <- zip_tables(CFG$paths$tables)   # tables.zip, now with TableS_validation
+if (!is.null(z)) say("wrote %s", z)

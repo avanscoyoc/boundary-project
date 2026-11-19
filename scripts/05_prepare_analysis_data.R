@@ -6,8 +6,7 @@
 # the PA set of the transect-subset sensitivity runs, and the counts.
 #
 # Run from the repository root:
-#   Rscript scripts/05_prepare_analysis_data.R [--out DIR]
-# --out DIR writes every output under DIR instead (a dry run; data/ and results/ are untouched).
+#   Rscript scripts/05_prepare_analysis_data.R
 #
 # Inputs:  results/pa_edge_metrics_ndvi.csv (04: one row per PA-year)
 #          data/02_pas/pas_selected.gpkg (02: PA polygons; every PA of 02, with its RESOLVE biome)
@@ -31,12 +30,7 @@
 
 source(file.path("modules", "r", "load.R"))   # config.R, every module of modules/r, arg() / say()
 
-out_root <- arg("--out")
-out <- if (is.null(out_root)) {
-  list(dir = CFG$paths$analysis_dir, counts = CFG$paths$counts)
-} else {
-  list(dir = file.path(out_root, "05_analysis"), counts = file.path(out_root, "analysis_counts.json"))
-}
+out <- list(dir = CFG$paths$analysis_dir, counts = CFG$paths$counts)
 
 # ── 1. Inputs ────────────────────────────────────────────────────────────────
 m <- readr::read_csv(CFG$paths$pa_metrics, guess_max = 1e6, show_col_types = FALSE, progress = FALSE,

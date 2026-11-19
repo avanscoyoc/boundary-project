@@ -28,8 +28,7 @@ Outputs: data/11_validation/sample.csv            sampled PAs: biome, draw order
              (both: field WDPA_PID = "<WDPA_PID>#<candidate>", as the key of script 13)
 
 Usage:
-    python scripts/11_validation_displace_transects.py [--n-per-biome N] [--reserve R] [--out DIR]
-(--out writes everything under DIR instead of data/11_validation, e.g. for a test.)
+    python scripts/11_validation_displace_transects.py
 """
 
 import sys
@@ -50,14 +49,10 @@ from modules.validation import (sample_pas, candidate_displacements, aeqd_transf
                                 displacement_centre, displace_polygon, write_polygon_zip, CANDIDATE_SEP)
 
 
-def arg(name, default, cast):
-    return cast(sys.argv[sys.argv.index(name) + 1]) if name in sys.argv else default
-
-
-N_PER_BIOME = arg('--n-per-biome', config.VALIDATION_N_PER_BIOME, int)
-RESERVE = arg('--reserve', config.VALIDATION_RESERVE, int)
-OUT_DIR = arg('--out', config.VALIDATION_DIR, Path)
-UPLOAD_DIR = OUT_DIR / 'upload'
+N_PER_BIOME = config.VALIDATION_N_PER_BIOME
+RESERVE = config.VALIDATION_RESERVE
+OUT_DIR = config.VALIDATION_DIR
+UPLOAD_DIR = config.VALIDATION_UPLOAD_DIR
 POINTS_PER_ZIP = 1_000_000
 POLY_VERTICES_PER_ZIP = 2_500_000
 

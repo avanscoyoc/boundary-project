@@ -23,7 +23,7 @@ Outputs: data/13_validation/validation_displaced_pa_years.csv  one row per valid
                                                     accepted one, distance, status
 
 Usage:
-    python scripts/13_validation_edge_metrics.py [--csv-dir DIR] [--sample-dir DIR] [--out DIR]
+    python scripts/13_validation_edge_metrics.py
 """
 
 import sys
@@ -41,13 +41,8 @@ from modules.validation import (CHECK_RULES, biome_from_num, candidate_checks, d
                                 select_pas, split_key)
 
 
-def arg(name, default, cast):
-    return cast(sys.argv[sys.argv.index(name) + 1]) if name in sys.argv else default
-
-
-CSV_DIR = arg('--csv-dir', config.VALIDATION_GEE_CSV_DIR, Path)
-SAMPLE_DIR = arg('--sample-dir', config.VALIDATION_DIR, Path)
-OUT = arg('--out', None, Path)
+CSV_DIR = config.VALIDATION_GEE_CSV_DIR
+SAMPLE_DIR = config.VALIDATION_DIR
 YEARS = list(range(config.START_YEAR, config.END_YEAR + 1))
 
 print("=" * 80)
@@ -140,9 +135,7 @@ log['status'] = np.select(
     ['selected', 'accepted, not needed (reserve)', 'failed: no displacement passed the local checks'],
     'failed: no candidate met the analysis-set rules')
 
-out_metrics = (OUT / config.VALIDATION_PA_METRICS.name) if OUT else config.VALIDATION_PA_METRICS
-out_checks = (OUT / config.VALIDATION_CHECKS.name) if OUT else config.VALIDATION_CHECKS
-out_log = (OUT / config.VALIDATION_LOG.name) if OUT else config.VALIDATION_LOG
+out_metrics, out_checks, out_log = config.VALIDATION_PA_METRICS, config.VALIDATION_CHECKS, config.VALIDATION_LOG
 out_metrics.parent.mkdir(parents=True, exist_ok=True)
 metrics.to_csv(out_metrics, index=False)
 chk.to_csv(out_checks, index=False)

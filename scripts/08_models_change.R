@@ -13,11 +13,8 @@
 # categorical rows of Table SZ are the coefficients of the fit.
 #
 # Run from the repository root (after 07):
-#   Rscript scripts/08_models_change.R [--pilot N] [--cores K] [--out DIR]
-# --pilot N  N randomly chosen PAs (the same PAs as 06 --pilot N); outputs go to
-#            data/05_analysis/pilot_N/ unless --out is given.
+#   Rscript scripts/08_models_change.R [--cores K]
 # --cores K  the two metrics are fitted in parallel when K ≥ 2 (default 2; ~1.5 GB each).
-# --out DIR  write tables to DIR/tables and DIR/diagnostics instead of results/.
 # At full size A and B each take about an hour per metric: run in the background, not at the
 # same time as 06 (memory). The spatial set-up is the same as 06's (same PAs and settings), so
 # it is loaded from the cache.
@@ -31,11 +28,8 @@
 
 source(file.path("modules", "r", "load.R"))   # config.R, every module of modules/r, arg() / say()
 
-pilot <- as.integer(arg("--pilot") %||% NA)
 cores <- as.integer(arg("--cores") %||% 2L)
-out_root <- arg("--out") %||% if (!is.na(pilot)) file.path(CFG$paths$analysis_dir, paste0("pilot_", pilot))
-out <- if (is.null(out_root)) list(tables = CFG$paths$tables, diagnostics = CFG$paths$diagnostics) else
-  list(tables = file.path(out_root, "tables"), diagnostics = file.path(out_root, "diagnostics"))
+out <- list(tables = CFG$paths$tables, diagnostics = CFG$paths$diagnostics)
 read <- function(name) {
   as.data.frame(readr::read_csv(file.path(CFG$paths$analysis_dir, name), guess_max = 1e5,
                                 col_types = readr::cols(WDPA_PID = "c", .default = readr::col_guess()),
@@ -54,15 +48,9 @@ d <- pa[vars]
 i <- match(d$WDPA_PID, tr$WDPA_PID)
 for (col in unlist(resp)) d[[col]] <- tr[[col]][i]
 stopifnot(!anyNA(d))
-if (!is.na(pilot)) {   # the same rows as 06 --pilot N (same seed and row count)
-  set.seed(CFG$pilot_seed)
-  d <- d[sort(sample.int(nrow(d), min(pilot, nrow(d)))), ]
-}
 d <- set_model_references(d, CFG$ref, names(CFG$iucn_groups), CFG$biome_order)
 rownames(d) <- NULL
-say("08: %d PAs%s; reference levels %s / %s; %d cores", nrow(d),
-    if (!is.na(pilot)) sprintf(" (pilot, seed %d)", CFG$pilot_seed) else "",
-    CFG$ref$iucn, CFG$ref$biome, cores)
+say("08: %d PAs; reference levels %s / %s; %d cores", nrow(d), CFG$ref$iucn, CFG$ref$biome, cores)
 
 # ── 2. Fits (A, non-spatial A, B per metric; the metrics in parallel) ────────
 cs <- spatial_setup(d, value = CFG$spatial$range_start_km, nugget = CFG$spatial$nugget,

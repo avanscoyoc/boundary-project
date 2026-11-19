@@ -18,9 +18,7 @@
 # A figure is skipped (with a message) when its input tables are missing, e.g. before 08 has run.
 #
 # Run from the repository root:
-#   Rscript scripts/10_figures.R [--from DIR] [--out DIR]
-# --from DIR  read tables from DIR/tables and DIR/diagnostics (e.g. a pilot) instead of results/.
-# --out DIR   write to DIR/figures, DIR/diagnostics and DIR/map_layers instead.
+#   Rscript scripts/10_figures.R
 #
 # Inputs:  results/tables/ (06, 07), results/diagnostics/ (06, 08), data/05_analysis/pa_level.csv
 #          (05), pa_trends.csv (07), data/02_pas/pas_selected.gpkg (02)
@@ -28,18 +26,12 @@
 #          fig4_trends.{pdf,png}, fig4b_case_<WDPA_PID>.{pdf,png}, figS_slope_correlation.{pdf,png};
 #          results/diagnostics/fig_moran_correlogram_mean_models.png, fig_residuals_<model>_<response>.png;
 #          data/10_map_layers/pa_map_layers.gpkg, case_study_pas.kml;
-#          results/R_sessionInfo.txt (without --out)
+#          results/R_sessionInfo.txt, results/tables.zip
 
 source(file.path("modules", "r", "load.R"))   # config.R, every module of modules/r, arg() / say()
 
-src <- if (is.null(arg("--from"))) list(tables = CFG$paths$tables, diagnostics = CFG$paths$diagnostics) else
-  list(tables = file.path(arg("--from"), "tables"), diagnostics = file.path(arg("--from"), "diagnostics"))
-out <- if (is.null(arg("--out"))) {
-  list(figures = CFG$paths$figures, diagnostics = CFG$paths$diagnostics, map_layers = CFG$paths$map_layers)
-} else {
-  list(figures = file.path(arg("--out"), "figures"), diagnostics = file.path(arg("--out"), "diagnostics"),
-       map_layers = file.path(arg("--out"), "map_layers"))
-}
+src <- list(tables = CFG$paths$tables, diagnostics = CFG$paths$diagnostics)
+out <- list(figures = CFG$paths$figures, diagnostics = CFG$paths$diagnostics, map_layers = CFG$paths$map_layers)
 for (dir in out) dir.create(dir, recursive = TRUE, showWarnings = FALSE)
 
 # Tables by name ("tables/x.csv" or "diagnostics/x.csv"); NULL if any is missing.
@@ -149,11 +141,7 @@ for (r in c("mean_models_residuals", "change_models_residuals")) {
   }
 }
 
-if (is.null(arg("--out"))) {
-  writeLines(utils::capture.output(utils::sessionInfo()), CFG$paths$session_info)
-  say("wrote %s", CFG$paths$session_info)
-}
-if (is.null(arg("--from")) && is.null(arg("--out"))) {
-  z <- zip_tables(CFG$paths$tables)
-  if (!is.null(z)) say("wrote %s", z)
-}
+writeLines(utils::capture.output(utils::sessionInfo()), CFG$paths$session_info)
+say("wrote %s", CFG$paths$session_info)
+z <- zip_tables(CFG$paths$tables)
+if (!is.null(z)) say("wrote %s", z)

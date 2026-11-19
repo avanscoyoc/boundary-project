@@ -138,9 +138,6 @@ CFG <- local({
       bands_km        = c(0, 50, 100, 250, 500, 1000, 2000)
     ),
 
-    # Seed of the random PA subset of a pilot run (scripts 06, 08, 09 --pilot N)
-    pilot_seed = 1L,
-
     # ── Validation: displaced transects (14) ─────────────────────────────────
     # Displaced-copy metrics come from Python scripts 11–13 (data/13_validation/).
     validation = list(

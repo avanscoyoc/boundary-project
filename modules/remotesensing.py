@@ -159,7 +159,7 @@ def sampling_image(with_biome=False):
     (their displaced copies), so both are measured identically.
 
     Bands, in order: max_extent (JRC Global Surface Water 1.4), gHM (global human
-    modification, mean of the collection), elevation and terrain_slope (Copernicus GLO-30),
+    modification, 2016), elevation and terrain_slope (Copernicus GLO-30),
     BIOME_NUM (RESOLVE Ecoregions 2017; only with ``with_biome``, script 12), then one NDVI
     gradient band per year, named by the year (get_gradient_magnitude).
 
@@ -169,7 +169,8 @@ def sampling_image(with_biome=False):
         The image, and the export selectors (point ID columns + band names).
     """
     gsw = ee.Image('JRC/GSW1_4/GlobalSurfaceWater')
-    hm = ee.ImageCollection('CSP/HM/GlobalHumanModification').mean()
+    # the 2016 image, pinned: the collection's only image now, so a later addition can't change it
+    hm = ee.Image('CSP/HM/GlobalHumanModification/2016')
     # Copernicus DEM: tag the mosaic with the tiles' native projection. Without it,
     # ee.Terrain.slope works on the mosaic's default 1-degree grid and returns
     # near-zero or missing slopes (Earth Engine catalog: COPERNICUS/DEM/GLO30_2024_1).

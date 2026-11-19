@@ -360,8 +360,8 @@ def evenspace(xy, sep, start=0):
         Columns x, y (points on the line), x0, y0, x1, y1 (the segment each
         point lies on), theta (segment angle, radians). The last point before
         the end of the line is dropped, so on a closed ring the gap between the
-        last and the first point is between sep and 2 * sep (never shorter than
-        sep; points closer than sep at the seam would give near-duplicate transects).
+        last and the first point is more than sep and at most 2 * sep (never shorter
+        than sep; points closer than sep at the seam would give near-duplicate transects).
     """
     xy = np.asarray(xy, dtype=float)
 
@@ -372,7 +372,7 @@ def evenspace(xy, sep, start=0):
     linelength = dtotal[-1]
 
     pos = np.arange(start, linelength, sep)
-    pos = pos[:-1]  # drop the last point: the seam gap of a closed ring is then in [sep, 2 * sep)
+    pos = pos[:-1]  # drop the last point: the seam gap of a closed ring is then in (sep, 2 * sep]
     if len(pos) == 0:
         return pd.DataFrame(columns=['x', 'y', 'x0', 'y0', 'x1', 'y1', 'theta'])
 

@@ -19,8 +19,7 @@
 # PA subsets are 09's.
 #
 # Run from the repository root (about a minute):
-#   Rscript scripts/07_trends.R [--out DIR]
-# --out DIR writes every output under DIR instead (a dry run).
+#   Rscript scripts/07_trends.R
 #
 # Inputs:  data/05_analysis/pa_level.csv, pa_year.csv, scaling.csv (05)
 # Outputs: data/05_analysis/pa_trends.csv            one row per PA: trend columns, change_*_z,
@@ -39,13 +38,7 @@
 
 source(file.path("modules", "r", "load.R"))   # config.R, every module of modules/r, arg() / say()
 
-out_root <- arg("--out")
-out <- if (is.null(out_root)) {
-  list(data = CFG$paths$analysis_dir, tables = CFG$paths$tables, diagnostics = CFG$paths$diagnostics)
-} else {
-  list(data = file.path(out_root, "05_analysis"), tables = file.path(out_root, "tables"),
-       diagnostics = file.path(out_root, "diagnostics"))
-}
+out <- list(data = CFG$paths$analysis_dir, tables = CFG$paths$tables, diagnostics = CFG$paths$diagnostics)
 read <- function(name, ...) {
   as.data.frame(readr::read_csv(file.path(CFG$paths$analysis_dir, name), guess_max = 1e5,
                                 show_col_types = FALSE, progress = FALSE, ...))
