@@ -21,7 +21,7 @@ exports only part 0 of point asset 000 and the biome of the first 20 polygons of
 
 MANUAL STEP AFTER RUNNING:
 Download all CSVs from the Google Drive folder 'ndvi_gradient_displaced' (the
-point parts and displaced_polygons_biome_NNN.csv) to data/12_gee_validation/, then run
+point parts and displaced_polygons_biome_NNN.csv) to data/12_gee/, then run
 script 13.
 """
 
@@ -90,4 +90,4 @@ while True:
 print("\nPolygon biome exports: " + ", ".join(f"{k} {v}" for k, v in states.items()))
 if any(v != 'COMPLETED' for v in states.values()):
     print("  WARNING: rerun the failed polygon export(s) before script 13.")
-print("\nDone. Download the CSVs to data/12_gee_validation/ and run script 13.")
+print("\nDone. Download the CSVs to data/12_gee/ and run script 13.")

@@ -18,14 +18,14 @@
 # --from DIR  read validation_displaced_pa_years.csv and validation_displacement_log.csv from DIR
 # --out DIR   write tables, diagnostics and figures under DIR instead of results/
 #
-# Inputs:  data/05_analysis/pa_level.csv, scaling.csv (05); results/validation_displaced_pa_years.csv,
-#          results/validation_displacement_log.csv (13)
+# Inputs:  data/05_analysis/pa_level.csv, scaling.csv (05); data/13_validation/
+#          validation_displaced_pa_years.csv, validation_displacement_log.csv (13)
 # Outputs: <tables>/TableS_validation.csv            paired summary per biome and all PAs
 #          <diagnostics>/validation_paired_pa.csv      one row per validation PA
 #          <diagnostics>/validation_attrition.csv      sampled PAs by biome and status
 #          <figures>/figS_validation.{pdf,png}
 
-source(file.path("modules", "r", "load.R"))   # config.R + every module of modules/r
+source(file.path("modules", "r", "load.R"))   # config.R, every module of modules/r, arg() / say()
 
 src <- if (is.null(arg("--from"))) list(pa_years = CFG$validation$pa_years, log = CFG$validation$log) else
   list(pa_years = file.path(arg("--from"), basename(CFG$validation$pa_years)),
@@ -105,3 +105,7 @@ for (i in which(summ$BIOME_NAME == w_label)) {
       summ$p_stratified_t[i])
 }
 say("wrote %s, %s, %s", out$tables, out$diagnostics, out$figures)
+if (is.null(arg("--out"))) {
+  z <- zip_tables(CFG$paths$tables)   # tables.zip, now with TableS_validation
+  if (!is.null(z)) say("wrote %s", z)
+}

@@ -39,7 +39,7 @@
 # Outputs: <tables>/TableS_sensitivity_metrics.csv, TableS_sensitivity_models.csv;
 #          <diagnostics>/sensitivity_runs.csv, sensitivity_main_check.csv, sensitivity_refit_check.csv
 
-source(file.path("modules", "r", "load.R"))   # config.R + every module of modules/r
+source(file.path("modules", "r", "load.R"))   # config.R, every module of modules/r, arg() / say()
 
 pilot <- as.integer(arg("--pilot") %||% NA)
 cores <- as.integer(arg("--cores") %||% 2L)

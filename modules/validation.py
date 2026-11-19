@@ -17,7 +17,7 @@ orientation and clustering of the transects are kept.
 - biome_from_num: RESOLVE BIOME_NUM -> the 8 biome groups of script 04 (point diagnostics)
 
 The edge metrics of the accepted displaced transects are computed with the functions of
-script 04 (modules.analysis), so PA and displaced copy are measured identically.
+script 04 (modules.edge_metrics), so PA and displaced copy are measured identically.
 """
 
 import numpy as np
@@ -25,7 +25,7 @@ import pandas as pd
 import pyproj
 import shapely
 
-from modules.analysis import biome_groups, recategorize_biome
+from modules.edge_metrics import biome_groups, recategorize_biome
 
 POINT_IDS = (-2, -1, 0, 1, 2)
 CANDIDATE_SEP = '#'   # upload key: "<WDPA_PID>#<candidate>"
@@ -104,7 +104,7 @@ def write_polygon_zip(keys, geoms, zip_path):
     """
     Displaced PA polygons as a zipped shapefile for Earth Engine table upload: field WDPA_PID
     (the key "<WDPA_PID>#<candidate>"), geometry in EPSG:4326. Written in a temporary folder
-    first, as modules.preprocessing.write_upload_zip.
+    first, as modules.transects.write_upload_zip.
     """
     import tempfile
     import zipfile
@@ -256,12 +256,12 @@ def displaced_metrics(df, years):
     """
     PA-year edge metrics of transect points, with script 04's functions (all transects only).
 
-    ``df``: points as read by modules.analysis.read_asset_csvs (WDPA_PID, transectID, pointID,
+    ``df``: points as read by modules.edge_metrics.read_asset_csvs (WDPA_PID, transectID, pointID,
     max_extent, gHM, elevation, terrain_slope, one column per year). Returns one row per
     PA-year with at least one complete transect: WDPA_PID, year, n_trnst, edge_extent, D02, D01,
     D0m1, D0m2, edge_intensity, water_extent_pct.
     """
-    from modules.analysis import build_transect_years, pa_year_metrics
+    from modules.edge_metrics import build_transect_years, pa_year_metrics
     ty, _ = build_transect_years(df, years)
     m = pa_year_metrics(ty)
     cols = ['WDPA_PID', 'year', 'n_trnst', 'edge_extent', 'D02', 'D01', 'D0m1', 'D0m2', 'edge_intensity',

@@ -37,7 +37,7 @@
 #                         trend_residual_autocorrelation{,_summary}.csv (per PA; per biome and
 #                         all PAs)
 
-source(file.path("modules", "r", "load.R"))   # config.R + every module of modules/r
+source(file.path("modules", "r", "load.R"))   # config.R, every module of modules/r, arg() / say()
 
 out_root <- arg("--out")
 out <- if (is.null(out_root)) {

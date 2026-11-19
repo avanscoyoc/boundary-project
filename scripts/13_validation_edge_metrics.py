@@ -13,13 +13,13 @@ VALIDATION_N_PER_BIOME PAs in draw order with an accepted copy are the validatio
 (reserves replace PAs without one).
 
 Inputs:  data/11_validation/sample.csv, candidates.csv (script 11)
-         data/12_gee_validation/*.csv (script 12, downloaded from Drive): the point parts and
+         data/12_gee/*.csv (script 12, downloaded from Drive): the point parts and
          displaced_polygons_biome_NNN.csv
-Outputs: results/validation_displaced_pa_years.csv  one row per validation PA-year of the
+Outputs: data/13_validation/validation_displaced_pa_years.csv  one row per validation PA-year of the
                                                     displaced copy (WDPA_PID = the original PA)
-         results/validation_candidate_checks.csv    one row per candidate: the rule values and
+         data/13_validation/validation_candidate_checks.csv    one row per candidate: the rule values and
                                                     results, passes, accepted
-         results/validation_displacement_log.csv    one row per sampled PA: candidates, the
+         data/13_validation/validation_displacement_log.csv    one row per sampled PA: candidates, the
                                                     accepted one, distance, status
 
 Usage:
@@ -36,7 +36,7 @@ import numpy as np
 import pandas as pd
 
 from modules import config
-from modules.analysis import find_asset_csvs, read_asset_csvs, recategorize_biome
+from modules.edge_metrics import find_asset_csvs, read_asset_csvs, recategorize_biome
 from modules.validation import (CHECK_RULES, biome_from_num, candidate_checks, displaced_metrics,
                                 select_pas, split_key)
 

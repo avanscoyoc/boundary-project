@@ -30,7 +30,7 @@
 #          data/10_map_layers/pa_map_layers.gpkg, case_study_pas.kml;
 #          results/R_sessionInfo.txt (without --out)
 
-source(file.path("modules", "r", "load.R"))   # config.R + every module of modules/r
+source(file.path("modules", "r", "load.R"))   # config.R, every module of modules/r, arg() / say()
 
 src <- if (is.null(arg("--from"))) list(tables = CFG$paths$tables, diagnostics = CFG$paths$diagnostics) else
   list(tables = file.path(arg("--from"), "tables"), diagnostics = file.path(arg("--from"), "diagnostics"))
@@ -152,4 +152,8 @@ for (r in c("mean_models_residuals", "change_models_residuals")) {
 if (is.null(arg("--out"))) {
   writeLines(utils::capture.output(utils::sessionInfo()), CFG$paths$session_info)
   say("wrote %s", CFG$paths$session_info)
+}
+if (is.null(arg("--from")) && is.null(arg("--out"))) {
+  z <- zip_tables(CFG$paths$tables)
+  if (!is.null(z)) say("wrote %s", z)
 }

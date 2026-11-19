@@ -142,10 +142,10 @@ CFG <- local({
     pilot_seed = 1L,
 
     # ── Validation: displaced transects (14) ─────────────────────────────────
-    # Displaced-copy metrics come from Python scripts 11–13 (results/validation_*.csv).
+    # Displaced-copy metrics come from Python scripts 11–13 (data/13_validation/).
     validation = list(
-      pa_years = p("results", "validation_displaced_pa_years.csv"),
-      log      = p("results", "validation_displacement_log.csv"),
+      pa_years = p("data", "13_validation", "validation_displaced_pa_years.csv"),
+      log      = p("data", "13_validation", "validation_displacement_log.csv"),
       seed     = 47L,
       chance_extent = 8 / 15   # edge rate if the five values were exchangeable (no structure)
     ),

@@ -1,5 +1,5 @@
 """
-Unit tests for modules/preprocessing.py (script 02 geometry and transect logic).
+Unit tests for modules/transects.py (script 02 geometry and transect logic).
 
 Run from the repo root:  python -m pytest tests/
 """
@@ -17,7 +17,7 @@ import shapely
 from pyproj import Geod
 from shapely.geometry import Polygon, box
 
-from modules.preprocessing import (
+from modules.transects import (
     evenspace, extract_coords, make_pa_transects, resolve_overlaps,
     merge_same_name, add_shape_metrics, flag_other_pa, drop_excluded_pids, own_pid_sets,
 )
@@ -231,7 +231,7 @@ def test_flag_other_pa_ignores_own_and_merged_pas():
 # ---------------------------------------------------------------- coverage filter
 
 def test_generate_transects_removes_pa_with_coverage_gap(tmp_path):
-    from modules.preprocessing import generate_transects
+    from modules.transects import generate_transects
     pas = pas_frame([('U', u_shape(), 'u', 'X', 2000), ('SQ', box(100000, 0, 160000, 60000), 'sq', 'X', 2000)])
     kwargs = dict(src_crs=MOLL, sample_dist=500, transect_unit=2500, npts=2, buffer_dist=5500,
                   chunk_size=400, upload_dir=tmp_path, upload_prefix='t_', points_path=tmp_path / 'p.parquet',

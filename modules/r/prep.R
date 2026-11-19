@@ -249,7 +249,7 @@ final_set_summary <- function(pids, polys, py, area, points_per_transect = 5L) {
 }
 
 #' RESOLVE Ecoregions 2017 biome names -> the groups of script 04 (`recategorize_biome()` in
-#' modules/analysis.py), from the one table both read: modules/biome_groups.csv. 8 analysis
+#' modules/edge_metrics.py), from the one table both read: modules/biome_groups.csv. 8 analysis
 #' groups, plus Mangrove and Rock & Ice (RESOLVE's "N/A"), excluded by script 05. A missing name,
 #' "Unknown", "None" or "" gives NA; any other name is kept as it is (as in Python).
 BIOME_GROUPS <- local({

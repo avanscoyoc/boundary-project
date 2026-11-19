@@ -36,7 +36,7 @@
 #          <diagnostics>/mean_models_ranges.csv           estimated range of each spatial fit (09
 #                                                         fixes the sensitivity refits at these)
 
-source(file.path("modules", "r", "load.R"))   # config.R + every module of modules/r
+source(file.path("modules", "r", "load.R"))   # config.R, every module of modules/r, arg() / say()
 
 pilot <- as.integer(arg("--pilot") %||% NA)
 cores <- as.integer(arg("--cores") %||% 2L)

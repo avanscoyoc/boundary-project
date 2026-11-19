@@ -1,4 +1,4 @@
-"""Unit tests for modules/analysis.py (script 04 metrics, biome groups, CSV names)."""
+"""Unit tests for modules/edge_metrics.py (script 04 metrics, biome groups, CSV names)."""
 
 import sys
 from pathlib import Path
@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import numpy as np
 import pandas as pd
 
-from modules.analysis import _grouped_cohens_d, PT_COLS, recategorize_biome, find_asset_csvs
+from modules.edge_metrics import _grouped_cohens_d, PT_COLS, recategorize_biome, find_asset_csvs
 
 
 # Reference implementation of Cohen's d; pa_year_metrics computes the same values with
@@ -49,7 +49,7 @@ def test_grouped_cohens_d_matches_reference():
 
 def test_missing_transects():
     """Transects with a missing value in any year, as build_transect_years drops them (script 04 → 05)."""
-    from modules.analysis import missing_transects
+    from modules.edge_metrics import missing_transects
     years = [2003, 2004, 2005]
 
     def pts(pid, tid, missing=(), water=(), n=5):

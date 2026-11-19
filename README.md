@@ -58,7 +58,7 @@ python scripts/11_validation_displace_transects.py
 #  → upload each zip in data/11_validation/upload/ as a table asset of the same name
 python scripts/12_validation_sample_imagery.py --test
 python scripts/12_validation_sample_imagery.py
-#  → download every CSV of the Drive folder ndvi_gradient_displaced to data/12_gee_validation/
+#  → download every CSV of the Drive folder ndvi_gradient_displaced to data/12_gee/
 python scripts/13_validation_edge_metrics.py
 Rscript scripts/14_validation_compare.R
 ```
@@ -118,7 +118,7 @@ Removed PAs, with the step, the reason and the PA that replaced them, are in `da
 - Covariates (PA means over the year's complete transects): `gHM_mean` (human modification at the two outer points), `elevation_mean` and `terrain_slope_mean` (boundary point), `water_extent_pct` (% of transects with any point in the JRC maximum water extent), `in_other_pa_pct`.
 - Per-PA trends are computed by 07 on the analysis set (`data/05_analysis/pa_trends.csv`).
 
-**Other outputs:** `results/pipeline_counts.json` (counts of 01, 02 and 04), `results/analysis_counts.json` (05), `results/tables/` (supplementary tables and figure source tables), `results/figures/`, `results/diagnostics/` (spatial ranges, Moran's I, residuals, …), `results/validation_*.csv` (13), `results/R_sessionInfo.txt`. Intermediate data are in `data/`, one folder per script (`01_wdpa`, `02_pas`, `02_transects`, `03_gee`, `04_transect_years`, `05_analysis`, `10_map_layers`, `11_validation`, `12_gee_validation`, `inspection`); coordinates and WDPA polygons stay in `data/`.
+**Other outputs:** `results/pipeline_counts.json` (counts of 01, 02 and 04), `results/analysis_counts.json` (05), `results/tables/` (supplementary tables and figure source tables), `results/figures/`, `results/diagnostics/` (spatial ranges, Moran's I, residuals, …), `results/R_sessionInfo.txt`. Intermediate data are in `data/`, one folder per script (`01_wdpa`, `02_pas`, `02_transects`, `03_gee`, `04_transect_years`, `05_analysis`, `10_map_layers`, `11_validation`, `12_gee`, `13_validation`, `inspection`); coordinates and WDPA polygons stay in `data/`.
 
 ## Configuration
 
@@ -127,7 +127,7 @@ Python settings are in [modules/config.py](modules/config.py) (the defaults repr
 ## Troubleshooting
 
 - **"Input file not found":** a previous script or a manual download/upload step is missing.
-- **Script 04 stops on missing, unexpected or duplicate points, or on unrecognised CSVs:** `data/03_gee/` must hold exactly one copy of every part of this run (remove Drive duplicates such as `name (1).csv` and the second copy of the `--test` part). Script 13 checks `data/12_gee_validation/` the same way.
+- **Script 04 stops on missing, unexpected or duplicate points, or on unrecognised CSVs:** `data/03_gee/` must hold exactly one copy of every part of this run (remove Drive duplicates such as `name (1).csv` and the second copy of the `--test` part). Script 13 checks `data/12_gee/` the same way.
 - **Earth Engine sign-in errors:** `earthengine authenticate --auth_mode=notebook --force` (the default `gcloud` mode saves no credentials for the Drive scope).
 - **"GEE_PROJECT has not been set":** run `earthengine set_project YOUR-PROJECT-ID`, or set the `GEE_PROJECT` environment variable (project IDs are listed at [console.cloud.google.com](https://console.cloud.google.com/)).
 

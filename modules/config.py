@@ -197,7 +197,7 @@ INSPECTION_DECISIONS = ('', 'exclude', 'check')                 # blank = keep
 
 VALIDATION_DIR = DATA_DIR / "11_validation"                  # script 11: sample, candidates, log
 VALIDATION_UPLOAD_DIR = VALIDATION_DIR / "upload"            # zipped shapefiles to upload to Earth Engine
-VALIDATION_GEE_CSV_DIR = DATA_DIR / "12_gee_validation"      # script 12 CSVs (download from Drive)
+VALIDATION_GEE_CSV_DIR = DATA_DIR / "12_gee"                 # script 12 CSVs (download from Drive)
 VALIDATION_SAMPLE_FRAME = DATA_DIR / "05_analysis" / "pa_level.csv"   # the analysis PAs (R script 05)
 
 VALIDATION_N_PER_BIOME = 50        # PAs per biome
@@ -218,9 +218,10 @@ VALIDATION_UPLOAD_PREFIX = f'displaced_points{_TAG}_'
 VALIDATION_ASSET_PREFIX = f'projects/{GEE_PROJECT}/assets/{VALIDATION_UPLOAD_PREFIX}'
 VALIDATION_DRIVE_FOLDER = f'{INDEX_NAME}_gradient_displaced{_TAG}'
 VALIDATION_EXPORT_PREFIX = f'{VALIDATION_DRIVE_FOLDER}_'                    # script 12 CSV names
-VALIDATION_PA_METRICS = RESULTS_DIR / "validation_displaced_pa_years.csv"   # script 13
-VALIDATION_LOG = RESULTS_DIR / "validation_displacement_log.csv"           # script 13
-VALIDATION_CHECKS = RESULTS_DIR / "validation_candidate_checks.csv"        # script 13
+VALIDATION_OUT_DIR = DATA_DIR / "13_validation"                            # script 13 (read by R script 14)
+VALIDATION_PA_METRICS = VALIDATION_OUT_DIR / "validation_displaced_pa_years.csv"
+VALIDATION_LOG = VALIDATION_OUT_DIR / "validation_displacement_log.csv"
+VALIDATION_CHECKS = VALIDATION_OUT_DIR / "validation_candidate_checks.csv"
 
 # The displaced copy must pass the analysis-set rules of R script 05. The
 # values are those of modules/r/config.R (min_complete_pct, max_water_pct, min_years);

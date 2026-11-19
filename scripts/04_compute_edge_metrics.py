@@ -40,7 +40,7 @@ import pandas as pd
 import pyogrio
 from modules import config
 from modules.counts import update_counts
-from modules.analysis import (
+from modules.edge_metrics import (
     find_asset_csvs, read_asset_csvs, build_transect_years, pa_year_metrics,
     recategorize_biome, missing_transects,
 )

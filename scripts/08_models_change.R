@@ -29,7 +29,7 @@
 #          <diagnostics>/change_models_{coef,wald,contrasts,tau2,spatial_params,moran,
 #                         residuals,ranges}.csv, biome_change_gls_{means,sigma}.csv (Table SW fits)
 
-source(file.path("modules", "r", "load.R"))   # config.R + every module of modules/r
+source(file.path("modules", "r", "load.R"))   # config.R, every module of modules/r, arg() / say()
 
 pilot <- as.integer(arg("--pilot") %||% NA)
 cores <- as.integer(arg("--cores") %||% 2L)

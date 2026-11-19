@@ -242,7 +242,7 @@ def test_biome_from_num_and_split_key():
 def test_script_04_path_on_synthetic_exports(tmp_path):
     """Earth Engine-style CSVs -> script 04's metrics, with known answers; the validation path
     (displaced_metrics) gives the same PA-years. Runs without pipeline data."""
-    from modules.analysis import (find_asset_csvs, read_asset_csvs, build_transect_years,
+    from modules.edge_metrics import (find_asset_csvs, read_asset_csvs, build_transect_years,
                                   pa_year_metrics, POINT_IDS)
     years = [2003, 2004]
     rows = []
@@ -286,7 +286,7 @@ def test_script_04_path_on_synthetic_exports(tmp_path):
 def test_displaced_metrics_reproduce_script_04():
     """With no displacement, the validation metric path gives 04's PA-year metrics exactly, on
     the real exports (skips without pipeline data; the synthetic test above always runs)."""
-    from modules.analysis import read_asset_csvs
+    from modules.edge_metrics import read_asset_csvs
     # an asset's export is ordered by point position, so a PA's points span all its parts
     files = sorted(config.GEE_CSV_DIR.glob(f'{config.GEE_EXPORT_PREFIX}000_part_*.csv'))
     if not files or not config.PA_METRICS.exists() or not config.TRANSECT_POINTS.exists():

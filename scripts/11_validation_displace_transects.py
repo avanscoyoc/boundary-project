@@ -45,7 +45,7 @@ import pyogrio
 import shapely
 
 from modules import config
-from modules.preprocessing import write_upload_zip
+from modules.transects import write_upload_zip
 from modules.validation import (sample_pas, candidate_displacements, aeqd_transformers, footprint_m,
                                 displacement_centre, displace_polygon, write_polygon_zip, CANDIDATE_SEP)
 

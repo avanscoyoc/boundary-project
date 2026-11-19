@@ -46,7 +46,7 @@ import geopandas as gpd
 import shapely
 from modules import config
 from modules.counts import update_counts
-from modules.preprocessing import (
+from modules.transects import (
     drop_excluded_pids, fill_holes, resolve_overlaps, merge_same_name, add_shape_metrics,
     own_pid_sets, generate_transects
 )
