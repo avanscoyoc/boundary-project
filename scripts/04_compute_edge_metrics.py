@@ -1,8 +1,8 @@
 """
 Script 04: Compute Edge Metrics
 
-Turns the Earth Engine exports into transect-year data and PA-year edge metrics
-with per-PA trends.
+Turns the Earth Engine exports into transect-year data and PA-year edge metrics.
+(Per-PA trends are computed in R, script 07, on the analysis set.)
 
 Workflow (one asset at a time; every PA lies within a single asset):
 1. Read the asset's CSV parts and check every exported point arrived exactly once
@@ -10,8 +10,7 @@ Workflow (one asset at a time; every PA lies within a single asset):
    edge flag, water_extent and in_other_pa flags, covariates
 3. Compute PA-year metrics for four versions: all transects, without water,
    without other-PA, without either flag
-4. Merge PA attributes (from pas_selected.gpkg), recategorize biomes, and add
-   per-PA OLS trends for every extent and intensity metric
+4. Merge PA attributes (from pas_selected.gpkg) and group the biomes
 
 Edge: pt_0 > min(pt_1, pt_2) and pt_0 > min(pt_m1, pt_m2).
 Edge intensity: mean of the four Cohen's d values (pt_0 vs each position),
@@ -43,7 +42,7 @@ from modules import config
 from modules.counts import update_counts
 from modules.analysis import (
     find_asset_csvs, read_asset_csvs, build_transect_years, pa_year_metrics,
-    recategorize_biome, add_trends, missing_transects,
+    recategorize_biome, missing_transects,
 )
 
 t_start = time.time()
@@ -92,7 +91,7 @@ metrics, missing = [], []
 completeness = {'points_expected': len(points), 'points_received': 0, 'points_missing': 0,
                 'points_unexpected': 0}
 per_year = {y: 0 for y in years}
-transect_counts = {'generated': n_generated, 'received': 0, 'missing_points': 0}
+transect_counts = {'kept_by_02': n_generated, 'received': 0, 'missing_points': 0}
 key = ['WDPA_PID', 'transectID', 'pointID']
 
 for asset, files in asset_csvs.items():
@@ -124,8 +123,8 @@ if completeness['points_missing'] or completeness['points_unexpected']:
                      f"{completeness['points_unexpected']:,} unexpected points in the CSVs: "
                      f"check that every CSV part was downloaded once, and only this run's parts.")
 
-# PA-year table with attributes and trends
-print("\nMerging attributes and computing trends...")
+# PA-year table with attributes
+print("\nMerging attributes...")
 pa = pd.concat(metrics, ignore_index=True)
 attributes = pyogrio.read_dataframe(config.PAS_SELECTED, read_geometry=False)
 attributes['WDPA_PID'] = attributes['WDPA_PID'].astype(str)
@@ -133,7 +132,7 @@ pa = pa.merge(attributes, on='WDPA_PID', how='left')
 pa['BIOME_NAME'] = pa['BIOME_NAME'].apply(recategorize_biome)
 # Share of the PA's transects with data at all 5 points that year
 pa['pct_complete'] = 100 * pa['n_trnst'] / pa['N_TRNST']
-pa = add_trends(pa.sort_values(['WDPA_PID', 'year']).reset_index(drop=True))
+pa = pa.sort_values(['WDPA_PID', 'year']).reset_index(drop=True)
 
 config.RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 pa.to_csv(config.PA_METRICS, index=False)

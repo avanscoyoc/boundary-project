@@ -2,7 +2,9 @@
 #
 # Runs (each recomputes the PA means, trends and models from the PA-year data):
 #   main         all transects, the analysis PAs (reproduces 06–08 at their ranges)
-#   all_common   all transects, the PAs of the transect-subset comparison (set_transects)
+#   all_common   all transects, the PAs of the transect-subset comparison (set_transects); as in
+#                the subsets, a PA-year counts only with ≥ config sensitivity$min_transects
+#                complete transects
 #   nowater, nootherpa, noflags
 #                each transect subset on the same PAs as all_common; a PA-year counts only
 #                with ≥ config sensitivity$min_transects complete transects in the subset
@@ -84,7 +86,8 @@ run_def <- function(label, pids, version, min_tr, vs) list(label = label, pids =
 mt <- CFG$sensitivity$min_transects
 runs <- list(
   main        = run_def("Main analysis (all transects)", pa$WDPA_PID, "all", 0L, NA),
-  all_common  = run_def("All transects, transect-subset PAs", common, "all", 0L, "main"),
+  all_common  = run_def(sprintf("All transects, transect-subset PAs (PA-years with >= %d transects)", mt),
+                        common, "all", mt, "main"),
   nowater     = run_def("Without water transects", common, "nowater", mt, "all_common"),
   nootherpa   = run_def("Without transects bordering other PAs", common, "nootherpa", mt, "all_common"),
   noflags     = run_def("Without water or other-PA transects", common, "noflags", mt, "all_common"),

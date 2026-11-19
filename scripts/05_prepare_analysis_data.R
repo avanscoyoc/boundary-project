@@ -135,6 +135,13 @@ ts <- transect_subset_set(py[py$WDPA_PID %in% d$WDPA_PID, ], CFG$transects, unna
                           CFG$sensitivity$min_transects, CFG$min_years)
 stopifnot(identical(ts$WDPA_PID, d$WDPA_PID))
 d$set_transects   <- ts$ok_every_version
+# sensitivity$min_transects is meant to be the fewest transects of any analysed PA (09)
+n_tr <- polys$N_TRNST[match(d$WDPA_PID, polys$WDPA_PID)]
+say("fewest transects of any analysed PA: %d (config sensitivity$min_transects = %d)", min(n_tr),
+    CFG$sensitivity$min_transects)
+if (min(n_tr) != CFG$sensitivity$min_transects)
+  warning("config sensitivity$min_transects (", CFG$sensitivity$min_transects, ") is not the fewest transects of ",
+          "any analysed PA (", min(n_tr), "): check it before running 09", call. = FALSE)
 d$set_established <- d$STATUS_YR <= CFG$sensitivity$established_by  # analysed (imputed) year
 d$set_reported    <- !d$STATUS_YR_imputed
 

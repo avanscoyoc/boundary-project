@@ -357,8 +357,10 @@ def evenspace(xy, sep, start=0):
     -------
     DataFrame
         Columns x, y (points on the line), x0, y0, x1, y1 (the segment each
-        point lies on), theta (segment angle, radians). The last point is
-        dropped so a closed ring doesn't get a point at both start and end.
+        point lies on), theta (segment angle, radians). The last point before
+        the end of the line is dropped, so on a closed ring the gap between the
+        last and the first point is between sep and 2 * sep (never shorter than
+        sep; points closer than sep at the seam would give near-duplicate transects).
     """
     xy = np.asarray(xy, dtype=float)
 
@@ -369,7 +371,7 @@ def evenspace(xy, sep, start=0):
     linelength = dtotal[-1]
 
     pos = np.arange(start, linelength, sep)
-    pos = pos[:-1]  # drop last point to avoid duplicating the start of a closed ring
+    pos = pos[:-1]  # drop the last point: the seam gap of a closed ring is then in [sep, 2 * sep)
     if len(pos) == 0:
         return pd.DataFrame(columns=['x', 'y', 'x0', 'y0', 'x1', 'y1', 'theta'])
 
@@ -407,8 +409,9 @@ def transect(tpts, tlen, npts=1):
     DataFrame
         Columns transectID (int, 1-indexed), pointID (int: negative = inward,
         0 = boundary, positive = outward), x, y; sorted by transectID, pointID.
-        Inner points are on the left of the segment direction, which is inside
-        the PA for a clockwise ring (see extract_coords).
+        Inner points are on the right of the direction of travel along the ring
+        (x0, y0 -> x1, y1), which is inside the PA for a clockwise ring (see
+        extract_coords); theta points the opposite way (x1 -> x0).
     """
     if len(tpts) == 0:
         return pd.DataFrame(columns=['transectID', 'pointID', 'x', 'y'])

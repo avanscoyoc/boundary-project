@@ -4,8 +4,12 @@ Script 01: Collect Protected Areas
 Downloads and filters protected area polygons from Google Earth Engine.
 
 Workflow:
-1. Filter WDPA dataset (≥200 km², non-marine, excludes UNESCO reserves)
-2. Add biome information from RESOLVE Ecoregions
+1. Filter the WDPA release (modules/remotesensing.py, pa_filter_steps): terrestrial
+   (MARINE == "0"), not a Marine Protected Area or a UNESCO-MAB Biosphere Reserve, status
+   Designated / Established / Inscribed, GIS_AREA >= 200 km², WDPA_PID not in
+   EXCLUDED_PIDS, single-part polygon; the PAs removed by each filter are counted in
+   results/pipeline_counts.json (section '01_wdpa')
+2. Add the RESOLVE Ecoregions 2017 biome with the largest overlap
 3. Export to Google Drive
 
 MANUAL STEP REQUIRED AFTER RUNNING:
@@ -23,7 +27,8 @@ sys.path.insert(0, str(project_root))
 
 import ee
 from modules import config
-from modules.remotesensing import get_pa_filter, set_geometry_type, get_biome
+from modules.counts import update_counts
+from modules.remotesensing import get_pa_filter, pa_filter_steps, set_geometry_type, get_biome
 
 print("="*80)
 print("SCRIPT 01: Collect Protected Areas")
@@ -60,6 +65,27 @@ print(f"  - Excluding {len(config.EXCLUDED_PIDS)} problematic PIDs")
 
 pa_filter = get_pa_filter(type="Polygon")
 wdpa_filtered = wdpa.filter(pa_filter)
+
+# PAs left after each filter, in order (for the methods' counts; about 2 min). The geometry
+# type is computed only for the PAs left by the attribute filters (single_part is last).
+print("Counting the PAs removed by each filter...")
+try:
+    fc = ee.FeatureCollection(config.WDPA_COLLECTION)
+    before = fc.size().getInfo()
+    counts = {'collection': config.WDPA_COLLECTION, 'features_in_release': before, 'steps': []}
+    print(f"  {'release':<28}{before:>9,}")
+    for name, f in pa_filter_steps(type="Polygon"):
+        if name == "single_part":
+            fc = fc.map(set_geometry_type)
+        fc = fc.filter(f)
+        n = fc.size().getInfo()
+        counts['steps'].append({'step': name, 'removed': before - n, 'n_out': n})
+        print(f"  {name:<28}{n:>9,}  (-{before - n:,})")
+        before = n
+    counts['exported'] = before
+    update_counts(config.PIPELINE_COUNTS, '01_wdpa', counts)
+except ee.EEException as e:
+    print(f"  WARNING: counts not computed ({e}); the export below is unaffected.")
 
 # Add biome information
 print("Adding biome information from RESOLVE Ecoregions 2017...")

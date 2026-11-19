@@ -12,7 +12,7 @@ The data the scripts produce (`data/`, `results/`) are not part of the repositor
 01_collect_protected_areas.py      → filter WDPA in Earth Engine → download GeoJSON from Drive
 02_generate_sampling_points.py     → choose PAs + build transects → upload zips to Earth Engine
 03_sample_satellite_imagery.py     → sample NDVI gradients in Earth Engine → download CSVs from Drive
-04_compute_edge_metrics.py         → transect-years, PA-year metrics, trends → final CSV
+04_compute_edge_metrics.py         → transect-years, PA-year metrics → final CSV
 05_prepare_analysis_data.R         → analysis set, imputed establishment years, z-scores (R)
 06_models_mean.R                   → spatial GLS of mean edge extent and intensity → Tables SX, SY
 07_trends.R                        → per-PA trends, standardised change, biome comparison, case studies → Tables SV, SW
@@ -41,7 +41,7 @@ python scripts/03_sample_satellite_imagery.py --test
 python scripts/03_sample_satellite_imagery.py
 # → Download all CSVs from Drive folder ndvi_gradient to data/03_gee/
 
-# 4. Edge metrics and trends (local)
+# 4. Edge metrics (local)
 python scripts/04_compute_edge_metrics.py
 # → results/pa_edge_metrics_ndvi.csv
 
@@ -94,7 +94,7 @@ boundary-project/
 │   ├── config.py                # All parameters and paths (Python)
 │   ├── remotesensing.py         # Google Earth Engine functions
 │   ├── preprocessing.py         # PA selection and transect generation
-│   ├── analysis.py              # Edge detection, PA-year metrics, trends
+│   ├── analysis.py              # Edge detection, PA-year metrics, biome groups
 │   ├── validation.py            # Displaced transects (validation)
 │   ├── counts.py                # Writes results/pipeline_counts.json
 │   └── r/                       # R analysis: config.R (settings), prep.R, trends.R, spatial.R,
@@ -133,17 +133,16 @@ boundary-project/
 - Four versions of every metric, by suffix: none (all transects), `_nowater` (no transects with water), `_nootherpa` (no transects whose outer points fall in another PA), `_noflags` (neither)
   - `n_trnst*`: complete transects that year (all 5 points have a value)
   - `pct_complete`: `n_trnst` as a % of the PA's transects (`N_TRNST`), to spot years with little data
-  - `edge_extent*`: share of transects that are edges (`pt_0 > min(pt_1, pt_2)` and `pt_0 > min(pt_m1, pt_m2)`)
+  - `edge_extent*`: share of transects that are edges (`pt_0 > min(pt_1, pt_2)` and `pt_0 > min(pt_m1, pt_m2)`). With no boundary effect (five exchangeable values) the expected share is 8/15 ≈ 0.533, not 0
   - `D02*`, `D01*`, `D0m1*`, `D0m2*`: Cohen's d of the boundary point vs each other position, on edge transects
-  - `edge_intensity*`: mean of the four Cohen's d values
-  - `slope_*`, `p_value_*`: per-PA OLS trend on year (≥ 5 years of data)
-  - `p_adj_*`: Benjamini–Hochberg adjusted p-value (across PAs, separately for each metric)
-  - `trend_*`: `increase` / `decrease` when `p_adj` < 0.05, otherwise `no_trend`
-- Covariates: `gHM_mean`, `elevation_mean`, `terrain_slope_mean`, `water_extent_pct`, `in_other_pa_pct`
+  - `edge_intensity*`: mean of the four Cohen's d values. It is computed on edge transects only, so it is positive even with no boundary effect
+  - The validation (scripts 11–14) measures both metrics on displaced copies of each PA's transects, which gives the baseline of the surrounding landscape
+- Covariates, PA means over the year's complete transects: `gHM_mean` (human modification at the two outer points), `elevation_mean` and `terrain_slope_mean` (at the boundary point), `water_extent_pct` (% of transects with any point in the JRC maximum water extent), `in_other_pa_pct` (% of transects flagged `in_other_pa`)
+- Per-PA trends are not in this file: script 07 computes them on the analysis set (`data/05_analysis/pa_trends.csv`)
 
 **`data/04_transect_years/ndvi_NNN.parquet`** — one row per complete transect-year: the five gradient values (`pt_m2` … `pt_2`), `edge`, and the per-transect flags `water_extent` and `in_other_pa`.
 
-**`results/pipeline_counts.json`** — counts at every PA filter and transect check (script 02) and per-year transect completeness (script 04).
+**`results/pipeline_counts.json`** — the PAs removed by each WDPA filter (script 01), counts at every PA selection step and transect check (script 02), and per-year transect completeness (script 04).
 
 ## Setup
 
@@ -175,7 +174,7 @@ boundary-project/
 ```bash
 python scripts/01_collect_protected_areas.py
 ```
-Filters WDPA polygons (single-part polygons, ≥ 200 km², terrestrial, designated/established/inscribed; no marine PAs or UNESCO-MAB Biosphere Reserves; 32 PIDs excluded by hand, 21 of them found in the visual inspection: 19 circular polygons and 2 city PAs), assigns the RESOLVE biome with the largest overlap, and exports to Google Drive.
+Filters WDPA polygons (terrestrial; no Marine Protected Areas or UNESCO-MAB Biosphere Reserves; designated/established/inscribed; ≥ 200 km²; 32 PIDs excluded by hand, 21 of them found in the visual inspection: 19 circular polygons and 2 city PAs; single-part polygons), counts the PAs each filter removes (`pipeline_counts.json`, section `01_wdpa`; about 2 minutes), assigns the RESOLVE biome with the largest overlap, and exports to Google Drive.
 
 **⚠️ MANUAL STEP**: Download `WDPA_polygons.geojson` from Google Drive → `data/01_wdpa/`
 
@@ -193,7 +192,7 @@ python scripts/02_generate_sampling_points.py
 Part 1 — choose PAs (equal-area Mollweide):
 1. Fill holes smaller than 2.25 km²
 2. Duplicates (overlap > 90% of both PAs): keep the oldest. Nested PAs (overlap > 90% of the smaller only): keep the larger
-3. Same `ORIG_NAME` + `ISO3` and touching or overlapping: dissolve into one PA, keeping the oldest establishment year (`MERGED_PID` lists the merged PAs)
+3. Same `ORIG_NAME` + `ISO3` and touching or overlapping: dissolve into one PA (`MERGED_PID` lists the merged PAs). The merged PA keeps the `WDPA_PID` of its oldest member and the oldest non-zero establishment year; its other attributes (name, IUCN category, `WDPAID`, biome, …) come from the largest member (`ATTR_PID`)
 4. Compute geodesic area, perimeter, and shape ratio (perimeter / √area), for information only; there is no shape filter
 
 Part 2 — transects (each PA in its own azimuthal equidistant projection, so distances are true meters):
@@ -201,7 +200,7 @@ Part 2 — transects (each PA in its own azimuthal equidistant projection, so di
 2. Boundary points every 500 m; transects of 5 points 2.5 km apart (2 inner, 1 boundary, 2 outer)
 3. Keep a transect only if its inner half lies within the PA and its outer half lies outside it
 4. Remove PAs whose longest unsampled stretch of boundary is more than 25% of the boundary (`MAX_GAP_PCT_LIMIT`)
-5. Flag transects whose outer points fall inside another PA (`in_other_pa`)
+5. Flag transects whose outer points fall inside another PA (`in_other_pa`). "Another PA" means one of script 01's polygons (≥ 200 km², single-part, designated): smaller, multi-part or proposed PAs are not flagged
 6. Write upload zips of 400 whole PAs each, and every point to `transect_points.parquet`
 
 Removed PAs, with the step, reason, and the PA that replaced them, are in `data/02_pas/pas_removed.gpkg`.
@@ -221,7 +220,7 @@ Computes the gradient magnitude of each annual median NDVI composite (MOD13A1, 2
 ```bash
 python scripts/04_compute_edge_metrics.py
 ```
-Processes one asset at a time: checks that every exported point arrived exactly once, builds one row per complete transect-year, computes PA-year metrics for the four transect subsets, merges PA attributes, and adds per-PA trends. The 14 RESOLVE biomes are grouped by vegetation structure and temperature into 8 groups: Tropical Grassland (with flooded grasslands), Temperate & Montane Grassland, Tundra, Desert, Mediterranean, Tropical Forest, Temperate Forest and Boreal Forest; Mangrove and Rock & Ice are kept as their own groups and removed by script 05. It also lists the transects with a missing value in any year (`data/04_transect_years/missing_transects.csv`), which script 05 summarises for the analysis set in `analysis_counts.json`. See [Outputs](#outputs).
+Processes one asset at a time: checks that every exported point arrived exactly once, builds one row per complete transect-year, computes PA-year metrics for the four transect subsets, and merges PA attributes. The 14 RESOLVE biomes are grouped by vegetation structure and temperature into 8 groups: Tropical Grassland (with flooded grasslands), Temperate & Montane Grassland, Tundra, Desert, Mediterranean, Tropical Forest, Temperate Forest and Boreal Forest. Mangroves, and RESOLVE's unclassified rock and ice ("N/A", grouped as Rock & Ice), are removed by script 05. It also lists the transects with a missing value in any year (`data/04_transect_years/missing_transects.csv`), which script 05 summarises for the analysis set in `analysis_counts.json`. See [Outputs](#outputs).
 
 ## Statistical Analysis (R)
 

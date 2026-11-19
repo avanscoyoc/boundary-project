@@ -233,25 +233,3 @@ def test_generate_transects_removes_pa_with_coverage_gap(tmp_path):
     assert strict['totals']['in_pas_removed_for_coverage_gap'] == strict['n_transects']['U'] > 0
     loose = generate_transects(pas, max_gap_pct_limit=None, **kwargs)
     assert loose['status'] == {'U': 'ok', 'SQ': 'ok'}
-
-
-# ---------------------------------------------------------------- Earth Engine retries (script 03)
-
-def test_retry_recovers_from_transient_errors(monkeypatch):
-    import modules.remotesensing as rs
-    monkeypatch.setattr(rs.time, 'sleep', lambda s: None)
-    calls = {'n': 0}
-
-    def flaky():
-        calls['n'] += 1
-        if calls['n'] < 3:
-            raise ConnectionError('network down')
-        return 'COMPLETED'
-
-    assert rs._retry(flaky, 'test') == 'COMPLETED' and calls['n'] == 3
-
-    def always_fails():
-        raise ConnectionError('still down')
-    import pytest
-    with pytest.raises(ConnectionError):
-        rs._retry(always_fails, 'test', attempts=3)

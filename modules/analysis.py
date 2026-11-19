@@ -7,9 +7,10 @@ Edge metric functions (script 04).
   the water / other-PA flags
 - pa_year_metrics: PA-year edge extent, Cohen's d values, and edge intensity, for
   four transect subsets (all, no water, no other-PA, neither)
-- add_trends: per-PA OLS trends of every extent and intensity metric, with
-  Benjamini-Hochberg adjusted p-values
-- cohens_d, recategorize_biome, fit_trend, bh_adjust
+- missing_transects: transects with a missing value in any year
+- cohens_d (reference implementation, for the tests), recategorize_biome
+
+Per-PA trends are computed in R (script 07) on the analysis set.
 
 Every PA lies within a single asset (script 02 writes whole PAs per upload file),
 so each asset is processed on its own; memory is bounded by one asset.
@@ -22,7 +23,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from scipy import stats
 
 POINT_IDS = [-2, -1, 0, 1, 2]
 PT_COLS = ['pt_m2', 'pt_m1', 'pt_0', 'pt_1', 'pt_2']
@@ -352,84 +352,3 @@ def recategorize_biome(biome):
         return "Temperate & Montane Grassland"
     else:
         return biome
-
-
-def fit_trend(group, metric='edge_extent', min_years=5):
-    """
-    OLS trend of one PA's metric on year.
-
-    Years where the metric is NaN are left out. With fewer than ``min_years``
-    observations, slope and p-value are NaN.
-
-    Returns a Series with 'slope_{suffix}' and 'p_value_{suffix}', where suffix
-    is the metric name without 'edge_' (e.g. 'extent_nowater').
-    """
-    suffix = metric.removeprefix('edge_')
-    ok = group[metric].notna().to_numpy()
-    if ok.sum() < min_years:
-        return pd.Series({f'slope_{suffix}': np.nan, f'p_value_{suffix}': np.nan})
-    slope, intercept, r_value, p_value, std_err = stats.linregress(
-        group['year'].to_numpy()[ok], group[metric].to_numpy()[ok]
-    )
-    return pd.Series({f'slope_{suffix}': slope, f'p_value_{suffix}': p_value})
-
-
-def bh_adjust(p_values):
-    """
-    Benjamini-Hochberg adjusted p-values (false discovery rate); NaN stays NaN.
-
-    The number of tests is the number of non-NaN p-values.
-    """
-    p = np.asarray(p_values, dtype=float)
-    out = np.full(p.shape, np.nan)
-    ok = ~np.isnan(p)
-    m = int(ok.sum())
-    if m == 0:
-        return out
-    order = np.argsort(p[ok])
-    ranked = p[ok][order] * m / np.arange(1, m + 1)
-    adjusted = np.minimum(np.minimum.accumulate(ranked[::-1])[::-1], 1.0)
-    vals = np.empty(m)
-    vals[order] = adjusted
-    out[ok] = vals
-    return out
-
-
-def add_trends(pa_years, alpha=0.05, min_years=5):
-    """
-    Add per-PA trend columns for every edge_extent* and edge_intensity* metric.
-
-    For each metric (suffix = name without 'edge_', e.g. 'extent_nowater'):
-    - slope_{suffix}: OLS slope on year (per year), from >= min_years years
-    - p_value_{suffix}: unadjusted p-value of the slope
-    - p_adj_{suffix}: Benjamini-Hochberg adjusted p-value, across PAs, separately
-      for each metric
-    - trend_{suffix}: 'increase' / 'decrease' when p_adj < alpha (by the sign of
-      the slope), otherwise 'no_trend'; NaN when there are too few years
-
-    Parameters
-    ----------
-    pa_years : DataFrame
-        One row per PA-year (output of pa_year_metrics, plus attributes).
-
-    Returns
-    -------
-    DataFrame
-        ``pa_years`` with the trend columns merged onto every row.
-    """
-    metrics = [f'edge_{m}{v}' for v in VERSIONS for m in ('extent', 'intensity')]
-    out = pa_years
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore', RuntimeWarning)
-        for metric in metrics:
-            suffix = metric.removeprefix('edge_')
-            trends = (pa_years.groupby('WDPA_PID')[['year', metric]]
-                      .apply(fit_trend, metric=metric, min_years=min_years)
-                      .reset_index())
-            slope, p_adj = trends[f'slope_{suffix}'], bh_adjust(trends[f'p_value_{suffix}'])
-            trends[f'p_adj_{suffix}'] = p_adj
-            trends[f'trend_{suffix}'] = np.where(
-                np.isnan(p_adj), None,
-                np.where(p_adj < alpha, np.where(slope > 0, 'increase', 'decrease'), 'no_trend'))
-            out = out.merge(trends, on='WDPA_PID', how='left')
-    return out

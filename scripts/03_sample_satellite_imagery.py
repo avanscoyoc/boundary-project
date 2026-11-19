@@ -43,7 +43,7 @@ sys.path.insert(0, str(project_root))
 import ee
 from modules import config
 from modules.remotesensing import (
-    get_annual_gradient_magnitude, get_ndvi_projection, batch_sample_assets
+    sampling_image, get_ndvi_projection, batch_sample_assets
 )
 
 TEST_RUN = '--test' in sys.argv
@@ -72,34 +72,8 @@ ndvi_proj = get_ndvi_projection()
 ndvi_scale = ndvi_proj.nominalScale().getInfo()
 print(f"Sampling on the native MODIS grid: {ndvi_scale:.1f} m")
 
-# Static layers
-gsw = ee.Image('JRC/GSW1_4/GlobalSurfaceWater')
-hm = ee.ImageCollection('CSP/HM/GlobalHumanModification').mean()
-# Copernicus DEM: tag the mosaic with the tiles' native projection. Without it,
-# ee.Terrain.slope works on the mosaic's default 1-degree grid and returns
-# near-zero or missing slopes (Earth Engine catalog: COPERNICUS/DEM/GLO30_2024_1).
-dem = ee.ImageCollection('COPERNICUS/DEM/GLO30_2024_1').select('DEM')
-elevation = dem.mosaic().setDefaultProjection(dem.first().projection()).rename('elevation')
-slope = ee.Terrain.slope(elevation).rename('terrain_slope')
-
-staticImage = ee.Image.cat([
-    gsw.select('max_extent'),
-    hm.rename('gHM'),
-    elevation,
-    slope
-])
-
-# Year configuration
-years = ee.List.sequence(config.START_YEAR, config.END_YEAR)
-gradBandNames = [str(y) for y in range(config.START_YEAR, config.END_YEAR + 1)]
-selectors = ['WDPA_PID', 'transectID', 'pointID', 'max_extent', 'gHM', 'elevation', 'terrain_slope'] + gradBandNames
-
-# Annual gradient band layers
-gradientBands = ee.ImageCollection.fromImages(
-    years.map(get_annual_gradient_magnitude)
-).toBands()
-gradientBands = gradientBands.rename(gradBandNames)
-image = staticImage.addBands(gradientBands)
+# Static layers (water, human modification, elevation, slope) + one NDVI gradient band per year
+image, selectors = sampling_image()
 
 # Process assets sequentially (~5 hours for the full run)
 total_assets = config.get_num_chunks()

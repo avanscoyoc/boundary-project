@@ -2,62 +2,49 @@
 Google Earth Engine functions for remote sensing data collection.
 
 This module contains functions for:
-- Filtering protected area datasets
-- Computing NDVI gradient magnitude
+- Filtering protected area datasets (script 01)
+- Computing NDVI gradient magnitude and the sampling image (scripts 03, 12)
 - Managing GEE task submissions
 """
 
 import time
 import ee
 from modules.config import (
-    MIN_AREA_KM2, VALID_STATUS, EXCLUDED_PIDS,
+    MIN_AREA_KM2, VALID_STATUS, EXCLUDED_PIDS, START_YEAR, END_YEAR,
     NDVI_COLLECTION, NDVI_BAND, NDVI_SCALE_FACTOR
 )
 
 
-def get_pa_filter(type="Polygon"):
+def pa_filter_steps(type="Polygon"):
     """
-    Create a combined filter for WDPA (World Database on Protected Areas) features.
-    
-    Filters out marine areas, marine protected areas, UNESCO biosphere reserves,
-    and applies constraints on area, status, and excludes specific problem PIDs.
-    
-    Parameters
-    ----------
-    type : str, optional
-        Geometry type to filter for (default is "Polygon").
-    
-    Returns
-    -------
-    ee.Filter
-        Combined Earth Engine filter object for WDPA feature collection.
-    
-    Notes
-    -----
-    - Keeps terrestrial PAs only (MARINE == "0")
-    - Excludes Marine Protected Areas and UNESCO-MAB Biosphere Reserves
-    - Only includes areas with status from config.VALID_STATUS
-    - Requires minimum area from config.MIN_AREA_KM2
-    - Excludes specific problematic WDPA_PIDs from config
-    """
-    polygon_filter = ee.Filter.eq("geometry_type", type)
-    not_marine_filter = ee.Filter.eq("MARINE", "0")
-    not_mpa_filter = ee.Filter.neq("DESIG_ENG", "Marine Protected Area")
-    not_unesco_filter = ee.Filter.neq("DESIG_ENG", "UNESCO-MAB Biosphere Reserve")
-    status_filter = ee.Filter.inList("STATUS", VALID_STATUS)
-    area_filter = ee.Filter.gte("GIS_AREA", MIN_AREA_KM2)
-    not_pids_filter = ee.Filter.inList("WDPA_PID", EXCLUDED_PIDS).Not()
+    The WDPA filters of script 01, in order, as (name, ee.Filter) pairs.
 
-    combined_filter = ee.Filter.And(
-        polygon_filter,
-        not_marine_filter,
-        not_mpa_filter,
-        not_unesco_filter,
-        status_filter,
-        area_filter,
-        not_pids_filter
-    )
-    return combined_filter
+    - terrestrial: MARINE == "0"
+    - not_marine_protected_area: DESIG_ENG is not "Marine Protected Area"
+    - not_unesco_mab: DESIG_ENG is not "UNESCO-MAB Biosphere Reserve"
+    - status: STATUS in config.VALID_STATUS
+    - min_area: GIS_AREA >= config.MIN_AREA_KM2
+    - not_excluded_pid: WDPA_PID not in config.EXCLUDED_PIDS
+    - single_part: geometry type `type` (default "Polygon"; drops multi-part PAs). Needs the
+      geometry_type property of set_geometry_type(); last, so that counting the PAs left
+      after each step (script 01) inspects only the geometries left by the attribute filters.
+
+    The combined filter (get_pa_filter) gives the same PAs in any order.
+    """
+    return [
+        ("terrestrial", ee.Filter.eq("MARINE", "0")),
+        ("not_marine_protected_area", ee.Filter.neq("DESIG_ENG", "Marine Protected Area")),
+        ("not_unesco_mab", ee.Filter.neq("DESIG_ENG", "UNESCO-MAB Biosphere Reserve")),
+        ("status", ee.Filter.inList("STATUS", VALID_STATUS)),
+        ("min_area", ee.Filter.gte("GIS_AREA", MIN_AREA_KM2)),
+        ("not_excluded_pid", ee.Filter.inList("WDPA_PID", EXCLUDED_PIDS).Not()),
+        ("single_part", ee.Filter.eq("geometry_type", type)),
+    ]
+
+
+def get_pa_filter(type="Polygon"):
+    """All filters of pa_filter_steps() combined (ee.Filter.And)."""
+    return ee.Filter.And(*[f for _, f in pa_filter_steps(type)])
 
 
 def set_geometry_type(feature):
@@ -166,23 +153,41 @@ def get_ndvi_projection():
     return ee.ImageCollection(NDVI_COLLECTION).first().select(NDVI_BAND).projection()
 
 
-def get_annual_gradient_magnitude(y):
+def sampling_image(with_biome=False):
     """
-    Wrapper around get_gradient_magnitude for use with ee.List.map().
+    The image sampled at every transect point, by script 03 (PA transects) and script 12
+    (their displaced copies), so both are measured identically.
 
-    Designed to build a multi-year gradient image stack.
-
-    Parameters
-    ----------
-    y : ee.Number
-        Year to process, as passed by ee.List.map().
+    Bands, in order: max_extent (JRC Global Surface Water 1.4), gHM (global human
+    modification, mean of the collection), elevation and terrain_slope (Copernicus GLO-30),
+    BIOME_NUM (RESOLVE Ecoregions 2017; only with ``with_biome``, script 12), then one NDVI
+    gradient band per year, named by the year (get_gradient_magnitude).
 
     Returns
     -------
-    ee.Image
-        Single-band NDVI gradient magnitude image for that year.
+    (ee.Image, list of str)
+        The image, and the export selectors (point ID columns + band names).
     """
-    return get_gradient_magnitude(y)
+    gsw = ee.Image('JRC/GSW1_4/GlobalSurfaceWater')
+    hm = ee.ImageCollection('CSP/HM/GlobalHumanModification').mean()
+    # Copernicus DEM: tag the mosaic with the tiles' native projection. Without it,
+    # ee.Terrain.slope works on the mosaic's default 1-degree grid and returns
+    # near-zero or missing slopes (Earth Engine catalog: COPERNICUS/DEM/GLO30_2024_1).
+    dem = ee.ImageCollection('COPERNICUS/DEM/GLO30_2024_1').select('DEM')
+    elevation = dem.mosaic().setDefaultProjection(dem.first().projection()).rename('elevation')
+    slope = ee.Terrain.slope(elevation).rename('terrain_slope')
+    bands = [gsw.select('max_extent'), hm.rename('gHM'), elevation, slope]
+    names = ['max_extent', 'gHM', 'elevation', 'terrain_slope']
+    if with_biome:
+        bands.append(ee.FeatureCollection("RESOLVE/ECOREGIONS/2017")
+                     .reduceToImage(['BIOME_NUM'], ee.Reducer.first()).rename('BIOME_NUM'))
+        names.append('BIOME_NUM')
+
+    years = ee.List.sequence(START_YEAR, END_YEAR)
+    grad_names = [str(y) for y in range(START_YEAR, END_YEAR + 1)]
+    gradient = ee.ImageCollection.fromImages(years.map(get_gradient_magnitude)).toBands().rename(grad_names)
+    image = ee.Image.cat(bands).addBands(gradient)
+    return image, ['WDPA_PID', 'transectID', 'pointID'] + names + grad_names
 
 
 def _retry(fn, what, attempts=10, wait=60):

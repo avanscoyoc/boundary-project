@@ -34,7 +34,7 @@ sys.path.insert(0, str(project_root))
 
 import ee
 from modules import config
-from modules.remotesensing import (get_annual_gradient_magnitude, get_ndvi_projection, batch_sample_assets,
+from modules.remotesensing import (sampling_image, get_ndvi_projection, batch_sample_assets,
                                    get_biome, _state)
 
 TEST_RUN = '--test' in sys.argv
@@ -52,22 +52,8 @@ export_prefix = config.VALIDATION_EXPORT_PREFIX
 ndvi_proj = get_ndvi_projection()
 ndvi_scale = ndvi_proj.nominalScale().getInfo()
 
-# The same static layers and gradient bands as script 03, plus the biome number
-gsw = ee.Image('JRC/GSW1_4/GlobalSurfaceWater')
-hm = ee.ImageCollection('CSP/HM/GlobalHumanModification').mean()
-dem = ee.ImageCollection('COPERNICUS/DEM/GLO30_2024_1').select('DEM')
-elevation = dem.mosaic().setDefaultProjection(dem.first().projection()).rename('elevation')
-slope = ee.Terrain.slope(elevation).rename('terrain_slope')
-biome = (ee.FeatureCollection("RESOLVE/ECOREGIONS/2017")
-         .reduceToImage(['BIOME_NUM'], ee.Reducer.first()).rename('BIOME_NUM'))
-static_image = ee.Image.cat([gsw.select('max_extent'), hm.rename('gHM'), elevation, slope, biome])
-
-years = ee.List.sequence(config.START_YEAR, config.END_YEAR)
-grad_names = [str(y) for y in range(config.START_YEAR, config.END_YEAR + 1)]
-gradient = ee.ImageCollection.fromImages(years.map(get_annual_gradient_magnitude)).toBands().rename(grad_names)
-image = static_image.addBands(gradient)
-selectors = ['WDPA_PID', 'transectID', 'pointID', 'max_extent', 'gHM', 'elevation', 'terrain_slope',
-             'BIOME_NUM'] + grad_names
+# The same image as script 03, plus the biome number
+image, selectors = sampling_image(with_biome=True)
 
 n_assets = len(list(config.VALIDATION_UPLOAD_DIR.glob(f'{config.VALIDATION_UPLOAD_PREFIX}*.zip')))
 n_poly = len(list(config.VALIDATION_UPLOAD_DIR.glob(f'{config.VALIDATION_POLY_UPLOAD_PREFIX}*.zip')))
