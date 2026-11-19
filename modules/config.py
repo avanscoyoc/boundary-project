@@ -98,7 +98,13 @@ VALID_STATUS = ["Designated", "Established", "Inscribed"]
 # Problematic WDPA_PIDs to exclude
 EXCLUDED_PIDS = [
     "555655917", "555656005", "555656013", "555665477", "555656021",
-    "555665485", "555556142", "187", "555703455", "555563456", "15894"
+    "555665485", "555556142", "187", "555703455", "555563456", "15894",
+    # Circular polygons (problematic geometries), found in the visual inspection (script 05b)
+    "6690", "6742", "6738", "6745", "6733", "6744", "6807", "6740", "6736",
+    "555682777", "555682773", "555543053", "555512070", "6794", "6737",
+    "555592664", "555592665", "555621717", "95418",
+    # City PAs (the Haram of Al-Madinah and the Haram of Makkah), found in the visual inspection
+    "101853", "101854",
 ]
 
 # =====================================================================

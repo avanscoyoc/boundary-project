@@ -258,21 +258,22 @@ final_set_summary <- function(pids, polys, py, area, points_per_transect = 5L) {
        complete_transects_per_pa_year = rng(a$n_trnst))
 }
 
-#' RESOLVE Ecoregions 2017 biome names -> the 8 groups of script 04 (`recategorize_biome()` in
-#' modules/analysis.py). RESOLVE's "N/A" (rock and ice) is "Rock & Ice"; a missing name, "Unknown",
-#' "None" or "" gives NA; any other name is kept as it is (as in Python).
+#' RESOLVE Ecoregions 2017 biome names -> the groups of script 04 (`recategorize_biome()` in
+#' modules/analysis.py): 8 analysis groups, plus Mangrove and Rock & Ice (excluded by script 05).
+#' RESOLVE's "N/A" (rock and ice) is "Rock & Ice"; a missing name, "Unknown", "None" or "" gives
+#' NA; any other name is kept as it is (as in Python).
 BIOME_GROUPS <- c(
   "Tropical & Subtropical Moist Broadleaf Forests" = "Tropical Forest",
   "Tropical & Subtropical Dry Broadleaf Forests" = "Tropical Forest",
   "Tropical & Subtropical Coniferous Forests" = "Tropical Forest",
+  "Tropical & Subtropical Grasslands, Savannas & Shrublands" = "Tropical Grassland",
+  "Flooded Grasslands & Savannas" = "Tropical Grassland",
   "Temperate Broadleaf & Mixed Forests" = "Temperate Forest",
   "Temperate Conifer Forests" = "Temperate Forest",
-  "Mediterranean Forests, Woodlands & Scrub" = "Temperate Forest",
+  "Temperate Grasslands, Savannas & Shrublands" = "Temperate & Montane Grassland",
+  "Montane Grasslands & Shrublands" = "Temperate & Montane Grassland",
+  "Mediterranean Forests, Woodlands & Scrub" = "Mediterranean",
   "Boreal Forests/Taiga" = "Boreal Forest",
-  "Tropical & Subtropical Grasslands, Savannas & Shrublands" = "Grassland & Shrubland",
-  "Temperate Grasslands, Savannas & Shrublands" = "Grassland & Shrubland",
-  "Flooded Grasslands & Savannas" = "Grassland & Shrubland",
-  "Montane Grasslands & Shrublands" = "Grassland & Shrubland",
   "Tundra" = "Tundra",
   "Deserts & Xeric Shrublands" = "Desert",
   "Mangroves" = "Mangrove",

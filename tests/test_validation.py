@@ -224,6 +224,10 @@ def test_copy_rules_match_the_r_analysis_set():
 def test_biome_from_num_and_split_key():
     assert list(biome_from_num([1, 6, 13, 14, np.nan, 98])) == [
         'Tropical Forest', 'Boreal Forest', 'Desert', 'Mangrove', None, None]
+    # the split grasslands and Mediterranean (RESOLVE 7-10, 12)
+    assert list(biome_from_num([7, 9, 8, 10, 12])) == [
+        'Tropical Grassland', 'Tropical Grassland', 'Temperate & Montane Grassland',
+        'Temperate & Montane Grassland', 'Mediterranean']
     pid, cand = split_key(['314990_A#2', '100017#5'])
     assert list(pid) == ['314990_A', '100017'] and list(cand) == [2, 5]
 

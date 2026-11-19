@@ -61,9 +61,12 @@ CFG <- local({
     # FALSE: the checklist is not read and the set is unchanged.
     inspection = list(checklist = p("data", "inspection", "checklist.csv"), apply = FALSE),
 
-    # Biome order for tables and figures only. Reference levels are set separately (`ref`).
-    biome_order = c("Grassland & Shrubland", "Tropical Forest", "Temperate Forest",
-                    "Boreal Forest", "Desert", "Tundra"),
+    # Biome groups (script 04, recategorize_biome) in their order for tables and figures only:
+    # by vegetation structure (grassland and tundra, desert, Mediterranean, forest), then
+    # temperature. Reference levels are set separately (`ref`).
+    biome_order = c("Tropical Grassland", "Temperate & Montane Grassland", "Tundra",
+                    "Desert", "Mediterranean",
+                    "Tropical Forest", "Temperate Forest", "Boreal Forest"),
 
     # IUCN categories → three groups
     iucn_groups = list(
@@ -116,8 +119,8 @@ CFG <- local({
     # includes Sissili (28556), merged into the complex by script 02.
     case_studies = data.frame(
       WDPA_PID = c("555705201", "36531", "34032", "19667"),
-      label    = c("Pô-Nazinga-Sissili, Burkina Faso · Grassland",
-                   "Zala, Nigeria · Grassland",
+      label    = c("Pô-Nazinga-Sissili, Burkina Faso · Trop. Grass.",
+                   "Zala, Nigeria · Trop. Grass.",
                    "Igarapé Ribeirão, Brazil · Trop. For.",
                    "Namtok Chat Trakan, Thailand · Trop. For."),
       expect   = c("increase/increase", "decrease/decrease", "increase/increase", "no_trend/no_trend"),

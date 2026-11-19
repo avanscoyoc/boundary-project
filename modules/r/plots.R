@@ -12,13 +12,17 @@
 PLOT_FAMILY <- "Helvetica"
 
 BIOME_COLORS <- c(
-  "Grassland & Shrubland" = "#C4A35A",
-  "Tropical Forest"       = "#2E8B57",
-  "Temperate Forest"      = "#5B8DB8",
-  "Boreal Forest"         = "#7B68AA",
-  "Desert"                = "#8C5A2B",
-  "Tundra"                = "#D6568F"
+  "Tropical Grassland"            = "#C4A35A",
+  "Temperate & Montane Grassland" = "#8A9A3B",
+  "Tundra"                        = "#D6568F",
+  "Desert"                        = "#8C5A2B",
+  "Mediterranean"                 = "#E8743B",
+  "Tropical Forest"               = "#2E8B57",
+  "Temperate Forest"              = "#5B8DB8",
+  "Boreal Forest"                 = "#7B68AA"
 )
+# Biome group as a row label ("Biome: tropical forest"): lower case, proper nouns kept.
+biome_row_label <- function(x) paste0("Biome: ", gsub("mediterranean", "Mediterranean", tolower(x), fixed = TRUE))
 RESPONSE_LABELS <- c(extent = "Edge extent", intensity = "Edge intensity")
 FIG3_COLORS <- c("Edge extent" = "#cf6e25", "Edge intensity" = "#179c8c")
 FIG3_SHAPES <- c("Edge extent" = 21, "Edge intensity" = 24)
@@ -97,7 +101,7 @@ fig3a_rows <- function(coef, response_sd, biome_order, contrasts = NULL, ref = N
   ref_biome <- unique(cat_rows$reference[cat_rows$factor == "BIOME_NAME"])
   stopifnot(length(ref_iucn) == 1, length(ref_biome) == 1)
   cat_rows$term_label <- ifelse(cat_rows$factor == "IUCN_group", paste0("IUCN: ", cat_rows$level),
-                                paste0("Biome: ", tolower(cat_rows$level)))
+                                biome_row_label(cat_rows$level))
   rows <- rbind(cont, cat_rows[, names(cont)])
   sdv <- stats::setNames(response_sd$sd_response, response_sd$response)[rows$response]
   stopifnot(!anyNA(sdv))
@@ -105,7 +109,7 @@ fig3a_rows <- function(coef, response_sd, biome_order, contrasts = NULL, ref = N
   cont_order <- c("Human modification (HMI)", "Water extent", "Slope", "Elevation",
                   "PA area (log)", "Establishment year")
   iucn_order <- paste0("IUCN: ", setdiff(IUCN_LEVELS, ref_iucn))
-  biome_rows <- paste0("Biome: ", tolower(setdiff(biome_order, ref_biome)))
+  biome_rows <- biome_row_label(setdiff(biome_order, ref_biome))
   order <- c(cont_order, iucn_order, biome_rows)
   stopifnot(all(rows$term_label %in% order))
   rows$term_label <- factor(rows$term_label, levels = rev(order))
@@ -232,7 +236,7 @@ fig3 <- function(rows_a, pred_iucn, pred_biome, slopes_iucn, slopes_biome, wald,
       ggplot2::scale_color_manual(values = BIOME_COLORS, labels = biome_lab, name = NULL) +
       ggplot2::scale_fill_manual(values = BIOME_COLORS, guide = "none") +
       fig3_axes(d, resp) +
-      ggplot2::guides(color = ggplot2::guide_legend(ncol = 3, byrow = TRUE)) +
+      ggplot2::guides(color = ggplot2::guide_legend(ncol = 2, byrow = TRUE)) +   # 8 groups: 4 rows
       ggplot2::labs(x = "Human modification index", y = RESPONSE_LABELS[[resp]]) +
       theme_pa() + theme_fig3
   }
@@ -256,7 +260,7 @@ fig3 <- function(rows_a, pred_iucn, pred_biome, slopes_iucn, slopes_biome, wald,
     design <- "A\nB"; widths <- 1; heights <- c(1, 0.08)
   } else {
     design <- paste(c(paste0("A", LETTERS[1 + seq_len(k)]), strrep(LETTERS[k + 2], 2)), collapse = "\n")
-    widths <- c(1.1, 1); heights <- c(rep(1, k), 0.2)
+    widths <- c(1.1, 1); heights <- c(rep(1, k), 0.3)   # room for the 4-row biome legend
   }
   patchwork::wrap_plots(c(list(p_a), right, list(patchwork::guide_area()))) +
     patchwork::plot_layout(design = design, guides = "collect", widths = widths, heights = heights) &
@@ -345,7 +349,8 @@ fig4a <- function(summary, reps, biome_order, pooled_label, pooled_display = "Al
     ggplot2::labs(x = NULL, y = "Change in edge metric, 2003–2025\n(among-PA SD)") +
     theme_pa(base_size = 12) +
     ggplot2::theme(axis.text.x = ggplot2::element_text(face = x_face),
-                   legend.position = "inside", legend.position.inside = c(0.5, 0.2),
+                   # bottom right, below the forest columns (the centre is Mediterranean's wide CIs)
+                   legend.position = "inside", legend.position.inside = c(0.82, 0.07),
                    legend.direction = "horizontal", legend.background = ggplot2::element_blank(),
                    legend.key = ggplot2::element_blank(), legend.key.size = grid::unit(0.35, "cm"),
                    legend.text = ggplot2::element_text(size = 10))

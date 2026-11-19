@@ -175,7 +175,7 @@ boundary-project/
 ```bash
 python scripts/01_collect_protected_areas.py
 ```
-Filters WDPA polygons (single-part polygons, ≥ 200 km², terrestrial, designated/established/inscribed; no marine PAs or UNESCO-MAB Biosphere Reserves; 11 PIDs excluded by hand), assigns the RESOLVE biome with the largest overlap, and exports to Google Drive.
+Filters WDPA polygons (single-part polygons, ≥ 200 km², terrestrial, designated/established/inscribed; no marine PAs or UNESCO-MAB Biosphere Reserves; 32 PIDs excluded by hand, 21 of them found in the visual inspection: 19 circular polygons and 2 city PAs), assigns the RESOLVE biome with the largest overlap, and exports to Google Drive.
 
 **⚠️ MANUAL STEP**: Download `WDPA_polygons.geojson` from Google Drive → `data/01_wdpa/`
 
@@ -219,7 +219,7 @@ Computes the gradient magnitude of each annual median NDVI composite (MOD13A1, 2
 ```bash
 python scripts/04_compute_edge_metrics.py
 ```
-Processes one asset at a time: checks that every exported point arrived exactly once, builds one row per complete transect-year, computes PA-year metrics for the four transect subsets, merges PA attributes, and adds per-PA trends. It also lists the transects with a missing value in any year (`data/04_transect_years/missing_transects.csv`), which script 05 summarises for the analysis set in `analysis_counts.json`. See [Outputs](#outputs).
+Processes one asset at a time: checks that every exported point arrived exactly once, builds one row per complete transect-year, computes PA-year metrics for the four transect subsets, merges PA attributes, and adds per-PA trends. The 14 RESOLVE biomes are grouped by vegetation structure and temperature into 8 groups: Tropical Grassland (with flooded grasslands), Temperate & Montane Grassland, Tundra, Desert, Mediterranean, Tropical Forest, Temperate Forest and Boreal Forest; Mangrove and Rock & Ice are kept as their own groups and removed by script 05. It also lists the transects with a missing value in any year (`data/04_transect_years/missing_transects.csv`), which script 05 summarises for the analysis set in `analysis_counts.json`. See [Outputs](#outputs).
 
 ## Statistical Analysis (R)
 

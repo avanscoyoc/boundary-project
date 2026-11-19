@@ -300,7 +300,10 @@ def pa_year_metrics(ty):
 
 def recategorize_biome(biome):
     """
-    Recategorize biomes into 8 major groups.
+    Recategorize RESOLVE biomes into 8 groups (temperature zone x moisture): Tropical Forest,
+    Tropical Grassland (with flooded grasslands), Temperate Forest, Temperate & Montane
+    Grassland, Mediterranean, Boreal Forest, Tundra, Desert; plus Mangrove and Rock & Ice,
+    which the analysis excludes.
 
     RESOLVE's "N/A" biome (its Rock & Ice areas, e.g. Greenland, the Himalaya)
     becomes "Rock & Ice". "Unknown" (no intersecting ecoregion) and missing
@@ -330,17 +333,19 @@ def recategorize_biome(biome):
                    "Tropical & Subtropical Moist Broadleaf Forests",
                    "Tropical & Subtropical Dry Broadleaf Forests"]:
         return "Tropical Forest"
-    elif biome in ["Mediterranean Forests, Woodlands & Scrub",
-                   "Temperate Conifer Forests",
+    elif biome in ["Temperate Conifer Forests",
                    "Temperate Broadleaf & Mixed Forests"]:
         return "Temperate Forest"
+    elif biome in ["Mediterranean Forests, Woodlands & Scrub"]:
+        return "Mediterranean"
     elif biome in ["Boreal Forests/Taiga"]:
         return "Boreal Forest"
     elif biome in ["Tropical & Subtropical Grasslands, Savannas & Shrublands",
-                   "Temperate Grasslands, Savannas & Shrublands",
-                   "Montane Grasslands & Shrublands",
                    "Flooded Grasslands & Savannas"]:
-        return "Grassland & Shrubland"
+        return "Tropical Grassland"
+    elif biome in ["Temperate Grasslands, Savannas & Shrublands",
+                   "Montane Grasslands & Shrublands"]:
+        return "Temperate & Montane Grassland"
     else:
         return biome
 

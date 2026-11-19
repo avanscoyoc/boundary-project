@@ -106,9 +106,12 @@ test_that("biome_group maps RESOLVE biome names to the 8 groups of script 04", {
          "Tropical & Subtropical Grasslands, Savannas & Shrublands", "Temperate Grasslands, Savannas & Shrublands",
          "Flooded Grasslands & Savannas", "Montane Grasslands & Shrublands", "Tundra", "Deserts & Xeric Shrublands",
          "Mangroves", "N/A", "Unknown", "", NA, "Something else")
-  expect_identical(biome_group(x), c(rep("Tropical Forest", 3), rep("Temperate Forest", 3), "Boreal Forest",
-                                     rep("Grassland & Shrubland", 4), "Tundra", "Desert", "Mangrove", "Rock & Ice",
-                                     NA, NA, NA, "Something else"))
+  expect_identical(biome_group(x), c(rep("Tropical Forest", 3), rep("Temperate Forest", 2), "Mediterranean",
+                                     "Boreal Forest", "Tropical Grassland", "Temperate & Montane Grassland",
+                                     "Tropical Grassland", "Temperate & Montane Grassland", "Tundra", "Desert",
+                                     "Mangrove", "Rock & Ice", NA, NA, NA, "Something else"))
+  # the analysis groups are exactly config biome_order; Mangrove and Rock & Ice are excluded
+  expect_setequal(setdiff(BIOME_GROUPS, CFG$exclude_biomes), CFG$biome_order)
 })
 
 test_that("add_pas_without_metrics adds PAs of script 02 without metrics at 0% complete; the sea rule drops them", {

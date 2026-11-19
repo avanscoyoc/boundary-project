@@ -1,5 +1,8 @@
 # Unit tests for modules/r/models.R (non-spatial gls on simulated data; seconds).
 
+# Four biomes for the simulated data: three groups, then the reference biome (config ref).
+SIM_BIOMES <- c(setdiff(CFG$biome_order, CFG$ref$biome)[1:3], CFG$ref$biome)
+
 sim_model_data <- function(n = 400, seed = 21) {
   set.seed(seed)
   d <- data.frame(
@@ -7,14 +10,14 @@ sim_model_data <- function(n = 400, seed = 21) {
     terrain_slope_z = rnorm(n), water_extent_pct_z = rnorm(n),
     gHM_mean = runif(n, 0, 0.8),
     IUCN_group = sample(c("strict", "non-strict", "unknown"), n, replace = TRUE),
-    BIOME_NAME = sample(CFG$biome_order[1:4], n, replace = TRUE, prob = c(0.4, 0.3, 0.2, 0.1)),
+    BIOME_NAME = sample(SIM_BIOMES, n, replace = TRUE, prob = c(0.4, 0.3, 0.2, 0.1)),
     stringsAsFactors = FALSE)
   d$gHM_mean_z <- (d$gHM_mean - 0.3) / 0.2
-  slope_b <- c(0.02, 0, -0.01, 0.03)[match(d$BIOME_NAME, CFG$biome_order)]
+  slope_b <- c(0.02, 0, -0.01, 0.03)[match(d$BIOME_NAME, SIM_BIOMES)]
   d$y <- 0.5 + 0.01 * d$log_area_z + slope_b * d$gHM_mean_z +
     0.01 * (d$IUCN_group == "strict") * d$gHM_mean_z + rnorm(n, 0, 0.05)
   d$IUCN_group <- set_reference(d$IUCN_group, "strict", names(CFG$iucn_groups))
-  d$BIOME_NAME <- set_reference(d$BIOME_NAME, CFG$biome_order[1], CFG$biome_order)
+  d$BIOME_NAME <- set_reference(d$BIOME_NAME, SIM_BIOMES[1], CFG$biome_order)
   d
 }
 fit_ns <- function(d, type) fit_gls_cached(model_formula("y", type), d)
@@ -77,7 +80,7 @@ test_that("set_model_references: a refit with another reference is the same mode
   ref <- list(iucn = "non-strict", biome = "Boreal Forest")
   d2 <- set_model_references(d, ref, names(CFG$iucn_groups), CFG$biome_order)
   expect_identical(levels(d2$IUCN_group), c("non-strict", "strict", "unknown"))
-  expect_identical(levels(d2$BIOME_NAME), c("Boreal Forest", CFG$biome_order[1:3]))
+  expect_identical(levels(d2$BIOME_NAME), SIM_BIOMES[c(4, 1:3)])
   m2 <- fit_ns(d2, "add")
   expect_equal(fitted(m2), fitted(m), tolerance = 1e-10)
   expect_equal(m2$sigma, m$sigma, tolerance = 1e-10)
@@ -145,7 +148,7 @@ test_that("fit_change_models / change_model_tables / table_sz", {
   expect_equal(unname(nlme::varWeights(cm$fits$B$modelStruct$varStruct)), 1 / sqrt(cm$data$v_precision))
   expect_null(fit_change_models(d, "y", "se_y", cs, fit_B = FALSE)$fits$B)
 
-  tb <- change_model_tables(cm, "y", "y", list(iucn = "non-strict", biome = CFG$biome_order[1]))
+  tb <- change_model_tables(cm, "y", "y", list(iucn = "non-strict", biome = SIM_BIOMES[1]))
   expect_setequal(unique(tb$coef$model), CHANGE_MODEL_LABELS)
   expect_equal(tb$spatial_params$n, nrow(d))
   expect_equal(tb$spatial_params$pseudoR2_spatial, cor(fitted(cm$fits$A), d$y)^2)

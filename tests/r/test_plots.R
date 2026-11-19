@@ -14,18 +14,20 @@ test_that("fig3a_rows: order, reference, response-SD scaling (contrasts or coeff
                               paste0("BIOME_NAME", bo[-1])),
                      estimate = 0.02, conf.low = 0.01, conf.high = 0.03, p.value = 0.01)
   sdt <- data.frame(response = "extent", sd_response = 0.1)
+  nb <- length(bo) - 1
   r <- fig3a_rows(coef, sdt, bo, ref = list(iucn = "strict", biome = bo[1]))
-  expect_equal(nrow(r), 6 + 2 + 5)
+  expect_equal(nrow(r), 6 + 2 + nb)
   expect_equal(r$est, rep(0.2, nrow(r)))
-  expect_identical(levels(r$term_label)[1], paste0("Biome: ", tolower(bo[6])))   # bottom row
+  expect_identical(levels(r$term_label)[1], paste0("Biome: ", tolower(utils::tail(bo, 1))))   # bottom row
   expect_identical(attr(r, "ref"), list(iucn = "strict", biome = bo[1]))
-  expect_equal(unname(attr(r, "n_groups")), c(6, 2, 5))
-  ctr <- data.frame(response = "extent", factor = c("IUCN_group", "IUCN_group", rep("BIOME_NAME", 5)),
+  expect_equal(unname(attr(r, "n_groups")), c(6, 2, nb))
+  ctr <- data.frame(response = "extent", factor = c("IUCN_group", "IUCN_group", rep("BIOME_NAME", nb)),
                     level = c("strict", "unknown", setdiff(bo, "Boreal Forest")),
-                    reference = c("non-strict", "non-strict", rep("Boreal Forest", 5)),
+                    reference = c("non-strict", "non-strict", rep("Boreal Forest", nb)),
                     estimate = 0.01, lower.CL = 0, upper.CL = 0.02, p.value = 0.2)
   r2 <- fig3a_rows(coef, sdt, bo, contrasts = ctr)
-  expect_true("Biome: grassland & shrubland" %in% r2$term_label)
+  expect_true(all(c("Biome: tropical grassland", "Biome: temperate & montane grassland",
+                    "Biome: Mediterranean") %in% r2$term_label))   # proper noun kept
   expect_false("Biome: boreal forest" %in% r2$term_label)
 })
 
@@ -68,7 +70,7 @@ test_that("fig3_panels keeps the supported interactions; fig3 builds with 0 to 4
   expect_equal(ps$n_runs, c(2, 2))
 
   bo <- CFG$biome_order
-  coef <- data.frame(response = rep(c("extent", "intensity"), each = 13),
+  coef <- data.frame(response = rep(c("extent", "intensity"), each = 6 + 2 + length(bo) - 1),
                      term = c(names(TERM_LABELS), "IUCN_groupnon-strict", "IUCN_groupunknown", paste0("BIOME_NAME", bo[-1])),
                      estimate = 0.02, conf.low = 0.01, conf.high = 0.03, p.value = 0.01)
   rows <- fig3a_rows(coef, data.frame(response = c("extent", "intensity"), sd_response = 0.1), bo,
