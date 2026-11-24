@@ -30,13 +30,13 @@ Inputs:
   data/04_transect_years/missing_transects.csv      script 04
   results/analysis_counts.json                      05's totals, cross-checked
 Outputs:
-  data/inspection/pas_final.zip   PA polygons
-  data/inspection/checklist.csv   order, WDPA_PID, NAME, ISO3, BIOME_NAME, decision, note
-                                  (UTF-8 with BOM so spreadsheets show names correctly)
+  data/inspection/analysis_pas.zip   PA polygons
+  data/inspection/checklist.csv      order, WDPA_PID, NAME, ISO3, BIOME_NAME, decision, note
+                                     (UTF-8 with BOM so spreadsheets show names correctly)
 A checklist that already has entries is never overwritten: the script stops before
 writing anything.
 
-After running: upload pas_final.zip to Earth Engine as table asset pas_final, then
+After running: upload analysis_pas.zip to Earth Engine as table asset analysis_pas, then
 paste tools/inspection_app.js into the Code Editor and run it.
 """
 

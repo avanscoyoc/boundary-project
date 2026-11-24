@@ -171,8 +171,8 @@ Tests whether the edge signal at the boundary exceeds what the same transects re
 - Weights biomes equally in "All PAs"; the table adds a PA-weighted row.
 
 ### Visual inspection (optional)
-- `tools/inspection_export.py` writes the analysed PAs (`data/inspection/pas_final.zip`) and a checklist.
-- Upload the zip as the asset `pas_final`, set `ASSET_ROOT` in `tools/inspection_app.js`, and run the app in the Code Editor.
+- `tools/inspection_export.py` writes the analysed PAs (`data/inspection/analysis_pas.zip`) and a checklist.
+- Upload the zip as the asset `analysis_pas`, set `ASSET_ROOT` in `tools/inspection_app.js`, and run the app in the Code Editor.
 - Add PAs to exclude to `EXCLUDED_PIDS` and rerun from 01.
 
 ## Outputs

@@ -88,7 +88,7 @@ GEE_EXPORT_PREFIX = f'{INDEX_NAME}_gradient_'                     # {GEE_EXPORT_
 # PAs excluded after the inspection are added to EXCLUDED_PIDS and the pipeline is rerun.
 INSPECTION_INPUT = DATA_DIR / "05_analysis" / "pa_level.csv"     # the analysed PAs (R script 05)
 INSPECTION_DIR = DATA_DIR / "inspection"
-INSPECTION_ZIP = INSPECTION_DIR / "pas_final.zip"                # upload as the table asset pas_final
+INSPECTION_ZIP = INSPECTION_DIR / "analysis_pas.zip"             # upload as the table asset analysis_pas
 INSPECTION_CHECKLIST = INSPECTION_DIR / "checklist.csv"
 INSPECTION_DECISIONS = ('', 'exclude', 'check')                  # blank = keep
 

@@ -9,7 +9,7 @@
  * then the pipeline is rerun from script 01.
  *
  * BEFORE RUNNING:
- * 1. Run tools/inspection_export.py and upload data/inspection/pas_final.zip as
+ * 1. Run tools/inspection_export.py and upload data/inspection/analysis_pas.zip as
  *    the table asset PAS_ASSET below. The points are the existing
  *    transect_points_NNN assets (script 02).
  * 2. Set ASSET_ROOT below, paste this file into the Code Editor
@@ -22,7 +22,7 @@
 
 // --- Settings ---------------------------------------------------------------
 var ASSET_ROOT = 'projects/YOUR-PROJECT-ID/assets/';   // your Earth Engine project's assets
-var PAS_ASSET = ASSET_ROOT + 'pas_final';                    // inspection_export.py
+var PAS_ASSET = ASSET_ROOT + 'analysis_pas';                 // inspection_export.py
 var POINTS_PREFIX = ASSET_ROOT + 'transect_points_';         // script 02 (+ NNN)
 var SEA_CUTOFF = 75;    // script 05: removed if median % complete transects < 75
 var LAKE_CUTOFF = 75;   // script 05: removed if % transects with water > 75
