@@ -33,8 +33,7 @@ python scripts/01_collect_protected_areas.py
 
 # 02 Choose PAs and build transects (local)
 python scripts/02_generate_sampling_points.py
-#  → upload each data/02_transects/upload/transect_points_NNN.zip as the table asset transect_points_NNN
-#    (one asset per file; script 02 prints the list)
+#  → upload each data/02_transects/upload/transect_points_NNN.zip as table assets in Earth Engine
 
 # 03 Sample NDVI gradients (Earth Engine, ~5 h)
 python scripts/03_sample_satellite_imagery.py
@@ -54,7 +53,7 @@ Rscript scripts/10_figures.R
 
 # 11–14 Validation 
 python scripts/11_validation_displace_transects.py
-#  → upload each zip in data/11_validation/upload/ as a table asset of the same name
+#  → upload each zip in data/11_validation/upload/ as a table assets in Earth Engine
 python scripts/12_validation_sample_imagery.py
 #  → download the Drive folder 12_gee and put its CSVs in data/12_gee/ (as for 03)
 python scripts/13_validation_edge_metrics.py
@@ -88,8 +87,8 @@ Scripts 06, 08 and 09 take `--cores K` (fits run in parallel, default 2). At ful
 
 #### 03 Sample imagery · Earth Engine
 - Reads the transect points uploaded as assets in script 02 (`transect_points_NNN`).
-- Takes the annual median of each year's MOD13A1 NDVI composites, 2001–2025.
-- Computes the NDVI gradient magnitude on MODIS's native ~463 m grid.
+- Computes an annual median composite for each year's MOD13A1 NDVI, 2001–2025.
+- Calculates the NDVI gradient magnitude on MODIS's native ~463 m grid.
 - Samples the NDVI gradient magnitude of every point in every year. Records missing values as -9999.
 - Adds covariates by sampling the maximum water extent (JRC GSW 1.4 `max_extent`), human modification (gHM 2016), and elevation and slope (Copernicus GLO-30, 2024) at all points, resampling all layers to the MODIS grid.
 - Exports one CSV per 50,000 points to a Drive folder `03_gee`; user must download them to `data/03_gee/`.
@@ -161,11 +160,11 @@ Tests whether the edge signal at the boundary exceeds what the same transects re
 - Measures edge metrics for each displaced PA with 04's functions.
 - Keeps the displaced PA if it passes 05's rules (same biome; sea, lake, 5 years). 
 
-#### 14 Validtation Compare · R
+#### 14 Validation Compare · R
 - Compares each PA with its displaced copy in the 2001–2025 mean of each metric, per biome and for all PAs.
 - Reports the mean with a bootstrap CI, the median, the share of PAs above their displaced copy, and a Wilcoxon test (Holm across biomes).
 
-#### Visual inspection (optional)
+### Visual inspection (optional)
 - You can visually inspect every PA and transect point used in this analysis by running `tools/inspection_export.py`
 - Upload the zip `data/inspection/analysis_pas.zip` to Earth Engine assets. Set `ASSET_ROOT` in `tools/inspection_app.js`, and run the .js script in the Earth Engine Code Editor.
 
